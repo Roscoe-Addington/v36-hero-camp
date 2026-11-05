@@ -1,0 +1,19 @@
+{
+  "name": "diagnostic-tool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clinician-administered screening questionnaire for major depressive disorder (PHQ-9) and generalized anxiety disorder (GAD-7 + DSM-5-TR criteria items).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env src/server.js",
+    "create-clinician": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/create-clinician.js",
+    "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "nodemailer": "^10.3.1"
+  }
+}
