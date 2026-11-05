@@ -4,6 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { answers as makeAnswers } from './helpers.js';
 
 process.env.DB_PATH = ':memory:';
 process.env.NODE_ENV = 'test';
@@ -86,11 +87,13 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   const form = await fetch(base + qPath);
   assert.equal(form.status, 200);
 
-  const answers = {
+  const answers = makeAnswers({
     phq1: 2, phq2: 3, phq3: 2, phq4: 2, phq5: 0, phq6: 2, phq7: 1, phq8: 0, phq9: 1, phqDifficulty: 2,
     gad1: 2, gad2: 2, gad3: 2, gad4: 1, gad5: 0, gad6: 1, gad7: 2, gadDifficulty: 1,
     gadA: 1, gadB: 1, gadC1: 1, gadC2: 1, gadC3: 1, gadC4: 0, gadC5: 0, gadC6: 1,
-  };
+    // Differential items: past elevated mood with reduced sleep -> bipolar flag
+    bp1: 1, bp2: 1, bp3: 0, auditc1: 3, auditc2: 1, auditc3: 1, ptsd0: 1, ptsd1: 1, ptsd3: 1, ptsd4: 1,
+  });
   const submit = await post(qPath, answers);
   assert.equal(submit.status, 200);
   const thanks = await submit.text();
@@ -110,6 +113,12 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.ok(email.includes('*********1234'), 'personal number is masked');
   assert.ok(!email.includes('19900101-1234'));
   assert.ok(email.includes('Likelihood:      High'));
+  assert.ok(email.includes('PRIORITY DIFFERENTIAL'));
+  assert.ok(email.includes('DIFFERENTIAL DIAGNOSIS SCREENING'));
+  assert.ok(email.includes('Bipolar I or II disorder  [PRIORITY]'));
+  // AUDIT-C 3+1+1 = 5, recorded gender Female -> cut-off 3 -> positive
+  assert.ok(email.includes('AUDIT-C = 5/12 (cut-off 3 for recorded gender "Female")'));
+  assert.ok(email.includes('PC-PTSD-5 score 3/5'));
 
   // 7. Clinician sees the report
   const patientAfter = await (await fetch(base + patientPath, { headers: { cookie } })).text();
@@ -117,6 +126,8 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   const report = await (await fetch(base + reportPath, { headers: { cookie } })).text();
   assert.ok(report.includes('Safety alert'));
   assert.ok(report.includes('PHQ-9 total: <strong>13/27</strong>'));
+  assert.ok(report.includes('Differential diagnosis screening'));
+  assert.ok(report.includes('Priority:</strong> screen positive for Bipolar I or II disorder'));
 });
 
 test('a clinician cannot see another clinician\'s patient', async () => {

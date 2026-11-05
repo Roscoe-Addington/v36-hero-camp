@@ -23,7 +23,7 @@ It screens for:
    number, gender, age, education level, employed yes/no.
 2. The clinician clicks **Create new questionnaire link** and sends the link
    to the patient (e.g. via the clinic's secure messaging).
-3. The patient opens the link (no login needed), answers 26 questions and
+3. The patient opens the link (no login needed), answers 56 questions and
    submits. The link then stops working.
 4. The app scores the answers and emails the result to the clinician's email
    address. The full report, with every answer, is in the clinician portal.
@@ -43,6 +43,38 @@ For each condition:
   threshold that counts toward a diagnosis
 - functional impairment
 - a checklist of what the clinician must still rule out
+
+### Differential diagnosis screening
+
+The same email also contains a **differential diagnosis report**
+(`src/differential.js`). It checks 18 conditions that DSM-5-TR says must be
+ruled out, or may explain the symptoms better, before diagnosing MDD or GAD:
+
+| Group | Conditions checked |
+| --- | --- |
+| Must be excluded first (marked **PRIORITY**) | Bipolar I/II disorder, psychotic features / psychotic disorder |
+| Other depressive disorders | Persistent depressive disorder, PMDD, bereavement / prolonged grief |
+| Other anxiety-related disorders | Panic, social anxiety, OCD, illness anxiety, PTSD (PC-PTSD-5) |
+| Substances and medical causes | Alcohol (AUDIT-C) and drugs, medication, caffeine, medical conditions |
+| Stress | Adjustment disorder (only if MDD/GAD criteria are not met) |
+| Clinician only (no questionnaire) | Neurocognitive disorder (highlighted from age 60), ADHD, personality disorders |
+
+For every condition the report shows **why it was checked, the exact rule,
+the patient's answers to the questions it used, what it found, what it
+would mean, and a suggested next step** (e.g. a validated follow-up tool).
+Each one gets a status: *Screen positive*, *Unclear*, *Not indicated*, or
+*Clinician to assess*.
+
+It also shows how much each result depends on **symptoms shared by
+depression and anxiety** (sleep, fatigue, concentration, restlessness), for
+example: "The MDD symptom count (5) falls to 2 without symptoms also
+attributed to anxiety."
+
+The patient answers 30 extra questions for this (56 in total, about 10–15
+minutes). Apart from AUDIT-C, the single-question drug screen and the
+PC-PTSD-5, these questions are written for this tool and are **not
+validated**. A positive screen tells the clinician what to ask about. It
+does not mean the condition is present.
 
 How the likelihood is decided (see `src/scoring.js`):
 
@@ -83,6 +115,7 @@ npm test
 src/server.js          URLs and what happens on each one
 src/questionnaire.js   the questions and answer options
 src/scoring.js         the scoring rules  <- the clinical logic
+src/differential.js    the differential diagnosis rules
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens
@@ -118,8 +151,9 @@ Before using it with real patients, at minimum:
       read the results in the portal.
 - [ ] Encrypt the database at rest and set up backups.
 - [ ] Add an audit log (who viewed which patient, when).
-- [ ] Have a clinician who knows the instruments review `src/scoring.js` and
-      the supplementary GAD questions (they are not a validated instrument).
+- [ ] Have a clinician who knows the instruments review `src/scoring.js`,
+      `src/differential.js` and the questions written for this tool (they
+      are not a validated instrument).
 - [ ] Use a validated translation if patients answer in another language
       (official PHQ-9 and GAD-7 translations exist, including Swedish).
 - [ ] Check the MDR classification question with your organisation.

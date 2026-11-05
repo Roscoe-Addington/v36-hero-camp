@@ -2,17 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scoreDepression, scoreAnxiety, scoreAll, LIKELIHOOD, phq9Severity, gad7Severity } from '../src/scoring.js';
 import { parseAnswers } from '../src/questionnaire.js';
-
-// Builds a full answer set where everything is 0 ("Not at all" / "No"),
-// then applies the overrides we care about in each test.
-function answers(overrides = {}) {
-  const base = {
-    phq1: 0, phq2: 0, phq3: 0, phq4: 0, phq5: 0, phq6: 0, phq7: 0, phq8: 0, phq9: 0, phqDifficulty: 0,
-    gad1: 0, gad2: 0, gad3: 0, gad4: 0, gad5: 0, gad6: 0, gad7: 0, gadDifficulty: 0,
-    gadA: 0, gadB: 0, gadC1: 0, gadC2: 0, gadC3: 0, gadC4: 0, gadC5: 0, gadC6: 0,
-  };
-  return { ...base, ...overrides };
-}
+import { answers } from './helpers.js';
 
 test('PHQ-9 severity bands match the published cut-offs', () => {
   assert.equal(phq9Severity(4), 'Minimal');

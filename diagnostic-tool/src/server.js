@@ -22,6 +22,7 @@ import {
 } from './auth.js';
 import { parseAnswers } from './questionnaire.js';
 import { scoreAll } from './scoring.js';
+import { runDifferential } from './differential.js';
 import { sendResultsEmail } from './email.js';
 import * as views from './views.js';
 
@@ -277,7 +278,10 @@ app.post('/q/:token', async (req, res) => {
     );
   }
 
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
   const results = scoreAll(answers);
+  // The differential uses the patient's recorded gender and age as well.
+  results.differential = runDifferential(answers, patient, results);
   const completedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
   // "AND completed_at IS NULL" makes sure a double-click cannot save twice.
@@ -292,7 +296,6 @@ app.post('/q/:token', async (req, res) => {
   // Show the patient the thank-you page straight away; email in the background.
   send(res, views.thankYouPage({ safetyFlag: results.safetyFlag }));
 
-  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
   const clinicianRow = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id);
   let emailStatus;
   try {

@@ -36,6 +36,49 @@ function symptomLines(list) {
   return list.map((s) => `    - ${s.symptom}: ${s.frequency}`);
 }
 
+// The detailed differential diagnosis report, as plain text.
+export function buildDifferentialText(differential) {
+  if (!differential) return ['DIFFERENTIAL DIAGNOSIS SCREENING', '  Not available for this questionnaire.'];
+  const { summary, entries, overlap } = differential;
+  const lines = [
+    'DIFFERENTIAL DIAGNOSIS SCREENING',
+    `  ${summary.checked} alternative or co-occurring conditions checked (DSM-5-TR differentials for MDD and GAD).`,
+    '  This shows what to explore in the interview. It does not confirm or exclude any diagnosis.',
+    '',
+    '  Summary',
+    `    Screen positive:     ${summary.flagged.length ? summary.flagged.join('; ') : 'none'}`,
+    `    Unclear / partial:   ${summary.possible.length ? summary.possible.join('; ') : 'none'}`,
+    '',
+    '  Overlap between MDD and GAD symptoms',
+    ...overlap.shared.map(
+      (s) => `    - ${s.symptom}: depression side ${s.onDepressionSide ? 'yes' : 'no'}, anxiety side ${s.onAnxietySide ? 'yes' : 'no'}`
+    ),
+    ...overlap.notes.map((n) => `    Note: ${n}`),
+    '',
+    '  Conditions checked (most important first)',
+  ];
+  entries.forEach((e, i) => {
+    lines.push(
+      '',
+      `  ${i + 1}. ${e.condition}${e.priority ? '  [PRIORITY]' : ''}`,
+      `     Status:       ${e.status}`,
+      `     Relevant to:  ${e.relevantTo.join(', ')}`,
+      `     Why checked:  ${e.why}`,
+      `     Rule:         ${e.rule}`
+    );
+    if (e.evidence.length) {
+      lines.push('     Answers used:');
+      for (const ev of e.evidence) lines.push(`       [${ev.id}] ${ev.question}`, `              -> ${ev.answer}`);
+    }
+    lines.push(
+      `     Finding:      ${e.finding}`,
+      `     What it means: ${e.implication}`,
+      `     Next step:    ${e.nextStep}`
+    );
+  });
+  return lines;
+}
+
 export function buildReportText({ patient, results, completedAt, reportUrl }) {
   const d = results.depression;
   const a = results.anxiety;
@@ -47,6 +90,16 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
       `The patient answered "${results.safetyAnswer}" to PHQ-9 item 9`,
       '(thoughts of being better off dead or of self-harm).',
       'This needs prompt clinical follow-up and a suicide risk assessment.',
+      ''
+    );
+  }
+
+  const priority = results.differential?.summary.priority ?? [];
+  if (priority.length) {
+    lines.push(
+      '!!! PRIORITY DIFFERENTIAL !!!',
+      `Screen positive for: ${priority.join('; ')}.`,
+      'See the differential diagnosis section below.',
       ''
     );
   }
@@ -89,6 +142,10 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
     'Before making a diagnosis:',
     ...CLINICIAN_CHECKLIST.map((c) => `  - ${c}`),
     '',
+    '='.repeat(70),
+    ...buildDifferentialText(results.differential),
+    '='.repeat(70),
+    '',
     `Full report with item-level answers: ${reportUrl}`,
     '(Log in to the clinician portal to view it.)'
   );
@@ -96,8 +153,9 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
 }
 
 export async function sendResultsEmail({ to, patient, results, completedAt, reportUrl }) {
-  const subject = results.safetyFlag
-    ? `URGENT: safety alert in screening results (${patient.last_name})`
+  const urgent = results.safetyFlag || (results.differential?.summary.priority.length ?? 0) > 0;
+  const subject = urgent
+    ? `URGENT: ${results.safetyFlag ? 'safety alert' : 'priority differential'} in screening results (${patient.last_name})`
     : `Screening results ready (${patient.last_name})`;
   const text = buildReportText({ patient, results, completedAt, reportUrl });
   const message = {
@@ -105,7 +163,7 @@ export async function sendResultsEmail({ to, patient, results, completedAt, repo
     to,
     subject,
     text,
-    priority: results.safetyFlag ? 'high' : 'normal',
+    priority: urgent ? 'high' : 'normal',
   };
 
   if (!transport) {

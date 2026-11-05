@@ -14,8 +14,10 @@ import {
   DIFFICULTY_QUESTION,
   PHQ_DIFFICULTY_ID,
   GAD_DIFFICULTY_ID,
+  DIFFERENTIAL_SECTIONS,
 } from './questionnaire.js';
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
+import { STATUS } from './differential.js';
 
 // ---------- The escaping helper ----------
 
@@ -217,7 +219,7 @@ export function patientPage({ clinician, patient, assessments, newLink }) {
                 else status = 'Waiting for patient';
                 return html`<tr>
                   <td>${a.created_at}</td>
-                  <td>${status} ${r?.safetyFlag ? html`<span class="badge danger">Safety alert</span>` : ''}</td>
+                  <td>${status} ${r?.safetyFlag ? html`<span class="badge danger">Safety alert</span>` : ''} ${r?.differential?.summary.priority.length ? html`<span class="badge danger">Priority differential</span>` : ''}</td>
                   <td>${r ? html`${likelihoodBadge(r.depression.likelihood)} PHQ-9 ${r.depression.total}` : ''}</td>
                   <td>${r ? html`${likelihoodBadge(r.anxiety.likelihood)} GAD-7 ${r.anxiety.total}` : ''}</td>
                 </tr>`;
@@ -249,6 +251,74 @@ function itemTable(items) {
     <thead><tr><th>Question</th><th>Answer</th><th>Score</th></tr></thead>
     <tbody>${items.map((i) => html`<tr><td>${i.text}</td><td>${i.answer}</td><td>${i.score}</td></tr>`)}</tbody>
   </table>`;
+}
+
+// ---------- Clinician: differential diagnosis section ----------
+
+function statusBadge(status) {
+  const cls = {
+    [STATUS.FLAGGED]: 'danger',
+    [STATUS.POSSIBLE]: 'warn',
+    [STATUS.CLINICIAN]: 'info',
+    [STATUS.NOT_INDICATED]: 'ok',
+  }[status];
+  return html`<span class="badge ${cls}">${status}</span>`;
+}
+
+function differentialSection(differential) {
+  if (!differential) {
+    return html`<section class="card"><h2>Differential diagnosis screening</h2>
+      <p class="hint">Not available: this questionnaire was completed before differential screening was added.</p></section>`;
+  }
+  const { summary, entries, overlap } = differential;
+  return html`<section class="card">
+    <h2>Differential diagnosis screening</h2>
+    <p class="hint">${summary.checked} alternative or co-occurring conditions checked against DSM-5-TR differentials for MDD and GAD. This shows what to explore in the interview; it does not confirm or exclude any diagnosis.</p>
+    ${summary.priority.length
+      ? html`<div class="alert" role="alert"><strong>Priority:</strong> screen positive for ${summary.priority.join('; ')}.</div>`
+      : ''}
+
+    <table class="diff-summary">
+      <thead><tr><th>Condition</th><th>Relevant to</th><th>Status</th></tr></thead>
+      <tbody>
+        ${entries.map(
+          (e) => html`<tr>
+            <td><a href="#diff-${e.id}">${e.condition}</a></td>
+            <td>${e.relevantTo.join(', ')}</td>
+            <td>${statusBadge(e.status)}</td>
+          </tr>`
+        )}
+      </tbody>
+    </table>
+
+    <h3>Overlap between depression and anxiety symptoms</h3>
+    <table>
+      <thead><tr><th>Shared symptom</th><th>Counted for depression</th><th>Counted for anxiety</th></tr></thead>
+      <tbody>
+        ${overlap.shared.map(
+          (o) => html`<tr><td>${o.symptom}</td><td>${o.onDepressionSide ? 'Yes' : 'No'}</td><td>${o.onAnxietySide ? 'Yes' : 'No'}</td></tr>`
+        )}
+      </tbody>
+    </table>
+    ${overlap.notes.map((n) => html`<p class="note">${n}</p>`)}
+
+    <h3>Detailed reasoning</h3>
+    ${entries.map(
+      (e) => html`<details class="diff" id="diff-${e.id}" ${e.status === STATUS.FLAGGED || e.status === STATUS.POSSIBLE ? html`open` : ''}>
+        <summary><strong>${e.condition}</strong> ${statusBadge(e.status)}</summary>
+        <dl>
+          <dt>Why checked</dt><dd>${e.why}</dd>
+          <dt>Rule applied</dt><dd>${e.rule}</dd>
+          ${e.evidence.length
+            ? html`<dt>Answers used</dt><dd><ul>${e.evidence.map((ev) => html`<li>${ev.question} — <strong>${ev.answer}</strong></li>`)}</ul></dd>`
+            : ''}
+          <dt>Finding</dt><dd>${e.finding}</dd>
+          <dt>What it means</dt><dd>${e.implication}</dd>
+          <dt>Next step</dt><dd>${e.nextStep}</dd>
+        </dl>
+      </details>`
+    )}
+  </section>`;
 }
 
 export function reportPage({ clinician, patient, assessment, results, emailStatus }) {
@@ -304,6 +374,8 @@ export function reportPage({ clinician, patient, assessment, results, emailStatu
         <details><summary>Item-level answers</summary>${itemTable(a.itemScores)}</details>
       </section>
 
+      ${differentialSection(results.differential)}
+
       <section class="card">
         <h2>Before making a diagnosis</h2>
         <ul>${CLINICIAN_CHECKLIST.map((c) => html`<li>${c}</li>`)}</ul>
@@ -329,7 +401,7 @@ export function questionnairePage({ token, error }) {
     title: 'Questionnaire',
     body: html`
       <h1>Questionnaire about mood and worry</h1>
-      <p>Your clinician has asked you to fill in this questionnaire. It takes about 5–10 minutes. Please answer every question. Your answers go only to your clinician.</p>
+      <p>Your clinician has asked you to fill in this questionnaire. It takes about 10–15 minutes. Please answer every question. Your answers go only to your clinician.</p>
       <p class="crisis">${CRISIS_TEXT}</p>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
 
@@ -354,9 +426,17 @@ export function questionnairePage({ token, error }) {
           ${GAD_CRITERIA_ITEMS.map((item, i) => radioGroup(item.id, item.text, YES_NO_OPTIONS, i + 1))}
         </section>
 
+        ${DIFFERENTIAL_SECTIONS.map(
+          (section, s) => html`<section class="card">
+            <h2>Part ${s + 4}: ${section.title}</h2>
+            ${section.intro ? html`<p>${section.intro}</p>` : ''}
+            ${section.items.map((item, i) => radioGroup(item.id, item.text, item.options, i + 1))}
+          </section>`
+        )}
+
         <button class="big">Submit answers</button>
       </form>
-      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce.</p>`,
+      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD.</p>`,
   });
 }
 
