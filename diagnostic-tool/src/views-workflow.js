@@ -12,6 +12,9 @@ import { MOCA_DOMAINS, MOCA_CUTOFF, scoreMoca } from './moca.js';
 import { STRENGTH } from './suggestions.js';
 import { DIFFERENTIALS } from './differential-lists.js';
 import { conflictsAmong, conflictsFor, LEVEL } from './conflicts.js';
+import { INTERVIEW, MSE, INTERVIEW_FORM, RISK, INFORMANT, riskIndicators, finalizeBlocker } from './clinical-forms.js';
+import { renderForm, renderSummary } from './views-forms.js';
+import { optionLabel } from './forms.js';
 
 function levelBadge(level) {
   const cls = { [LEVEL.CONFLICT]: 'danger', [LEVEL.CHECK]: 'warn', [LEVEL.CODING]: 'info' }[level];
@@ -45,9 +48,13 @@ function patientLine(patient) {
 // The 5 stages, shown at the top of the assessment page.
 function progress(c) {
   const assessed = Object.keys(c.checklists).length;
+  const riskNeeded = riskIndicators(c).length > 0;
   const steps = [
     { label: 'Intake screening', done: Boolean(c.assessment.completed_at) },
-    { label: 'Clinician intake', done: Boolean(c.intake?.updated_at) },
+    { label: 'Intake interview', done: Boolean(c.interview?.updated_at) },
+    { label: 'MoCA & observations', done: Boolean(c.intake?.updated_at) },
+    { label: 'Informant', done: Boolean(c.informant?.updated_at) },
+    { label: riskNeeded ? 'Risk assessment (required)' : 'Risk assessment', done: Boolean(c.risk?.updated_at) },
     { label: `In-depth assessment (${assessed})`, done: assessed > 0 },
     { label: `Diagnosis (${c.diagnoses.items.length})`, done: c.diagnoses.items.length > 0 },
     { label: 'Finalized', done: Boolean(c.assessment.finalized_at) },
@@ -101,14 +108,32 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         ? html`<div class="alert" role="alert"><strong>Possible urgent neurological symptoms:</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. Ask when they started; if within the last days, arrange emergency assessment.</div>`
         : ''}
 
+      ${riskCard(base, c, locked)}
+
       <section class="card">
-        <h2>2. Clinician intake</h2>
+        <h2>2. Intake interview</h2>
+        <p class="hint">History, family history, medical history, social situation and mental status examination.</p>
+        ${c.interview?.updated_at ? interviewHighlights(c.interview) : html`<p class="hint">Not done yet.</p>`}
+        <p><a class="button" href="${base}/interview">${c.interview?.updated_at ? (locked ? 'View intake interview' : 'Open intake interview') : 'Start intake interview'}</a></p>
+      </section>
+
+      <section class="card">
+        <h2>3. MoCA and observed signs</h2>
         ${intakeSummary(c.intake, suggestions)}
         ${locked ? '' : intakeForm(base, c)}
       </section>
 
       <section class="card">
-        <h2>3. In-depth assessment</h2>
+        <h2>4. Informant</h2>
+        <p class="hint">Information from someone who knows the patient well, with the patient’s consent. Especially useful for memory problems, past periods of elevated mood and long-standing personality traits.</p>
+        ${c.informant?.updated_at
+          ? html`<p>${c.informant.inf_name} (${c.informant.inf_relationship}), recorded ${c.informant.updated_at}.</p>`
+          : html`<p class="hint">No informant recorded.</p>`}
+        <p><a class="button secondary-link" href="${base}/informant">${c.informant?.updated_at ? 'Open informant information' : 'Add informant information'}</a></p>
+      </section>
+
+      <section class="card">
+        <h2>6. In-depth assessment</h2>
         <p>Based on the intake screening, assess these disorders with the full criteria checklist. You decide which to assess; the list only shows where the screening points.</p>
         ${suggestions.suggestions.length === 0
           ? html`<p class="hint">The screening does not point toward any disorder in this app.</p>`
@@ -149,7 +174,7 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
       </section>
 
       <section class="card">
-        <h2>4. Diagnosis</h2>
+        <h2>7. Diagnosis</h2>
         ${diagnosisSection(base, c, evaluations, locked)}
       </section>
 
@@ -274,10 +299,11 @@ function diagnosisSection(base, c, evaluations, locked) {
                 </form>`;
               })}`
           : Object.keys(evaluations).length
-            ? html`<p class="hint">Every disorder you assessed has been confirmed. Assess another one in step 3 to confirm more.</p>`
-            : html`<p class="hint">Assess a disorder in step 3 to be able to confirm it here.</p>`}
+            ? html`<p class="hint">Every disorder you assessed has been confirmed. Assess another one in step 6 to confirm more.</p>`
+            : html`<p class="hint">Assess a disorder in step 6 to be able to confirm it here.</p>`}
 
         <h3>Finalize</h3>
+        ${finalizeBlocker(c) ? html`<p class="note">${finalizeBlocker(c)}</p>` : ''}
         <form method="post" action="${base}/finalize">
           <label>Summary for the final report
             <textarea name="final_note" rows="3" maxlength="5000">${c.diagnoses.finalNote ?? ''}</textarea>
@@ -285,6 +311,126 @@ function diagnosisSection(base, c, evaluations, locked) {
           <p class="hint">After finalizing, the assessment cannot be changed. ${confirmed.length === 0 ? 'No diagnosis is confirmed: the report will say that no diagnosis in this app was made.' : ''}</p>
           <button>Finalize assessment</button>
         </form>`}`;
+}
+
+// ---------- Risk assessment card on the assessment page ----------
+
+function riskCard(base, c, locked) {
+  const reasons = riskIndicators(c);
+  const r = c.risk;
+  return html`<section class="card ${reasons.length && !r?.updated_at ? 'attention' : ''}">
+    <h2>5. Suicide risk assessment</h2>
+    ${reasons.length
+      ? html`<p><strong>Required before finalizing</strong>, because of:</p><ul>${reasons.map((x) => html`<li>${x}</li>`)}</ul>`
+      : html`<p class="hint">No screening or interview finding requires it, but you can always do one.</p>`}
+    ${r?.updated_at
+      ? html`<ul class="facts">
+          <li>Current suicidal thoughts: <strong>${optionLabel(RISK, 'ideation', r.ideation)}</strong></li>
+          <li>Immediate action needed: <strong>${r.immediate === 'yes' ? 'Yes' : 'No'}</strong></li>
+          <li>Recorded ${r.updated_at}</li>
+        </ul>`
+      : ''}
+    <p>
+      <a class="button" href="${base}/risk">${r?.updated_at ? (locked ? 'View risk assessment' : 'Open risk assessment') : 'Start risk assessment'}</a>
+      ${r?.updated_at ? html` <a href="${base}/risk/plan">Safety plan for the patient</a>` : ''}
+    </p>
+  </section>`;
+}
+
+function interviewHighlights(iv) {
+  const items = [];
+  if (iv.reason) items.push(html`<li>Reason: ${iv.reason.slice(0, 160)}${iv.reason.length > 160 ? '…' : ''}</li>`);
+  if (iv.family?.length) items.push(html`<li>Family history: ${iv.family.map((v) => optionLabel(INTERVIEW, 'family', v)).join(', ')}</li>`);
+  if (iv.prev_attempt && iv.prev_attempt !== 'none') items.push(html`<li>Previous suicide attempts: ${optionLabel(INTERVIEW, 'prev_attempt', iv.prev_attempt)}</li>`);
+  const mseLabel = (id) => MSE[0].fields.find((f) => f.id === id).label;
+  const mse = ['mse_delusions', 'mse_hallucinations', 'mse_obsessions'].filter((id) => iv[id] === 'yes').map(mseLabel);
+  if (mse.length) items.push(html`<li>Mental status: ${mse.join(', ')}</li>`);
+  return items.length ? html`<ul class="facts">${items}</ul>` : html`<p class="hint">Recorded ${iv.updated_at}.</p>`;
+}
+
+// ---------- Interview, informant and risk pages (one generic page) ----------
+
+export function formPage({ clinician, c, title, intro, schema, values, action, errors = [], extra }) {
+  const locked = Boolean(c.assessment.finalized_at);
+  return layout({
+    title,
+    clinician,
+    body: html`
+      <p><a href="/clinician/assessments/${c.assessment.id}">← Back to the assessment</a></p>
+      <h1>${title}</h1>
+      <p class="hint">${patientLine(c.patient)}</p>
+      ${intro ? html`<p>${intro}</p>` : ''}
+      ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
+      ${extra ?? ''}
+      <form method="post" action="${action}">
+        ${renderForm(schema, values ?? {}, { disabled: locked })}
+        ${locked ? '' : html`<button>Save</button>`}
+      </form>`,
+  });
+}
+
+export function interviewPage({ clinician, c, errors, values }) {
+  return formPage({
+    clinician, c, errors,
+    title: 'Intake interview',
+    intro: 'Structured psychiatric history and mental status examination. Fill in what is relevant; only the reason for assessment is required.',
+    schema: INTERVIEW_FORM,
+    values: values ?? c.interview,
+    action: `/clinician/assessments/${c.assessment.id}/interview`,
+  });
+}
+
+export function informantPage({ clinician, c, errors, values }) {
+  return formPage({
+    clinician, c, errors,
+    title: 'Informant information',
+    intro: 'Information from someone who knows the patient well. Record it only with the patient’s consent, unless the law allows otherwise.',
+    schema: INFORMANT,
+    values: values ?? c.informant,
+    action: `/clinician/assessments/${c.assessment.id}/informant`,
+  });
+}
+
+export function riskPage({ clinician, c, errors, values }) {
+  const reasons = riskIndicators(c);
+  const a = c.answers ?? {};
+  const extra = html`<section class="card">
+    <h2>From the screening and interview</h2>
+    <ul class="facts">
+      <li>PHQ-9 item 9: <strong>${c.results?.safetyAnswer ?? 'not answered'}</strong></li>
+      <li>PHQ-9 total: ${c.results?.depression.total ?? '–'}/27; hopelessness (item 2): ${c.results?.depression.itemScores[1].answer ?? '–'}</li>
+      <li>Self-harm ever (screening): ${a.pd16 === 1 ? 'Yes' : 'No'}</li>
+      <li>Previous suicide attempts (interview): ${c.interview?.prev_attempt ? optionLabel(INTERVIEW, 'prev_attempt', c.interview.prev_attempt) : 'not recorded'}</li>
+      <li>Alcohol/drug screening: ${c.results?.differential?.entries.find((e) => e.id === 'substance')?.finding ?? '–'}</li>
+    </ul>
+    ${reasons.length ? html`<p><strong>A risk assessment is required</strong> because of: ${reasons.join(' ')}</p>` : ''}
+    <p class="hint">This form does not calculate a risk score or category. Guidelines (e.g. NICE 2022) advise against using risk scales to predict suicide; write a formulation and a plan based on the person’s needs.</p>
+  </section>`;
+  return formPage({
+    clinician, c, errors, extra,
+    title: 'Suicide risk assessment',
+    schema: RISK,
+    values: values ?? c.risk,
+    action: `/clinician/assessments/${c.assessment.id}/risk`,
+  });
+}
+
+// The safety plan as a clean page to give or read to the patient.
+export function safetyPlanPage({ clinician, c }) {
+  const r = c.risk ?? {};
+  const steps = RISK.find((s) => s.title.startsWith('Safety plan')).fields;
+  return layout({
+    title: 'Safety plan',
+    clinician,
+    body: html`
+      <p><a href="/clinician/assessments/${c.assessment.id}">← Back to the assessment</a></p>
+      <h1>My safety plan</h1>
+      <p>${c.patient.first_name} ${c.patient.last_name} · made ${r.updated_at ?? ''}</p>
+      <ol class="safety-plan">
+        ${steps.map((f) => html`<li><h2>${f.label.replace(/^\d+\.\s*/, '')}</h2><p class="prewrap">${r[f.id] || '—'}</p></li>`)}
+      </ol>
+      <p class="crisis">If you are in danger or thinking about harming yourself: call 112. In Sweden you can also call Mind Självmordslinjen on 90101, or 1177 for healthcare advice.</p>`,
+  });
 }
 
 // ---------- Checklist for one disorder ----------
@@ -443,6 +589,20 @@ export function finalReportPage({ clinician, c, suggestions }) {
               ${e.ev.counts.map((n) => html` · ${n.present} of ${n.of} symptoms (≥ ${n.min})`)}
               ${e.notes ? html`<br /><span class="hint">${e.notes}</span>` : ''}</li>`)}</ul>`
           : html`<p class="hint">No in-depth checklists were completed.</p>`}
+      </section>
+
+      <section class="card">
+        <h2>Intake interview</h2>
+        ${renderSummary(INTERVIEW, c.interview)}
+        <h3>Mental status examination</h3>
+        ${renderSummary(MSE, c.interview)}
+      </section>
+
+      ${c.informant ? html`<section class="card"><h2>Informant</h2>${renderSummary(INFORMANT, c.informant)}</section>` : ''}
+
+      <section class="card">
+        <h2>Suicide risk assessment</h2>
+        ${c.risk ? renderSummary(RISK, c.risk) : html`<p class="hint">Not done${riskIndicators(c).length ? '' : ' (no indication found)'}.</p>`}
       </section>
 
       <section class="card">

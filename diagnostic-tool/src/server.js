@@ -32,6 +32,7 @@ import { RATINGS } from './criteria.js';
 import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
+import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -260,12 +261,15 @@ function loadCase(req) {
     intake: parseJson(assessment.intake_json, null),
     checklists: parseJson(assessment.checklists_json, {}),
     diagnoses: parseJson(assessment.diagnoses_json, { items: [], finalNote: '' }),
+    interview: parseJson(assessment.interview_json, null),
+    risk: parseJson(assessment.risk_json, null),
+    informant: parseJson(assessment.informant_json, null),
     defaultLowEducation: defaultLowEducation(patient),
   };
 }
 
 function suggestionsFor(c) {
-  return buildSuggestions({ answers: c.answers, results: c.results, patient: c.patient, intake: c.intake });
+  return buildSuggestions({ answers: c.answers, results: c.results, patient: c.patient, intake: c.intake, interview: c.interview, informant: c.informant });
 }
 
 const notFound = (req, res) =>
@@ -339,6 +343,43 @@ clinician.post('/assessments/:id/intake', (req, res) => {
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });
 
+// ---------- Intake interview, informant, risk assessment ----------
+// One pattern for all three forms: a page, a parser (clinical-forms.js) and
+// the database column the result is saved in.
+
+const FORMS = {
+  interview: { page: workflow.interviewPage, parse: parseInterview, column: 'interview_json' },
+  informant: { page: workflow.informantPage, parse: parseInformant, column: 'informant_json' },
+  risk: { page: workflow.riskPage, parse: parseRisk, column: 'risk_json' },
+};
+
+for (const [name, form] of Object.entries(FORMS)) {
+  clinician.get(`/assessments/:id/${name}`, (req, res) => {
+    const c = loadCase(req);
+    if (!c) return notFound(req, res);
+    if (!c.assessment.completed_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+    send(res, form.page({ clinician: req.clinician, c }));
+  });
+
+  clinician.post(`/assessments/:id/${name}`, (req, res) => {
+    const c = editableCase(req, res);
+    if (!c) return;
+    const result = form.parse(req.body);
+    if (result.errors) {
+      return send(res, form.page({ clinician: req.clinician, c, errors: result.errors, values: req.body }), 400);
+    }
+    db.prepare(`UPDATE assessments SET ${form.column} = ? WHERE id = ?`).run(JSON.stringify(result[name]), c.assessment.id);
+    res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  });
+}
+
+clinician.get('/assessments/:id/risk/plan', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (!c.risk) return res.redirect(`/clinician/assessments/${c.assessment.id}/risk`);
+  send(res, workflow.safetyPlanPage({ clinician: req.clinician, c }));
+});
+
 // ---------- In-depth criteria checklists ----------
 
 function checklistDisorder(req) {
@@ -399,6 +440,11 @@ clinician.post('/assessments/:id/finalize', (req, res) => {
   const c = editableCase(req, res);
   if (!c) return;
   c.diagnoses.finalNote = String(req.body.final_note ?? '').slice(0, 5000);
+  // e.g. a required suicide risk assessment is missing (clinical-forms.js)
+  const blocker = finalizeBlocker(c);
+  if (blocker) {
+    return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors: [blocker] }), 400);
+  }
   db.prepare('UPDATE assessments SET diagnoses_json = ?, finalized_at = ? WHERE id = ? AND finalized_at IS NULL').run(
     JSON.stringify(c.diagnoses), now(), c.assessment.id
   );

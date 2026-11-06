@@ -38,7 +38,8 @@ const post = (path, fields, cookie) =>
     method: 'POST',
     redirect: 'manual',
     headers: { 'content-type': 'application/x-www-form-urlencoded', ...(cookie ? { cookie } : {}) },
-    body: new URLSearchParams(fields),
+    // Arrays are sent as repeated keys (family=a&family=b), like a browser's checkboxes.
+    body: new URLSearchParams(Object.entries(fields).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : [[k, v]]))),
   });
 
 test('clinician pages require login', async () => {
@@ -130,7 +131,8 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.ok(report.includes('Differential diagnosis screening'));
   assert.ok(report.includes('Priority:</strong> screen positive for Bipolar I or II disorder'));
   // Suggestions from the screening, in the portal and in the email
-  assert.ok(report.includes('3. In-depth assessment'));
+  assert.ok(report.includes('6. In-depth assessment'));
+  assert.ok(report.includes('Required before finalizing'), 'item 9 answered: risk assessment required');
   assert.ok(report.includes('checklist?disorder=bipolar1'));
   assert.ok(email.includes('SUGGESTED IN-DEPTH ASSESSMENTS'));
   assert.ok(email.includes('Bipolar I disorder [Suggested]'));
@@ -225,6 +227,15 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   await post(`${casePath}/checklist?disorder=bipolar1`, bp1, cookie);
   assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bipolar1', action: 'confirm' }, cookie)).status, 400);
   assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bipolar1', action: 'confirm', override: 'Testing the override.' }, cookie)).status, 302);
+  // Finalizing needs the intake interview first
+  assert.equal((await post(`${casePath}/finalize`, { final_note: 'x' }, cookie)).status, 400);
+  assert.equal((await post(`${casePath}/interview`, {}, cookie)).status, 400, 'reason is required');
+  const iv = await post(`${casePath}/interview`, { reason: 'Low mood and forgetfulness', family: ['depression', 'dementia'], mse_orientation: 'oriented', prev_attempt: 'none' }, cookie);
+  assert.equal(iv.status, 302);
+  // Informant: refused without consent, saved with it
+  assert.equal((await post(`${casePath}/informant`, { inf_name: 'Eva', inf_relationship: 'Wife', inf_consent: 'no' }, cookie)).status, 400);
+  assert.equal((await post(`${casePath}/informant`, { inf_name: 'Eva', inf_relationship: 'Wife', inf_consent: 'yes', inf_memory: 'yes' }, cookie)).status, 302);
+
   const fin = await post(`${casePath}/finalize`, { final_note: 'Recurrent depression; cognition to be followed up.' }, cookie);
   assert.equal(fin.headers.get('location'), `${casePath}/final`);
   const final = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
@@ -234,6 +245,9 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   assert.ok(final.includes('21/30'));
   assert.ok(final.includes('Not allowed together'));
   assert.ok(final.includes('Testing the override.'));
+  assert.ok(final.includes('Low mood and forgetfulness'), 'interview in the final report');
+  assert.ok(final.includes('Depression, Dementia'), 'family history in the final report');
+  assert.ok(final.includes('Eva'), 'informant in the final report');
 
   // Finalized: no more changes
   assert.equal((await post(`${casePath}/checklist?disorder=mdd`, mddRatings, cookie)).status, 409);
@@ -248,4 +262,36 @@ test('an on-site assessment cannot be answered through a patient link', async ()
   insert.run(patientId, hashToken('known-link-token'), '2099-01-01T00:00:00Z', 'link');
   assert.equal((await fetch(`${base}/q/known-onsite-token`)).status, 404);
   assert.equal((await fetch(`${base}/q/known-link-token`)).status, 200);
+});
+
+test('a required risk assessment blocks finalizing until it is done, then gives a safety plan', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Sam', last_name: 'Ek', personal_number: '19990101-0000', gender: 'Non-binary / other',
+    age: '26', education: 'Upper secondary school', employed: '1',
+  }, cookie);
+  const start = await post(`${created.headers.get('location')}/assessments`, { mode: 'onsite' }, cookie);
+  const casePath = start.headers.get('location').replace('/screening', '');
+  await post(`${casePath}/screening`, makeAnswers({ phq2: 3, phq9: 2 }), cookie);
+  await post(`${casePath}/interview`, { reason: 'Crisis after break-up' }, cookie);
+
+  const blocked = await post(`${casePath}/finalize`, {}, cookie);
+  assert.equal(blocked.status, 400);
+  assert.ok((await blocked.text()).includes('A suicide risk assessment is required'));
+
+  assert.equal((await post(`${casePath}/risk`, { ideation: 'active' }, cookie)).status, 400, 'formulation and plan required');
+  const risk = await post(`${casePath}/risk`, {
+    ideation: 'active', formulation: 'Acute crisis; strong family support.', immediate: 'no', plan: 'Daily phone contact this week.',
+    risk_factors: ['recent_loss', 'hopelessness'], protective: 'support', sp_people: 'Mum 070-000 00 00',
+  }, cookie);
+  assert.equal(risk.status, 302);
+  const plan = await (await fetch(`${base}${casePath}/risk/plan`, { headers: { cookie } })).text();
+  assert.ok(plan.includes('My safety plan'));
+  assert.ok(plan.includes('Mum 070-000 00 00'));
+
+  assert.equal((await post(`${casePath}/finalize`, {}, cookie)).status, 302);
+  const final = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
+  assert.ok(final.includes('Recent loss, crisis or humiliation, Hopelessness'));
+  assert.ok(final.includes('Daily phone contact this week.'));
 });

@@ -72,6 +72,9 @@ const NEW_ASSESSMENT_COLUMNS = {
   checklists_json: 'TEXT', // in-depth criteria ratings per disorder
   diagnoses_json: 'TEXT', // diagnoses the clinician confirmed
   finalized_at: 'TEXT',
+  interview_json: 'TEXT', // intake interview and mental status examination
+  risk_json: 'TEXT', // suicide risk assessment and safety plan
+  informant_json: 'TEXT', // information from someone who knows the patient
 };
 const existing = new Set(db.prepare('PRAGMA table_info(assessments)').all().map((c) => c.name));
 for (const [name, type] of Object.entries(NEW_ASSESSMENT_COLUMNS)) {

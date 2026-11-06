@@ -41,7 +41,7 @@ export function deliriumSigns(obs) {
   return { assessed: true, positive };
 }
 
-export function buildSuggestions({ answers: a, results, patient, intake }) {
+export function buildSuggestions({ answers: a, results, patient, intake, interview, informant }) {
   const found = new Map();
   function add(disorderId, strength, reason) {
     const existing = found.get(disorderId);
@@ -205,6 +205,44 @@ export function buildSuggestions({ answers: a, results, patient, intake }) {
   }
   if (anyOcrd && (flagged('medical') || possible('medical'))) {
     add('medical_ocrd', STRENGTH.CONSIDER, 'Obsessive-compulsive or related symptoms together with a medical condition.');
+  }
+
+  // ----- From the intake interview and the informant -----
+  const iv = interview ?? {};
+  const inf = informant ?? {};
+  if (iv.family?.includes('bipolar') && found.has('mdd')) {
+    add('mdd', STRENGTH.SUGGESTED, 'Family history of bipolar disorder: ask carefully about past hypomanic or manic periods before diagnosing MDD.');
+    add('bipolar2', STRENGTH.CONSIDER, 'Depression with a family history of bipolar disorder.');
+  }
+  if (['pregnant', 'postpartum'].includes(iv.perinatal) && found.has('mdd')) {
+    add('mdd', STRENGTH.SUGGESTED, 'Pregnant or recently gave birth: consider the "with peripartum onset" specifier (onset in pregnancy or within 4 weeks after delivery).');
+  }
+  if (iv.mse_hallucinations === 'yes' || iv.mse_delusions === 'yes') {
+    add('schizophrenia', STRENGTH.CONSIDER, 'Delusions or hallucinations in the mental status examination.');
+    add('delusional', STRENGTH.CONSIDER, 'Delusions or hallucinations in the mental status examination.');
+  }
+  if (iv.mse_thought_form === 'flight' || iv.mse_speech === 'pressured') {
+    add('bipolar1', STRENGTH.CONSIDER, 'Flight of ideas or pressured speech in the mental status examination.');
+  }
+  if (iv.mse_obsessions === 'yes') add('ocd', STRENGTH.CONSIDER, 'Obsessions in the mental status examination.');
+  if (iv.mse_orientation === 'disoriented') {
+    add('delirium', STRENGTH.SUGGESTED, 'Disoriented in the mental status examination: exclude delirium first.');
+    add('major_ncd', STRENGTH.CONSIDER, 'Disoriented in the mental status examination.');
+  }
+  if (inf.inf_elevated === 'yes') {
+    const reason = `Informant (${inf.inf_relationship}) has seen periods of elevated mood, energy or reduced sleep lasting days.`;
+    add('bipolar1', STRENGTH.SUGGESTED, reason);
+    add('bipolar2', STRENGTH.SUGGESTED, reason);
+  }
+  if (inf.inf_memory === 'yes') {
+    add('mild_ncd', Number(patient.age) >= 60 ? STRENGTH.SUGGESTED : STRENGTH.CONSIDER, `Informant (${inf.inf_relationship}) has noticed a decline in memory or thinking.`);
+    if (inf.inf_daily === 'yes') add('major_ncd', STRENGTH.SUGGESTED, 'Informant reports decline in memory or thinking AND more help needed with everyday activities.');
+  }
+  if (inf.inf_psychotic === 'yes') add('schizophrenia', STRENGTH.CONSIDER, 'Informant has noticed odd beliefs, suspiciousness or responding to things that are not there.');
+  if (inf.inf_traits === 'yes') {
+    for (const s of found.values()) {
+      if (findDisorder(s.disorderId).category === 'personality') s.reasons.push('Informant confirms long-standing difficulties since adolescence or early adulthood.');
+    }
   }
 
   // ----- Neurological findings: refer, do not diagnose here -----
