@@ -144,14 +144,18 @@ function select(name, options, selected) {
   </select>`;
 }
 
-export function newPatientPage({ clinician, errors = [], values = {} }) {
+// New patient, or editing an existing one (when `patient` is given).
+export function newPatientPage({ clinician, patient, errors = [], values = {} }) {
+  const title = patient ? 'Edit patient details' : 'New patient';
   return layout({
-    title: 'New patient',
+    title,
     clinician,
     body: html`
-      <h1>New patient</h1>
+      ${patient ? html`<p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>` : ''}
+      <h1>${title}</h1>
+      ${patient ? html`<p class="hint">Changes are recorded in the audit log (which fields changed, by whom and when).</p>` : ''}
       ${errors.length ? html`<div class="error" role="alert"><p>Please fix:</p><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
-      <form method="post" action="/clinician/patients" class="card">
+      <form method="post" action="${patient ? `/clinician/patients/${patient.id}/edit` : '/clinician/patients'}" class="card">
         <div class="grid2">
           <label>First name <input name="first_name" required maxlength="100" value="${values.first_name}" /></label>
           <label>Last name <input name="last_name" required maxlength="100" value="${values.last_name}" /></label>
@@ -167,7 +171,7 @@ export function newPatientPage({ clinician, errors = [], values = {} }) {
           <label class="choice"><input type="radio" name="employed" value="1" required ${values.employed === '1' ? html`checked` : ''} /> Yes</label>
           <label class="choice"><input type="radio" name="employed" value="0" ${values.employed === '0' ? html`checked` : ''} /> No</label>
         </fieldset>
-        <button>Save patient</button>
+        <button>${patient ? 'Save changes' : 'Save patient'}</button>
       </form>`,
   });
 }
@@ -178,12 +182,14 @@ function languageSelect() {
   return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}">${name}</option>`)}</select>`;
 }
 
-export function patientPage({ clinician, patient, assessments, newLink }) {
+export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [] }) {
   return layout({
     title: `${patient.first_name} ${patient.last_name}`,
     clinician,
     body: html`
       <h1>${patient.first_name} ${patient.last_name}</h1>
+      ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
+      <p class="record-links"><a href="/clinician/patients/${patient.id}/edit">Edit details</a> · <a href="/clinician/patients/${patient.id}/audit">Audit log</a></p>
       <dl class="card details">
         <dt>Personal number</dt><dd>${patient.personal_number}</dd>
         <dt>Gender</dt><dd>${patient.gender}</dd>
@@ -245,7 +251,19 @@ export function patientPage({ clinician, patient, assessments, newLink }) {
                 </tr>`;
               })}
             </tbody>
-          </table>`}`,
+          </table>`}
+
+      ${followupSection(patient, assessments, followups, followupLink)}
+
+      <details class="card danger-zone">
+        <summary>Delete patient record</summary>
+        <p>This permanently deletes the patient and all assessments. Use it only for records created by mistake or when the law requires deletion: health records usually have to be kept for a set time (in Sweden, at least 10 years under Patientdatalagen). The deletion is kept in the audit log.</p>
+        <form method="post" action="/clinician/patients/${patient.id}/delete">
+          <label>Type the patient’s last name to confirm <input name="confirm_last_name" required autocomplete="off" /></label>
+          <label>Reason <input name="reason" maxlength="300" /></label>
+          <button class="danger">Delete permanently</button>
+        </form>
+      </details>`,
   });
 }
 
@@ -532,6 +550,29 @@ export function thankYouPage({ safetyFlag, language = 'en' }) {
 export function linkInvalidPage({ language = 'en' }) {
   const t = STRINGS[language];
   return layout({ title: t.invalidTitle, language, body: html`<h1>${t.invalidTitle}</h1><p>${t.invalidText}</p>` });
+}
+
+export function auditPage({ clinician, patient, entries, actions }) {
+  return layout({
+    title: 'Audit log',
+    clinician,
+    body: html`
+      <p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>
+      <h1>Audit log</h1>
+      <p class="hint">Every view and change of this patient’s information (newest first, up to 500 entries).</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>When (UTC)</th><th>Who</th><th>What</th><th>Assessment</th><th>Detail</th></tr></thead>
+        <tbody>${entries.map((e) => html`<tr>
+          <td class="code">${e.at}</td><td>${e.clinician_name ?? `#${e.clinician_id}`}</td><td>${actions[e.action] ?? e.action}</td>
+          <td>${e.assessment_id ? html`<a href="/clinician/assessments/${e.assessment_id}">#${e.assessment_id}</a>` : ''}</td><td>${e.detail ?? ''}</td>
+        </tr>`)}</tbody>
+      </table></div>`,
+  });
+}
+
+// Filled in by phase D (follow-up measurements).
+function followupSection() {
+  return '';
 }
 
 export function messagePage({ title, message, clinician }) {

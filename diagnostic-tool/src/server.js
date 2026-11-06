@@ -33,6 +33,7 @@ import { RATINGS } from './criteria.js';
 import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
+import { audit, auditForPatient, ACTIONS } from './audit.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -165,15 +166,16 @@ clinician.get('/', (req, res) => {
 
 clinician.get('/patients/new', (req, res) => send(res, views.newPatientPage({ clinician: req.clinician })));
 
-clinician.post('/patients', (req, res) => {
+// Checks the patient form. Used for both new and edited patients.
+function validatePatient(body) {
   const values = {
-    first_name: clean(req.body.first_name),
-    last_name: clean(req.body.last_name),
-    personal_number: clean(req.body.personal_number, 20),
-    gender: clean(req.body.gender),
-    age: clean(req.body.age, 3),
-    education: clean(req.body.education),
-    employed: clean(req.body.employed, 1),
+    first_name: clean(body.first_name),
+    last_name: clean(body.last_name),
+    personal_number: clean(body.personal_number, 20),
+    gender: clean(body.gender),
+    age: clean(body.age, 3),
+    education: clean(body.education),
+    employed: clean(body.employed, 1),
   };
   const errors = [];
   if (!values.first_name) errors.push('First name is required.');
@@ -184,28 +186,73 @@ clinician.post('/patients', (req, res) => {
   if (!Number.isInteger(age) || age < 16 || age > 120) errors.push('Age must be a whole number between 16 and 120.');
   if (!views.EDUCATION_OPTIONS.includes(values.education)) errors.push('Choose a level of education.');
   if (values.employed !== '0' && values.employed !== '1') errors.push('Choose whether the patient is employed.');
+  const record = [values.first_name, values.last_name, values.personal_number, values.gender, age, values.education, Number(values.employed)];
+  return { values, errors, record };
+}
 
-  if (errors.length) {
-    return send(res, views.newPatientPage({ clinician: req.clinician, errors, values }), 400);
-  }
-
+clinician.post('/patients', (req, res) => {
+  const { values, errors, record } = validatePatient(req.body);
+  if (errors.length) return send(res, views.newPatientPage({ clinician: req.clinician, errors, values }), 400);
   const result = db
     .prepare(
       `INSERT INTO patients (clinician_id, first_name, last_name, personal_number, gender, age, education, employed)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(
-      req.clinician.id,
-      values.first_name,
-      values.last_name,
-      values.personal_number,
-      values.gender,
-      age,
-      values.education,
-      Number(values.employed)
-    );
+    .run(req.clinician.id, ...record);
+  audit(req.clinician.id, 'create_patient', { patientId: Number(result.lastInsertRowid) });
   res.redirect(`/clinician/patients/${result.lastInsertRowid}`);
 });
+
+clinician.get('/patients/:id/edit', (req, res) => {
+  const patient = ownPatient(req);
+  if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
+  send(res, views.newPatientPage({ clinician: req.clinician, patient, values: { ...patient, age: String(patient.age), employed: String(patient.employed) } }));
+});
+
+clinician.post('/patients/:id/edit', (req, res) => {
+  const patient = ownPatient(req);
+  if (!patient) return res.status(404).send('Not found');
+  const { values, errors, record } = validatePatient(req.body);
+  if (errors.length) return send(res, views.newPatientPage({ clinician: req.clinician, patient, errors, values }), 400);
+  db.prepare(
+    `UPDATE patients SET first_name = ?, last_name = ?, personal_number = ?, gender = ?, age = ?, education = ?, employed = ?
+      WHERE id = ? AND clinician_id = ?`
+  ).run(...record, patient.id, req.clinician.id);
+  // Record which fields changed (names only, not the values themselves).
+  const fields = ['first_name', 'last_name', 'personal_number', 'gender', 'age', 'education', 'employed'];
+  const changed = fields.filter((f, i) => String(patient[f]) !== String(record[i]));
+  audit(req.clinician.id, 'edit_patient', { patientId: patient.id, detail: changed.length ? `Changed: ${changed.join(', ')}` : 'No changes' });
+  res.redirect(`/clinician/patients/${patient.id}`);
+});
+
+clinician.post('/patients/:id/delete', (req, res) => {
+  const patient = ownPatient(req);
+  if (!patient) return res.status(404).send('Not found');
+  // Typing the last name is a deliberate step against deleting by mistake.
+  if (clean(req.body.confirm_last_name).toLowerCase() !== patient.last_name.toLowerCase()) {
+    const assessments = db.prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY id DESC').all(patient.id);
+    return send(res, views.patientPage({
+      clinician: req.clinician, patient, assessments, followups: followupsOf(patient.id),
+      errors: ['To delete, type the patient\u2019s last name exactly.'],
+    }), 400);
+  }
+  db.prepare('DELETE FROM followups WHERE patient_id = ?').run(patient.id);
+  db.prepare('DELETE FROM assessments WHERE patient_id = ?').run(patient.id);
+  db.prepare('DELETE FROM patients WHERE id = ? AND clinician_id = ?').run(patient.id, req.clinician.id);
+  audit(req.clinician.id, 'delete_patient', { patientId: patient.id, detail: clean(req.body.reason, 300) || null });
+  send(res, views.messagePage({ title: 'Patient deleted', message: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.', clinician: req.clinician }));
+});
+
+clinician.get('/patients/:id/audit', (req, res) => {
+  const patient = ownPatient(req);
+  if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
+  audit(req.clinician.id, 'view_audit', { patientId: patient.id });
+  send(res, views.auditPage({ clinician: req.clinician, patient, entries: auditForPatient(patient.id), actions: ACTIONS }));
+});
+
+function followupsOf(patientId) {
+  return db.prepare('SELECT * FROM followups WHERE patient_id = ? ORDER BY id DESC').all(patientId);
+}
 
 function showPatient(req, res, newLink) {
   const patient = ownPatient(req);
@@ -213,7 +260,8 @@ function showPatient(req, res, newLink) {
   const assessments = db
     .prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY created_at DESC, id DESC')
     .all(patient.id);
-  send(res, views.patientPage({ clinician: req.clinician, patient, assessments, newLink }));
+  audit(req.clinician.id, 'view_patient', { patientId: patient.id });
+  send(res, views.patientPage({ clinician: req.clinician, patient, assessments, newLink, followups: followupsOf(patient.id) }));
 }
 
 clinician.get('/patients/:id', (req, res) => showPatient(req, res, null));
@@ -237,6 +285,7 @@ clinician.post('/patients/:id/assessments', (req, res) => {
     .prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode, language) VALUES (?, ?, ?, ?, ?)')
     .run(patient.id, hashToken(token), expires.toISOString(), mode, language);
 
+  audit(req.clinician.id, 'start_assessment', { patientId: patient.id, assessmentId: Number(result.lastInsertRowid), detail: `${mode}, ${language}` });
   if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}/screening`);
   showPatient(req, res, { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) });
 });
@@ -266,6 +315,7 @@ function loadCase(req) {
     interview: parseJson(assessment.interview_json, null),
     risk: parseJson(assessment.risk_json, null),
     informant: parseJson(assessment.informant_json, null),
+    amendments: parseJson(assessment.amendments_json, []),
     defaultLowEducation: defaultLowEducation(patient),
   };
 }
@@ -299,10 +349,14 @@ function editableCase(req, res) {
 
 const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 
+const auditCase = (req, c, action, detail) =>
+  audit(req.clinician.id, action, { patientId: c.patient.id, assessmentId: c.assessment.id, detail });
+
 clinician.get('/assessments/:id', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   const suggestions = c.results ? suggestionsFor(c) : null;
+  auditCase(req, c, 'view_assessment');
   send(res, workflow.casePage({ clinician: req.clinician, c, suggestions }));
 });
 
@@ -346,6 +400,7 @@ clinician.post('/assessments/:id/screening', (req, res) => {
     return send(res, onsitePage(req, c, { answers: draft, consentDone: true, error: `${errors.length} questions are not answered yet. The answers so far are saved.` }), 400);
   }
   const done = completeScreening(c.assessment, c.patient, answers);
+  auditCase(req, c, 'save_screening');
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
   if (done) emailResults(c.assessment, c.patient, done);
 });
@@ -360,6 +415,7 @@ clinician.post('/assessments/:id/intake', (req, res) => {
     return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
   }
   db.prepare('UPDATE assessments SET intake_json = ? WHERE id = ?').run(JSON.stringify(intake), c.assessment.id);
+  auditCase(req, c, 'save_intake');
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });
 
@@ -378,6 +434,7 @@ for (const [name, form] of Object.entries(FORMS)) {
     const c = loadCase(req);
     if (!c) return notFound(req, res);
     if (!c.assessment.completed_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+    auditCase(req, c, `view_${name}`);
     send(res, form.page({ clinician: req.clinician, c }));
   });
 
@@ -389,6 +446,7 @@ for (const [name, form] of Object.entries(FORMS)) {
       return send(res, form.page({ clinician: req.clinician, c, errors: result.errors, values: req.body }), 400);
     }
     db.prepare(`UPDATE assessments SET ${form.column} = ? WHERE id = ?`).run(JSON.stringify(result[name]), c.assessment.id);
+    auditCase(req, c, `save_${name}`);
     res.redirect(`/clinician/assessments/${c.assessment.id}`);
   });
 }
@@ -397,6 +455,7 @@ clinician.get('/assessments/:id/risk/plan', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (!c.risk) return res.redirect(`/clinician/assessments/${c.assessment.id}/risk`);
+  auditCase(req, c, 'view_safety_plan');
   send(res, workflow.safetyPlanPage({ clinician: req.clinician, c }));
 });
 
@@ -434,6 +493,7 @@ clinician.post('/assessments/:id/checklist', (req, res) => {
   }
   c.checklists[disorder.id] = { ratings, specifiers, notes: String(req.body.notes ?? '').slice(0, 5000), updated_at: now() };
   db.prepare('UPDATE assessments SET checklists_json = ? WHERE id = ?').run(JSON.stringify(c.checklists), c.assessment.id);
+  auditCase(req, c, 'save_checklist', disorder.name);
   res.redirect(`/clinician/assessments/${c.assessment.id}/checklist?disorder=${disorder.id}`);
 });
 
@@ -453,6 +513,7 @@ clinician.post('/assessments/:id/diagnoses', (req, res) => {
     return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors: [result.error] }), 400);
   }
   db.prepare('UPDATE assessments SET diagnoses_json = ? WHERE id = ?').run(JSON.stringify(result.diagnoses), c.assessment.id);
+  auditCase(req, c, 'diagnosis', `${req.body.action} ${req.body.disorder}`);
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });
 
@@ -468,13 +529,37 @@ clinician.post('/assessments/:id/finalize', (req, res) => {
   db.prepare('UPDATE assessments SET diagnoses_json = ?, finalized_at = ? WHERE id = ? AND finalized_at IS NULL').run(
     JSON.stringify(c.diagnoses), now(), c.assessment.id
   );
+  auditCase(req, c, 'finalize');
   res.redirect(`/clinician/assessments/${c.assessment.id}/final`);
+});
+
+// Reopening a finalized assessment needs a reason. The diagnoses as they were
+// are kept in the amendment history, and the final report shows it.
+clinician.post('/assessments/:id/reopen', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (!c.assessment.finalized_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const reason = clean(req.body.reason, 1000);
+  if (!reason) {
+    return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors: ['Write why the assessment is reopened.'] }), 400);
+  }
+  c.amendments.push({
+    reopened_at: now(),
+    by: req.clinician.name,
+    reason,
+    previously_finalized_at: c.assessment.finalized_at,
+    diagnoses_before: c.diagnoses.items.map((d) => `${d.code} ${d.name}`),
+  });
+  db.prepare('UPDATE assessments SET finalized_at = NULL, amendments_json = ? WHERE id = ?').run(JSON.stringify(c.amendments), c.assessment.id);
+  auditCase(req, c, 'reopen', reason);
+  res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });
 
 clinician.get('/assessments/:id/final', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (!c.assessment.finalized_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  auditCase(req, c, 'view_final');
   send(res, workflow.finalReportPage({ clinician: req.clinician, c, suggestions: suggestionsFor(c) }));
 });
 

@@ -102,7 +102,18 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
     title: `Assessment — ${patient.last_name}`,
     clinician,
     body: html`${header}
-      ${locked ? html`<p class="note">This assessment was finalized ${assessment.finalized_at} and can no longer be changed. <a href="${base}/final">Open the final report</a>.</p>` : ''}
+      ${locked
+        ? html`<div class="note">
+            <p>This assessment was finalized ${assessment.finalized_at} and is locked. <a href="${base}/final">Open the final report</a>.</p>
+            <details><summary>Reopen to make a correction</summary>
+              <form method="post" action="${base}/reopen">
+                <label>Why is it reopened? (kept in the change history) <input name="reason" required maxlength="1000" /></label>
+                <button class="small">Reopen assessment</button>
+              </form>
+            </details>
+          </div>`
+        : ''}
+      ${amendmentHistory(c.amendments)}
       ${r.safetyFlag ? html`<div class="alert" role="alert"><strong>Safety alert:</strong> the patient answered “${r.safetyAnswer}” to PHQ-9 item 9 (thoughts of death or self-harm). Assess suicide risk.</div>` : ''}
       ${suggestions.neuroReferral.some((n) => n.urgent)
         ? html`<div class="alert" role="alert"><strong>Possible urgent neurological symptoms:</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. Ask when they started; if within the last days, arrange emergency assessment.</div>`
@@ -311,6 +322,14 @@ function diagnosisSection(base, c, evaluations, locked) {
           <p class="hint">After finalizing, the assessment cannot be changed. ${confirmed.length === 0 ? 'No diagnosis is confirmed: the report will say that no diagnosis in this app was made.' : ''}</p>
           <button>Finalize assessment</button>
         </form>`}`;
+}
+
+function amendmentHistory(amendments) {
+  if (!amendments?.length) return '';
+  return html`<section class="card">
+    <h2>Change history</h2>
+    <ul>${amendments.map((a) => html`<li>Reopened ${a.reopened_at} by ${a.by} (finalized ${a.previously_finalized_at}). Reason: ${a.reason}. Diagnoses before: ${a.diagnoses_before.join('; ') || 'none'}.</li>`)}</ul>
+  </section>`;
 }
 
 // ---------- Risk assessment card on the assessment page ----------
@@ -617,6 +636,8 @@ export function finalReportPage({ clinician, c, suggestions }) {
         ${suggestions.neuroReferral.length ? html`<h3>Neurological referral</h3><ul>${suggestions.neuroReferral.map((n) => html`<li>${n.finding}. ${n.action}</li>`)}</ul>` : ''}
         ${suggestions.outOfScope.length ? html`<h3>Findings outside this app</h3><ul>${suggestions.outOfScope.map((o) => html`<li>${o.condition}</li>`)}</ul>` : ''}
       </section>
+
+      ${amendmentHistory(c.amendments)}
 
       <p class="disclaimer">Diagnoses were confirmed by the clinician named above. The app's criteria checklists and suggestions support, but do not replace, clinical judgement. ICD-10 codes should be checked against ICD-10-SE before reporting.</p>`,
   });

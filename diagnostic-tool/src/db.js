@@ -78,8 +78,43 @@ const NEW_ASSESSMENT_COLUMNS = {
   language: "TEXT NOT NULL DEFAULT 'en'", // questionnaire language: 'en' or 'sv'
   draft_json: 'TEXT', // answers saved part-way through the questionnaire
   consent_at: 'TEXT', // when the patient confirmed they had read the information
+  amendments_json: 'TEXT', // history of reopening a finalized assessment
 };
 const existing = new Set(db.prepare('PRAGMA table_info(assessments)').all().map((c) => c.name));
 for (const [name, type] of Object.entries(NEW_ASSESSMENT_COLUMNS)) {
   if (!existing.has(name)) db.exec(`ALTER TABLE assessments ADD COLUMN ${name} ${type}`);
 }
+
+// Who looked at or changed what, and when. Deliberately NOT linked to the
+// patients table with a foreign key: the log must survive when a patient
+// record is deleted, so that the deletion itself stays on record.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id            INTEGER PRIMARY KEY,
+    at            TEXT NOT NULL DEFAULT (datetime('now')),
+    clinician_id  INTEGER NOT NULL,
+    action        TEXT NOT NULL,
+    patient_id    INTEGER,
+    assessment_id INTEGER,
+    detail        TEXT
+  );
+  CREATE INDEX IF NOT EXISTS audit_patient ON audit_log (patient_id);
+`);
+
+// Follow-up measurements (PHQ-9 + GAD-7) after the assessment, to see
+// whether treatment helps. Answered by link or on site, like the screening.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS followups (
+    id           INTEGER PRIMARY KEY,
+    patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL UNIQUE,
+    mode         TEXT NOT NULL DEFAULT 'link',
+    language     TEXT NOT NULL DEFAULT 'en',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at   TEXT NOT NULL,
+    revoked      INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
+    answers_json TEXT,
+    results_json TEXT
+  );
+`);

@@ -465,3 +465,17 @@ dl.summary-list dd {
   text-align: right;
   margin: 0;
 }
+
+.record-links {
+  margin-top: -0.5rem;
+}
+.danger-zone {
+  border-color: var(--danger);
+}
+.danger-zone summary {
+  color: var(--danger);
+  cursor: pointer;
+}
+button.danger {
+  background: var(--danger);
+}

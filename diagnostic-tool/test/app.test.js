@@ -342,3 +342,46 @@ test('patient link: Swedish, save part-way, keep answers when some are missing',
 function makeAnswersCount() {
   return Object.keys(makeAnswers()).length;
 }
+
+test('data protection: edit details, audit log, reopen with history, delete with confirmation', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female',
+    age: '25', education: 'Upper secondary school', employed: '1',
+  }, cookie);
+  const patientPath = created.headers.get('location');
+  const patientId = Number(patientPath.split('/').pop());
+
+  // Edit: invalid age refused, valid change saved and logged by field name only
+  const edit = { first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female', age: '15', education: 'Upper secondary school', employed: '1' };
+  assert.equal((await post(`${patientPath}/edit`, edit, cookie)).status, 400);
+  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26' }, cookie)).status, 302);
+  const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie } })).text();
+  assert.ok(auditHtml.includes('Edited patient details'));
+  assert.ok(auditHtml.includes('Changed: age'));
+  assert.ok(!auditHtml.includes('>26<'), 'the new value itself is not written to the log');
+
+  // Finalize, then reopen: needs a reason, and the history is kept
+  const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
+  const casePath = start.headers.get('location').replace('/screening', '');
+  await post(`${casePath}/screening`, { ...makeAnswers({}), consent_given: 'yes' }, cookie);
+  await post(`${casePath}/interview`, { reason: 'Check-up' }, cookie);
+  assert.equal((await post(`${casePath}/finalize`, {}, cookie)).status, 302);
+  assert.equal((await post(`${casePath}/reopen`, {}, cookie)).status, 400);
+  assert.equal((await post(`${casePath}/reopen`, { reason: 'Wrong date in interview' }, cookie)).status, 302);
+  await post(`${casePath}/finalize`, {}, cookie);
+  const final = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
+  assert.ok(final.includes('Change history'));
+  assert.ok(final.includes('Wrong date in interview'));
+
+  // Delete: needs the exact last name; afterwards the record is gone but the log remains
+  assert.equal((await post(`${patientPath}/delete`, { confirm_last_name: 'Wrong' }, cookie)).status, 400);
+  assert.equal((await post(`${patientPath}/delete`, { confirm_last_name: 'holm', reason: 'Test record' }, cookie)).status, 200);
+  assert.equal((await fetch(base + patientPath, { headers: { cookie } })).status, 404);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM assessments WHERE patient_id = ?').get(patientId).n, 0);
+  const log = db.prepare('SELECT action FROM audit_log WHERE patient_id = ? ORDER BY id').all(patientId).map((r) => r.action);
+  assert.ok(log.includes('delete_patient'));
+  assert.ok(log.includes('reopen'));
+  assert.ok(log.includes('view_final'));
+});
