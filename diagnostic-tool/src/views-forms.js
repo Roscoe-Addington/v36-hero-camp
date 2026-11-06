@@ -1,7 +1,7 @@
 // Draws a form schema (see forms.js) as HTML, and summarises saved answers.
 
 import { html } from './views.js';
-import { fieldsOf, optionLabel } from './forms.js';
+import { summaryRows } from './forms.js';
 
 function field(f, value, disabled) {
   const off = disabled ? html`disabled` : '';
@@ -32,13 +32,8 @@ export function renderForm(schema, values = {}, { disabled = false } = {}) {
 // A compact read-only summary: only the fields that have an answer.
 export function renderSummary(schema, values) {
   if (!values) return html`<p class="hint">Not filled in yet.</p>`;
-  const rows = fieldsOf(schema)
-    .map((f) => {
-      const v = values[f.id];
-      if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return null;
-      const shown = Array.isArray(v) ? v.map((x) => optionLabel(schema, f.id, x)).join(', ') : f.options ? optionLabel(schema, f.id, v) : v;
-      return html`<dt>${f.label}</dt><dd class="prewrap">${shown}</dd>`;
-    })
-    .filter(Boolean);
-  return rows.length ? html`<dl class="summary-list">${rows}</dl>` : html`<p class="hint">No answers recorded.</p>`;
+  const rows = summaryRows(schema, values);
+  return rows.length
+    ? html`<dl class="summary-list">${rows.map((r) => html`<dt>${r.label}</dt><dd class="prewrap">${r.value}</dd>`)}</dl>`
+    : html`<p class="hint">No answers recorded.</p>`;
 }

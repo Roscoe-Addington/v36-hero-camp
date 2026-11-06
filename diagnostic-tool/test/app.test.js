@@ -560,3 +560,35 @@ test('retention: patient page shows how long the record is kept; review page lis
   assert.equal((await post(`/clinician/patients/${id}/delete`, { confirm_last_name: 'Record', reason: 'Retention period ended' }, cookie)).status, 200);
   assert.ok(!(await (await fetch(`${base}/clinician/retention`, { headers: { cookie } })).text()).includes('Record, Old'));
 });
+
+test('final report as PDF: only when finalized, names the treating clinician, logged', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Åsa', last_name: 'Öberg', personal_number: '19700101-0000', gender: 'Female',
+    age: '56', education: 'Upper secondary school', employed: '1',
+  }, cookie);
+  const patientPath = created.headers.get('location');
+  const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
+  const casePath = start.headers.get('location').replace('/screening', '');
+  await answerPages(`${casePath}/screening`, { ...makeAnswers({ phq1: 2, phq2: 2 }), consent_given: 'yes' }, cookie);
+  await post(`${casePath}/interview`, { reason: 'Nedstämdhet ≥ 2 veckor' }, cookie);
+
+  assert.equal((await fetch(`${base}${casePath}/final.pdf`, { headers: { cookie }, redirect: 'manual' })).status, 302, 'not before finalizing');
+  await post(`${casePath}/finalize`, { final_note: 'Översikt: lätt nedstämdhet.' }, cookie);
+
+  const res = await fetch(`${base}${casePath}/final.pdf`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/pdf');
+  assert.match(res.headers.get('content-disposition'), /attachment; filename="assessment-\d+-final-report\.pdf"/);
+  assert.ok(!res.headers.get('content-disposition').includes('Öberg'), 'no name in the file name');
+  const pdf = Buffer.from(await res.arrayBuffer());
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.length > 2000);
+
+  const id = Number(casePath.split('/').pop());
+  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'download_pdf' AND assessment_id = ?").get(id));
+  const page = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
+  assert.ok(page.includes('Download PDF'));
+  assert.ok(page.includes('<dt>Treating clinician</dt><dd>Dr Test</dd>'));
+});

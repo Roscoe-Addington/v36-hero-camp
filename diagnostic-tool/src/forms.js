@@ -46,3 +46,17 @@ export function optionLabel(schema, fieldId, value) {
   const field = fieldsOf(schema).find((f) => f.id === fieldId);
   return field?.options?.find(([v]) => v === value)?.[1] ?? value;
 }
+
+// The answered fields of a form as plain { label, value } rows, with option
+// values turned into their labels. Used by the HTML summary and the PDF.
+export function summaryRows(schema, values) {
+  if (!values) return [];
+  return fieldsOf(schema)
+    .map((f) => {
+      const v = values[f.id];
+      if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return null;
+      const value = Array.isArray(v) ? v.map((x) => optionLabel(schema, f.id, x)).join(', ') : f.options ? optionLabel(schema, f.id, v) : v;
+      return { label: f.label, value: String(value) };
+    })
+    .filter(Boolean);
+}

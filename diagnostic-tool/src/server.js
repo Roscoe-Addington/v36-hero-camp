@@ -22,6 +22,7 @@ import {
 } from './auth.js';
 import { parseAnswers, parsePartialAnswers, PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT } from './questionnaire.js';
 import { responseQuality } from './response-quality.js';
+import { finalReportPdf } from './pdf-report.js';
 import { lang, STRINGS } from './i18n.js';
 import { scoreAll } from './scoring.js';
 import { runDifferential } from './differential.js';
@@ -379,6 +380,8 @@ function loadCase(req) {
     patient,
     // Supervisors and colleagues see the assessment but cannot change it.
     readOnly: !accessOf(req.clinician.id, patient)?.owner,
+    // The treating clinician, named in reports (not whoever is viewing).
+    ownerName: ownerOf(patient).name,
     answers: parseJson(assessment.answers_json, null),
     results: parseJson(assessment.results_json, null),
     intake: parseJson(assessment.intake_json, null),
@@ -704,6 +707,20 @@ clinician.post('/assessments/:id/reopen', (req, res) => {
   db.prepare('UPDATE assessments SET finalized_at = NULL, amendments_json = ? WHERE id = ?').run(JSON.stringify(c.amendments), c.assessment.id);
   auditCase(req, c, 'reopen', reason);
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
+});
+
+// The final report as a PDF file. The file name holds no patient name.
+clinician.get('/assessments/:id/final.pdf', async (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (!c.assessment.finalized_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const pdf = await finalReportPdf({ c, suggestions: suggestionsFor(c), clinicianName: c.ownerName });
+  auditCase(req, c, 'download_pdf');
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="assessment-${c.assessment.id}-final-report.pdf"`,
+  });
+  res.send(pdf);
 });
 
 clinician.get('/assessments/:id/final', (req, res) => {

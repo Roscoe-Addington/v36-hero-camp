@@ -599,13 +599,14 @@ export function finalReportPage({ clinician, c, suggestions }) {
     body: html`
       <p><a href="/clinician/assessments/${assessment.id}">← Back to the assessment</a></p>
       <h1>Final assessment report</h1>
+      <p><a class="button" href="/clinician/assessments/${assessment.id}/final.pdf">Download PDF</a></p>
       <dl class="card details">
         <dt>Patient</dt><dd>${patient.first_name} ${patient.last_name}</dd>
         <dt>Personal number</dt><dd>${patient.personal_number}</dd>
         <dt>Age / gender</dt><dd>${patient.age} / ${patient.gender}</dd>
         <dt>Education</dt><dd>${patient.education}</dd>
         <dt>Employed</dt><dd>${patient.employed ? 'Yes' : 'No'}</dd>
-        <dt>Clinician</dt><dd>${clinician.name}</dd>
+        <dt>Treating clinician</dt><dd>${c.ownerName ?? clinician.name}</dd>
         <dt>Intake screening</dt><dd>${assessment.mode === 'onsite' ? 'On site' : 'By link'}, completed ${assessment.completed_at}</dd>
         <dt>Finalized</dt><dd>${assessment.finalized_at}</dd>
       </dl>
@@ -664,6 +665,6 @@ export function finalReportPage({ clinician, c, suggestions }) {
 
       ${amendmentHistory(c.amendments)}
 
-      <p class="disclaimer">Diagnoses were confirmed by the clinician named above. The app's criteria checklists and suggestions support, but do not replace, clinical judgement. ICD-10 codes should be checked against ICD-10-SE before reporting.</p>`,
+      <p class="disclaimer">Diagnoses were confirmed by the treating clinician named above. The app's criteria checklists and suggestions support, but do not replace, clinical judgement. ICD-10 codes should be checked against ICD-10-SE before reporting.</p>`,
   });
 }

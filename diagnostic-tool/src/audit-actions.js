@@ -9,6 +9,7 @@ export const ACTIONS = {
   start_assessment: 'Started assessment',
   view_assessment: 'Viewed assessment',
   view_final: 'Viewed final report',
+  download_pdf: 'Downloaded final report (PDF)',
   view_safety_plan: 'Viewed safety plan',
   view_interview: 'Viewed intake interview',
   view_informant: 'Viewed informant information',
