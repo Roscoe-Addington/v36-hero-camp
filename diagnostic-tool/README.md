@@ -241,6 +241,9 @@ src/views-forms.js     draws the schema forms and their summaries
 src/followup.js        follow-up scoring and change over time
 src/i18n.js            English and Swedish patient-facing text
 src/audit.js           the audit log
+src/item-sources.js    where each question comes from (validated / adapted / own)
+src/pdf-report.js      the final report as a PDF
+docs/VALIDATION-PLAN.md  what needs validating, and how (living document)
 src/access.js          who may see a patient (treating clinician + named colleagues)
 src/retention.js       how long data is kept, and automatic cleanup
 src/response-quality.js  signs of tired or careless answering
@@ -344,6 +347,16 @@ English.
   websites are rejected.
 - Emails mask the personal number (last 4 digits only) unless
   `EMAIL_INCLUDE_PERSONAL_NUMBER=true`. The SMTP connection requires TLS.
+
+## Validation
+
+**[docs/VALIDATION-PLAN.md](docs/VALIDATION-PLAN.md)** lists everything that
+is not validated (68 of the 95 questions, the rules, the clinical content
+and the translations) and how to validate or replace it: replace an item
+with a validated instrument where one exists, or check it against a full
+diagnostic interview (gold standard). It is a living document: the source
+of every question is recorded in `src/item-sources.js`, and `npm test`
+fails if a new question is not classified, or not listed in the plan.
 
 ## Before real patients use this
 
