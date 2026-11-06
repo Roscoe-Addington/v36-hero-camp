@@ -43,7 +43,7 @@ db.exec(`
     gender          TEXT NOT NULL,
     age             INTEGER NOT NULL,
     education       TEXT NOT NULL,
-    employed        INTEGER NOT NULL,  -- 1 = yes, 0 = no
+    employed        INTEGER NOT NULL,  -- 1 = yes, 0 = no, 2 = student
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
 

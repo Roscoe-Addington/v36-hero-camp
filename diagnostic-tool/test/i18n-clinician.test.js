@@ -10,7 +10,7 @@ import { STRENGTH } from '../src/suggestions.js';
 import { LEVEL } from '../src/conflicts.js';
 import { KIND } from '../src/response-quality.js';
 import { MOCA_DOMAINS, mocaBand } from '../src/moca.js';
-import { GENDER_OPTIONS, EDUCATION_OPTIONS } from '../src/views.js';
+import { GENDER_OPTIONS, EDUCATION_OPTIONS, EMPLOYMENT_OPTIONS } from '../src/views.js';
 import { FREQUENCY_OPTIONS, DIFFICULTY_OPTIONS } from '../src/questionnaire.js';
 import { ACTIONS } from '../src/audit-actions.js';
 import { INTERVIEW_FORM, RISK, INFORMANT } from '../src/clinical-forms.js';
@@ -32,7 +32,7 @@ test('fixed lists translated by lookup have Swedish (statuses, options, form lab
   const lists = [
     ...Object.values(LIKELIHOOD), ...Object.values(DIFF), ...Object.values(CRITERIA), ...Object.values(STRENGTH),
     ...Object.values(LEVEL), ...Object.values(KIND), ...MOCA_DOMAINS.map((d) => d.label), ...[30, 20, 12, 5].map(mocaBand),
-    ...GENDER_OPTIONS, ...EDUCATION_OPTIONS, ...FREQUENCY_OPTIONS.map((o) => o.label), ...DIFFICULTY_OPTIONS.map((o) => o.label),
+    ...GENDER_OPTIONS, ...EDUCATION_OPTIONS, ...EMPLOYMENT_OPTIONS.map((o) => o.label), ...FREQUENCY_OPTIONS.map((o) => o.label), ...DIFFICULTY_OPTIONS.map((o) => o.label),
     'Minimal', 'Mild', 'Moderate', 'Moderately severe', 'Severe', 'Present', 'Absent', 'Unclear',
     'Supervisor', 'Close colleague', 'Treating clinician', 'Follow-up', 'Intake screening', ...Object.values(ACTIONS),
     ...[INTERVIEW_FORM, RISK, INFORMANT].flatMap((s) => s.flatMap((sec) => [sec.title, ...sec.fields.flatMap((f) => [f.label, ...(f.options ?? []).map((o) => o[1])])])),

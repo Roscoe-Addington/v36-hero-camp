@@ -8,7 +8,7 @@
 // Swedish. Clinical rule content (criteria, rule-out reasons, suggestion
 // reasons) is still English only; see TRA-3 in docs/VALIDATION-PLAN.md.
 
-import { html, layout, screeningSections } from './views.js';
+import { html, layout, screeningSections, employmentLabel } from './views.js';
 import { DISORDERS, CATEGORIES, findDisorder } from './disorders.js';
 import { evaluateDisorder, evaluateRule, STATUS, RATINGS } from './criteria.js';
 import { MOCA_DOMAINS, MOCA_CUTOFF, scoreMoca } from './moca.js';
@@ -629,7 +629,7 @@ export function finalReportPage({ clinician, c, suggestions }) {
         <dt>${t('Personal number')}</dt><dd>${patient.personal_number}</dd>
         <dt>${t('Age / gender')}</dt><dd>${patient.age} / ${t(patient.gender)}</dd>
         <dt>${t('Education')}</dt><dd>${t(patient.education)}</dd>
-        <dt>${t('Employed')}</dt><dd>${patient.employed ? t('Yes') : t('No')}</dd>
+        <dt>${t('Employment')}</dt><dd>${employmentLabel(patient.employed, t)}</dd>
         <dt>${t('Treating clinician')}</dt><dd>${c.ownerName ?? clinician.name}</dd>
         <dt>${t('Intake screening')}</dt><dd>${assessment.mode === 'onsite' ? t('On site') : t('By link')}, ${t('completed {date}', { date: assessment.completed_at })}</dd>
         <dt>${t('Finalized')}</dt><dd>${assessment.finalized_at}</dd>

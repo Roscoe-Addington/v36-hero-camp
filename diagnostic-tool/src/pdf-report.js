@@ -13,6 +13,7 @@ import { summaryRows } from './forms.js';
 import { INTERVIEW, MSE, RISK, INFORMANT, riskIndicators } from './clinical-forms.js';
 import { scoreMoca } from './moca.js';
 import { translator } from './i18n-clinician.js';
+import { employmentLabel } from './views.js';
 
 // Characters WinAnsi has above Latin-1 (code points 0x80-0x9F in Windows-1252).
 const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
@@ -89,7 +90,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
     { label: t('Personal number'), value: patient.personal_number },
     { label: t('Age / gender'), value: `${patient.age} / ${t(patient.gender)}` },
     { label: t('Education'), value: t(patient.education) },
-    { label: t('Employed'), value: patient.employed ? t('Yes') : t('No') },
+    { label: t('Employment'), value: employmentLabel(patient.employed, t) },
     { label: t('Treating clinician'), value: clinicianName },
     { label: t('Intake screening'), value: `${assessment.mode === 'onsite' ? t('On site') : t('By link')}, ${t('completed {date}', { date: assessment.completed_at })}` },
   ]);

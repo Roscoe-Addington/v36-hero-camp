@@ -144,6 +144,17 @@ export function dashboardPage({ clinician, patients }) {
 
 // ---------- Clinician: new patient form ----------
 
+// Stored in patients.employed: 1 = yes, 0 = no, 2 = student.
+export const EMPLOYMENT_OPTIONS = [
+  { value: '1', label: 'Yes' },
+  { value: '0', label: 'No' },
+  { value: '2', label: 'Student' },
+];
+export function employmentLabel(value, t = (s) => s) {
+  const option = EMPLOYMENT_OPTIONS.find((o) => o.value === String(value));
+  return option ? t(option.label) : '';
+}
+
 export const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary / other', 'Prefer not to say'];
 export const EDUCATION_OPTIONS = [
   'Primary / compulsory school',
@@ -187,8 +198,7 @@ export function newPatientPage({ clinician, patient, errors = [], values = {} })
         <label>${t('Level of education')} ${select(t, 'education', EDUCATION_OPTIONS, values.education)}</label>
         <fieldset>
           <legend>${t('Currently employed?')}</legend>
-          <label class="choice"><input type="radio" name="employed" value="1" required ${values.employed === '1' ? html`checked` : ''} /> ${t('Yes')}</label>
-          <label class="choice"><input type="radio" name="employed" value="0" ${values.employed === '0' ? html`checked` : ''} /> ${t('No')}</label>
+          ${EMPLOYMENT_OPTIONS.map((o, i) => html`<label class="choice"><input type="radio" name="employed" value="${o.value}" ${i === 0 ? html`required` : ''} ${values.employed === o.value ? html`checked` : ''} /> ${t(o.label)}</label>`)}
         </fieldset>
         <button>${patient ? t('Save changes') : t('Save patient')}</button>
       </form>`,
@@ -221,7 +231,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
         <dt>${t('Gender')}</dt><dd>${t(patient.gender)}</dd>
         <dt>${t('Age')}</dt><dd>${patient.age}</dd>
         <dt>${t('Education')}</dt><dd>${t(patient.education)}</dd>
-        <dt>${t('Employed')}</dt><dd>${patient.employed ? t('Yes') : t('No')}</dd>
+        <dt>${t('Employment')}</dt><dd>${employmentLabel(patient.employed, t)}</dd>
       </dl>
 
       ${newLink

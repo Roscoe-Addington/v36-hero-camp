@@ -245,7 +245,7 @@ function validatePatient(body) {
   const age = Number(values.age);
   if (!Number.isInteger(age) || age < 16 || age > 120) errors.push('Age must be a whole number between 16 and 120.');
   if (!views.EDUCATION_OPTIONS.includes(values.education)) errors.push('Choose a level of education.');
-  if (values.employed !== '0' && values.employed !== '1') errors.push('Choose whether the patient is employed.');
+  if (!views.EMPLOYMENT_OPTIONS.some((o) => o.value === values.employed)) errors.push('Choose whether the patient is employed or a student.');
   const record = [values.first_name, values.last_name, values.personal_number, values.gender, age, values.education, Number(values.employed)];
   return { values, errors, record };
 }

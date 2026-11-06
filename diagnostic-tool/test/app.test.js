@@ -366,6 +366,15 @@ test('data protection: edit details, audit log, reopen with history, delete with
   assert.ok(auditHtml.includes('Changed: age'));
   assert.ok(!auditHtml.includes('>26<'), 'the new value itself is not written to the log');
 
+  // Employment: "Student" is a third option; anything else is refused
+  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '3' }, cookie)).status, 400);
+  const editForm = await (await fetch(`${base}${patientPath}/edit`, { headers: { cookie } })).text();
+  assert.ok(editForm.includes('name="employed" value="2"'), 'the form offers Student');
+  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '2' }, cookie)).status, 302);
+  assert.equal(db.prepare('SELECT employed FROM patients WHERE id = ?').get(patientId).employed, 2);
+  const studentPage = await (await fetch(base + patientPath, { headers: { cookie } })).text();
+  assert.match(studentPage, /<dt>Employment<\/dt><dd>Student<\/dd>/);
+
   // Finalize, then reopen: needs a reason, and the history is kept
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
   const casePath = start.headers.get('location').replace('/screening', '');
@@ -609,6 +618,8 @@ test('clinician pages in Swedish: login link, language switch saved on the accou
   const id = db.prepare('SELECT id FROM patients WHERE clinician_id = 1 LIMIT 1').get().id;
   const patient = await (await fetch(`${base}/clinician/patients/${id}`, { headers: { cookie } })).text();
   assert.ok(patient.includes('Starta en ny bedömning'));
+  const form = await (await fetch(`${base}/clinician/patients/new`, { headers: { cookie } })).text();
+  assert.ok(form.includes('Studerar'), 'Student option in Swedish');
   // Switch back so other tests are unaffected
   await fetch(`${base}/clinician/language`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie }, body: 'language=en' });
   assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie } })).text()).includes('<h1>Patients</h1>'));
