@@ -45,10 +45,31 @@ app" so they are not lost.
    specifiers (e.g. severity). The app shows whether the criteria are
    **met**, **not met** or still **incomplete**, and the ICD-10 code.
 6. **Diagnosis.** The clinician confirms diagnoses. Confirming one whose
-   criteria are not met requires a written reason.
+   criteria are not met requires a written reason. The app checks every
+   combination of diagnoses (see below).
 7. **Final report.** Finalizing locks the assessment and produces a report
    with the diagnoses, ICD-10 codes, checklist results, MoCA and screening
    summary.
+
+### Differential diagnosis and conflict checks
+
+Every checklist page has a **rule-out table** (`src/differential-lists.js`):
+the conditions to exclude for that disorder, each with a reason. Conditions
+in the app link to their own checklist and show its result; conditions
+outside the app (e.g. ADHD, PTSD, psychotic disorders) are named so they are
+assessed in the interview.
+
+When diagnoses are confirmed, the app checks each combination
+(`src/conflicts.js`) on three levels:
+
+| Level | Meaning | Example |
+| --- | --- | --- |
+| Not allowed together | DSM-5-TR does not allow both. Confirming needs a written reason. | Major depressive disorder + bipolar I |
+| Check before giving both | Allowed only if a condition holds. Shown as a warning. | Substance-induced depression + major depressive disorder |
+| Coding note | Allowed, coded in a special way. | Panic disorder + agoraphobia (ICD-10 F40.01) |
+
+The rules for confirming diagnoses live in one pure function
+(`src/diagnosis.js`) that both the server and the browser demo use.
 
 ### About the MoCA
 
@@ -169,6 +190,9 @@ src/disorders.js       the 31 disorders: criteria, rules, ICD-10 codes
 src/criteria.js        evaluates a checklist (met / not met / incomplete)
 src/moca.js            MoCA score entry and interpretation
 src/views-workflow.js  assessment, checklist and final report pages
+src/differential-lists.js  what to rule out for each disorder
+src/conflicts.js       which diagnoses may be given together
+src/diagnosis.js       confirming and removing diagnoses (shared with the demo)
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens
@@ -206,7 +230,9 @@ Before using it with real patients, at minimum:
 - [ ] Add an audit log (who viewed which patient, when).
 - [ ] Have clinicians review `src/scoring.js`, `src/differential.js`,
       `src/suggestions.js`, every criteria label and rule in
-      `src/disorders.js`, and the ICD-10 codes against ICD-10-SE.
+      `src/disorders.js`, the rule-out lists in `src/differential-lists.js`,
+      the combination rules in `src/conflicts.js`, and the ICD-10 codes
+      against ICD-10-SE.
 - [ ] Get the screening questions written for this tool validated, or
       replace them with validated instruments (they are not validated).
 - [ ] Clarify the medical device (MDR) classification. Software that

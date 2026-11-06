@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { answers as makeAnswers } from './helpers.js';
+import { findDisorder, criterionIds } from '../src/disorders.js';
 
 process.env.DB_PATH = ':memory:';
 process.env.NODE_ENV = 'test';
@@ -213,6 +214,17 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
 
   // Confirm MDD and finalize
   assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'mdd', action: 'confirm', note: '' }, cookie)).status, 302);
+
+  // Checklist page shows what to rule out
+  const mddPage = await (await fetch(`${base}${casePath}/checklist?disorder=mdd`, { headers: { cookie } })).text();
+  assert.ok(mddPage.includes('Differential diagnosis: rule out'));
+  assert.ok(mddPage.includes('checklist?disorder=bipolar1'));
+
+  // Bipolar I together with MDD: refused without a reason, accepted with one
+  const bp1 = Object.fromEntries(criterionIds(findDisorder('bipolar1')).map((id) => [id, 'present']));
+  await post(`${casePath}/checklist?disorder=bipolar1`, bp1, cookie);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bipolar1', action: 'confirm' }, cookie)).status, 400);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bipolar1', action: 'confirm', override: 'Testing the override.' }, cookie)).status, 302);
   const fin = await post(`${casePath}/finalize`, { final_note: 'Recurrent depression; cognition to be followed up.' }, cookie);
   assert.equal(fin.headers.get('location'), `${casePath}/final`);
   const final = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
@@ -220,6 +232,8 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   assert.ok(final.includes('F33.1'));
   assert.ok(final.includes('Major depressive disorder'));
   assert.ok(final.includes('21/30'));
+  assert.ok(final.includes('Not allowed together'));
+  assert.ok(final.includes('Testing the override.'));
 
   // Finalized: no more changes
   assert.equal((await post(`${casePath}/checklist?disorder=mdd`, mddRatings, cookie)).status, 409);

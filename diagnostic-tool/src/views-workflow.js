@@ -10,6 +10,22 @@ import { DISORDERS, CATEGORIES, findDisorder } from './disorders.js';
 import { evaluateDisorder, evaluateRule, STATUS, RATINGS } from './criteria.js';
 import { MOCA_DOMAINS, MOCA_CUTOFF, scoreMoca } from './moca.js';
 import { STRENGTH } from './suggestions.js';
+import { DIFFERENTIALS } from './differential-lists.js';
+import { conflictsAmong, conflictsFor, LEVEL } from './conflicts.js';
+
+function levelBadge(level) {
+  const cls = { [LEVEL.CONFLICT]: 'danger', [LEVEL.CHECK]: 'warn', [LEVEL.CODING]: 'info' }[level];
+  return html`<span class="badge ${cls}">${level}</span>`;
+}
+
+// "Major depressive disorder + Bipolar I disorder"
+function pairName(r) {
+  return r.ids.map((id) => findDisorder(id).name).join(' + ');
+}
+
+function conflictList(rules) {
+  return html`<ul class="conflicts">${rules.map((r) => html`<li>${levelBadge(r.level)} <strong>${pairName(r)}.</strong> ${r.message}</li>`)}</ul>`;
+}
 
 const RATING_LABELS = { present: 'Present', absent: 'Absent', unclear: 'Unclear' };
 
@@ -221,6 +237,10 @@ function diagnosisSection(base, c, evaluations, locked) {
           </tr>`)}</tbody>
         </table></div>`
       : html`<p class="hint">No diagnosis confirmed yet.</p>`}
+    ${conflictsAmong(confirmed.map((d) => d.disorderId)).length
+      ? html`<h3>Checks for the confirmed diagnoses</h3>${conflictList(conflictsAmong(confirmed.map((d) => d.disorderId)))}`
+      : ''}
+    ${confirmed.filter((d) => d.conflictOverride).map((d) => html`<p class="note">Reason for giving ${d.name} despite a conflict: ${d.conflictOverride}</p>`)}
 
     ${locked
       ? ''
@@ -231,6 +251,8 @@ function diagnosisSection(base, c, evaluations, locked) {
               ${assessedNotConfirmed.map((id) => {
                 const d = findDisorder(id);
                 const ev = evaluations[id];
+                const preview = conflictsFor(id, [...confirmedIds]);
+                const blocking = preview.some((r) => r.level === LEVEL.CONFLICT);
                 return html`<form method="post" action="${base}/diagnoses" class="confirm-row">
                   <input type="hidden" name="disorder" value="${id}" />
                   <input type="hidden" name="action" value="confirm" />
@@ -238,10 +260,18 @@ function diagnosisSection(base, c, evaluations, locked) {
                   <label>Note${ev.status === STATUS.MET ? ' (optional)' : ' (required)'}
                     <input name="note" maxlength="1000" ${ev.status === STATUS.MET ? '' : html`required`} />
                   </label>
+                  ${preview.length ? conflictList(preview) : ''}
+                  ${blocking
+                    ? html`<label>Reason for giving both despite the conflict (required)
+                        <input name="override" maxlength="1000" required />
+                      </label>`
+                    : ''}
                   <button class="small">Confirm diagnosis</button>
                 </form>`;
               })}`
-          : html`<p class="hint">Assess a disorder in step 3 to be able to confirm it here.</p>`}
+          : Object.keys(evaluations).length
+            ? html`<p class="hint">Every disorder you assessed has been confirmed. Assess another one in step 3 to confirm more.</p>`
+            : html`<p class="hint">Assess a disorder in step 3 to be able to confirm it here.</p>`}
 
         <h3>Finalize</h3>
         <form method="post" action="${base}/finalize">
@@ -283,6 +313,8 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
         ${suggestion ? html`<p><strong>Why the screening suggested this:</strong></p><ul>${suggestion.reasons.map((x) => html`<li>${x}</li>`)}</ul>` : ''}
       </section>
 
+      ${ruleOutSection(base, c, disorder)}
+
       <p class="hint">Criteria are short reminders, not the DSM-5-TR text. Check the DSM-5-TR for the full wording. "Unclear" keeps the result open until you can decide.</p>
 
       <form method="post" action="${base}/checklist?disorder=${disorder.id}">
@@ -323,6 +355,39 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
   });
 }
 
+// ---------- Differential diagnosis on the checklist page ----------
+
+function ruleOutSection(base, c, disorder) {
+  const list = DIFFERENTIALS[disorder.id] ?? [];
+  const confirmedIds = c.diagnoses.items.map((d) => d.disorderId).filter((id) => id !== disorder.id);
+  const preview = conflictsFor(disorder.id, confirmedIds);
+  return html`<section class="card">
+    <h2>Differential diagnosis: rule out</h2>
+    <p class="hint">Conditions that can look like this disorder, or must be excluded before diagnosing it. Assessed ones show their checklist result.</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Condition</th><th>Why consider it</th><th>Status</th></tr></thead>
+      <tbody>
+        ${list.map((item) => {
+          if (item.outside) {
+            return html`<tr><td>${item.name}</td><td>${item.why}</td><td><span class="hint">Not in this app: assess in the interview</span></td></tr>`;
+          }
+          const other = findDisorder(item.id);
+          const checklist = c.checklists[item.id];
+          const confirmed = c.diagnoses.items.some((d) => d.disorderId === item.id);
+          return html`<tr>
+            <td><a href="${base}/checklist?disorder=${item.id}">${other.name}</a></td>
+            <td>${item.why}</td>
+            <td>${confirmed ? html`<span class="badge warn">Diagnosis confirmed</span> ` : ''}${checklist
+              ? criteriaBadge(evaluateDisorder(other, checklist, c.patient).status)
+              : html`<span class="hint">Not assessed</span>`}</td>
+          </tr>`;
+        })}
+      </tbody>
+    </table></div>
+    ${preview.length ? html`<h3>If you confirm this diagnosis</h3>${conflictList(preview)}` : ''}
+  </section>`;
+}
+
 // ---------- Final report ----------
 
 export function finalReportPage({ clinician, c, suggestions }) {
@@ -360,6 +425,10 @@ export function finalReportPage({ clinician, c, suggestions }) {
               <tbody>${c.diagnoses.items.map((d) => html`<tr><td class="code">${d.code}</td><td>${d.name}</td><td>${criteriaBadge(d.criteriaStatus)}</td><td>${d.note}</td></tr>`)}</tbody>
             </table></div>`
           : html`<p>No diagnosis in the scope of this app was made.</p>`}
+        ${conflictsAmong(c.diagnoses.items.map((d) => d.disorderId)).length
+          ? html`<h3>Combination checks</h3>${conflictList(conflictsAmong(c.diagnoses.items.map((d) => d.disorderId)))}`
+          : ''}
+        ${c.diagnoses.items.filter((d) => d.conflictOverride).map((d) => html`<p class="note">Reason for giving ${d.name} despite a conflict: ${d.conflictOverride}</p>`)}
         ${c.diagnoses.finalNote ? html`<h3>Summary</h3><p class="prewrap">${c.diagnoses.finalNote}</p>` : ''}
       </section>
 

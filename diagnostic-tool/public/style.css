@@ -405,3 +405,11 @@ button.secondary {
 .prewrap {
   white-space: pre-wrap;
 }
+
+ul.conflicts {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0;
+  display: grid;
+  gap: 0.4rem;
+}

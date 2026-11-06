@@ -28,7 +28,8 @@ import * as views from './views.js';
 import * as workflow from './views-workflow.js';
 import { buildSuggestions } from './suggestions.js';
 import { findDisorder, criterionIds } from './disorders.js';
-import { evaluateDisorder, RATINGS, STATUS as CRITERIA } from './criteria.js';
+import { RATINGS } from './criteria.js';
+import { applyDiagnosis } from './diagnosis.js';
 import { parseMoca, defaultLowEducation } from './moca.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -391,26 +392,17 @@ clinician.post('/assessments/:id/checklist', (req, res) => {
 clinician.post('/assessments/:id/diagnoses', (req, res) => {
   const c = editableCase(req, res);
   if (!c) return;
-  const disorder = findDisorder(String(req.body.disorder ?? ''));
-  if (!disorder) return notFound(req, res);
-  const items = c.diagnoses.items.filter((d) => d.disorderId !== disorder.id);
-
-  if (req.body.action === 'confirm') {
-    const checklist = c.checklists[disorder.id];
-    if (!checklist) {
-      const errors = [`Assess ${disorder.name} with the checklist before confirming it.`];
-      return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
-    }
-    const ev = evaluateDisorder(disorder, checklist, c.patient);
-    const note = clean(req.body.note, 1000);
-    if (ev.status !== CRITERIA.MET && !note) {
-      const errors = [`The criteria for ${disorder.name} are not met (${ev.status.toLowerCase()}). Write a note explaining why you confirm it.`];
-      return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
-    }
-    items.push({ disorderId: disorder.id, name: disorder.name, code: ev.code, criteriaStatus: ev.status, note, confirmed_at: now() });
+  // The rules live in diagnosis.js so the browser demo uses the same ones.
+  const result = applyDiagnosis(c, {
+    disorderId: req.body.disorder,
+    action: req.body.action,
+    note: req.body.note,
+    override: req.body.override,
+  });
+  if (result.error) {
+    return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors: [result.error] }), 400);
   }
-  c.diagnoses.items = items;
-  db.prepare('UPDATE assessments SET diagnoses_json = ? WHERE id = ?').run(JSON.stringify(c.diagnoses), c.assessment.id);
+  db.prepare('UPDATE assessments SET diagnoses_json = ? WHERE id = ?').run(JSON.stringify(result.diagnoses), c.assessment.id);
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });
 
