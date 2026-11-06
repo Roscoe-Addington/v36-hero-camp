@@ -37,6 +37,7 @@ import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
+import { clinicianLanguage } from './i18n-clinician.js';
 import { cleanup, recordsDue, keptUntil, policy as retentionPolicy } from './retention.js';
 import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
@@ -94,7 +95,7 @@ const clean = (value, max = 100) => String(value ?? '').replace(/\s+/g, ' ').tri
 
 app.get('/', (req, res) => res.redirect('/clinician'));
 
-app.get('/login', (req, res) => send(res, views.loginPage()));
+app.get('/login', (req, res) => send(res, views.loginPage({ language: clinicianLanguage(req.query.lang) })));
 
 // A real hash of a random password, used when the email is unknown so that
 // a wrong email and a wrong password take the same time to answer.
@@ -103,7 +104,7 @@ const DUMMY_HASH = hashPassword(newToken());
 app.post('/login', (req, res) => {
   const ip = req.ip;
   if (tooManyFailures(ip)) {
-    return send(res, views.loginPage({ error: 'Too many failed attempts. Try again in 15 minutes.' }), 429);
+    return send(res, views.loginPage({ error: 'Too many failed attempts. Try again in 15 minutes.', language: clinicianLanguage(req.body.language) }), 429);
   }
   const email = clean(req.body.email, 200).toLowerCase();
   const password = String(req.body.password ?? '');
@@ -111,7 +112,7 @@ app.post('/login', (req, res) => {
   const ok = verifyPassword(password, clinician ? clinician.password_hash : DUMMY_HASH) && clinician;
   if (!ok) {
     recordFailure(ip);
-    return send(res, views.loginPage({ error: 'Wrong email or password.' }), 401);
+    return send(res, views.loginPage({ error: 'Wrong email or password.', language: clinicianLanguage(req.body.language) }), 401);
   }
   clearFailures(ip);
   const session = createSession(clinician.id);
@@ -189,6 +190,19 @@ function ownedPatient(req) {
   const patient = accessiblePatient(req);
   return patient && req.access.owner ? patient : null;
 }
+
+// The language of the clinician pages, saved on the clinician's account.
+clinician.post('/language', (req, res) => {
+  db.prepare('UPDATE clinicians SET language = ? WHERE id = ?').run(clinicianLanguage(req.body.language), req.clinician.id);
+  // Back to the page the button was pressed on (same site only).
+  const back = req.get('referer');
+  let path = '/clinician';
+  try {
+    const url = new URL(back);
+    if (url.origin === BASE_URL || url.host === req.get('host')) path = url.pathname + url.search;
+  } catch {}
+  res.redirect(path.startsWith('/clinician') ? path : '/clinician');
+});
 
 clinician.get('/', (req, res) => {
   const patients = db
@@ -714,7 +728,7 @@ clinician.get('/assessments/:id/final.pdf', async (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (!c.assessment.finalized_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
-  const pdf = await finalReportPdf({ c, suggestions: suggestionsFor(c), clinicianName: c.ownerName });
+  const pdf = await finalReportPdf({ c, suggestions: suggestionsFor(c), clinicianName: c.ownerName, language: req.clinician.language });
   auditCase(req, c, 'download_pdf');
   res.set({
     'Content-Type': 'application/pdf',

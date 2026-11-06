@@ -310,14 +310,29 @@ the app: delete them according to the same rules.
 
 Patient pages (information page, questionnaire, follow-up, thank-you
 page) are in **English or Swedish** (`src/i18n.js`). The clinician picks
-the language when starting; the patient can switch. Clinician pages are in
-English.
+the language when starting; the patient can switch.
+
+Clinician pages are in **English or Swedish** too: each clinician switches
+in the menu, and the choice is saved on their account. The PDF report
+follows the language of the clinician who downloads it. The interface
+text, the forms (interview, MSE, risk, informant) and the server messages
+are translated (`src/i18n-clinician.js`, `src/i18n-clinician-sv.js`); a
+test fails if a text on the clinician pages has no Swedish translation.
+**Still in English:** disorder names, criteria, rule-out reasons,
+suggestion reasons and the differential report. They need the official
+Swedish DSM-5-TR terminology (TRA-3 in the validation plan).
 
 > **The Swedish PHQ-9, GAD-7, AUDIT-C and PC-PTSD-5 wording is an
 > unofficial translation written for this app.** Validated Swedish
 > versions exist. Changed wording can change how an instrument performs,
 > so replace them with the official translations before real use. The
 > other Swedish questions should be checked by a native speaker.
+
+## Emails
+
+Emails to clinicians contain **no names, personal numbers or health
+information**: only that results are ready (marked urgent when they need
+review today), an assessment number and a link to log in.
 
 ## Data protection features
 
@@ -387,9 +402,7 @@ Before using it with real patients, at minimum:
       text (legal basis, retention, access, rights).
 - [ ] Confirm the retention periods (`.env`) with the data protection
       officer, including how long audit logs must be kept.
-- [ ] Decide whether colleagues with access may change data or only
-      read it (today they have the same rights as the treating clinician,
-      except granting access and deleting).
+- [ ] Check the Swedish clinician texts with a Swedish-speaking clinician.
 - [ ] Have clinicians review the intake interview, risk assessment and
       safety plan forms against your organisation's routines.
 - [ ] Use a validated translation if patients answer in another language

@@ -56,7 +56,7 @@ export function clinicianForSession(token) {
   if (!token) return null;
   const row = db
     .prepare(
-      `SELECT c.id, c.name, c.email, s.expires_at
+      `SELECT c.id, c.name, c.email, c.language, s.expires_at
          FROM sessions s JOIN clinicians c ON c.id = s.clinician_id
         WHERE s.token_hash = ?`
     )
@@ -66,7 +66,7 @@ export function clinicianForSession(token) {
     destroySession(token);
     return null;
   }
-  return { id: row.id, name: row.name, email: row.email };
+  return { id: row.id, name: row.name, email: row.email, language: row.language || 'en' };
 }
 
 // Reads cookies from the request header without an extra library.

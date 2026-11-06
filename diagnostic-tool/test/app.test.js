@@ -503,7 +503,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
   // The supervisor can now see the patient and its assessments; the outsider still cannot
   assert.equal(await status(supervisor), 200);
   const page = await (await fetch(base + patientPath, { headers: { cookie: supervisor } })).text();
-  assert.ok(page.includes('You have <strong>read-only</strong> access as <strong>Supervisor</strong>'));
+  assert.ok(page.includes('You have read-only access as Supervisor, granted by Dr Test'));
   assert.ok(!page.includes('Delete patient record'), 'only the treating clinician can delete');
   assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie: supervisor } })).text()).includes('Shared by Dr Test'));
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, owner);
@@ -591,4 +591,25 @@ test('final report as PDF: only when finalized, names the treating clinician, lo
   const page = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
   assert.ok(page.includes('Download PDF'));
   assert.ok(page.includes('<dt>Treating clinician</dt><dd>Dr Test</dd>'));
+});
+
+test('clinician pages in Swedish: login link, language switch saved on the account', async () => {
+  assert.ok((await (await fetch(`${base}/login?lang=sv`)).text()).includes('Inloggning för behandlare'));
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const switched = await fetch(`${base}/clinician/language`, {
+    method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie, referer: `${base}/clinician/retention` },
+    body: 'language=sv',
+  });
+  assert.equal(switched.headers.get('location'), '/clinician/retention', 'back to the same page');
+  const list = await (await fetch(`${base}/clinician`, { headers: { cookie } })).text();
+  assert.ok(list.includes('<h1>Patienter</h1>'));
+  assert.ok(list.includes('lang="sv"'));
+  const id = db.prepare('SELECT id FROM patients WHERE clinician_id = 1 LIMIT 1').get().id;
+  const patient = await (await fetch(`${base}/clinician/patients/${id}`, { headers: { cookie } })).text();
+  assert.ok(patient.includes('Starta en ny bedömning'));
+  // Switch back so other tests are unaffected
+  await fetch(`${base}/clinician/language`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie }, body: 'language=en' });
+  assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie } })).text()).includes('<h1>Patients</h1>'));
 });

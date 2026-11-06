@@ -138,3 +138,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS access_clinician ON patient_access (clinician_id);
 `);
+
+// Each clinician chooses the language of the clinician pages ('en' or 'sv').
+if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'language')) {
+  db.exec("ALTER TABLE clinicians ADD COLUMN language TEXT NOT NULL DEFAULT 'en'");
+}

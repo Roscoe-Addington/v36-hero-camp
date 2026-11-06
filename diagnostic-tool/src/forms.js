@@ -49,14 +49,15 @@ export function optionLabel(schema, fieldId, value) {
 
 // The answered fields of a form as plain { label, value } rows, with option
 // values turned into their labels. Used by the HTML summary and the PDF.
-export function summaryRows(schema, values) {
+// `t` translates labels (optional; i18n-clinician.js).
+export function summaryRows(schema, values, t = (text) => text) {
   if (!values) return [];
   return fieldsOf(schema)
     .map((f) => {
       const v = values[f.id];
       if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return null;
-      const value = Array.isArray(v) ? v.map((x) => optionLabel(schema, f.id, x)).join(', ') : f.options ? optionLabel(schema, f.id, v) : v;
-      return { label: f.label, value: String(value) };
+      const value = Array.isArray(v) ? v.map((x) => t(optionLabel(schema, f.id, x))).join(', ') : f.options ? t(optionLabel(schema, f.id, v)) : v;
+      return { label: t(f.label), value: String(value) };
     })
     .filter(Boolean);
 }

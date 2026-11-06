@@ -328,7 +328,8 @@ These are not questions, but they decide what the clinician sees.
 | --- | --- | --- | --- |
 | TRA-1 | Swedish PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5 (unofficial translation in `src/i18n.js`) | Replace with the official validated Swedish versions; do not validate our own translation. | Open |
 | TRA-2 | Swedish wording of the own and adapted items | Forward translation by two translators, reconciliation, back-translation, review, then cognitive interviews in Swedish (ISPOR / WHO translation guidance). Items replaced by instruments use the instrument's official Swedish version instead. | Open |
-| TRA-3 | Swedish clinical terms on the clinician pages (disorder names, criteria labels, rule-out reasons) | These are still in English. Use the official Swedish DSM-5-TR terminology (licensed) and ICD-10-SE names; do not invent terms. | Open |
+| TRA-3 | Swedish clinical terms on the clinician pages | Interface, forms and messages are translated (`src/i18n-clinician-sv.js`). Still in English: disorder names, criteria labels, specifiers, rule-out reasons, conflict messages, suggestion reasons, the differential report and the MoCA error messages. Use the official Swedish DSM-5-TR terminology (licensed) and ICD-10-SE names; do not invent terms. | Open |
+| TRA-5 | Swedish interface text on the clinician pages | Review by a Swedish-speaking clinician (written for this app). | Open |
 | TRA-4 | Patient information text (consent page) | Written by the data protection officer in both languages. | Open |
 
 ## 8. Order of work
@@ -358,3 +359,4 @@ These are not questions, but they decide what the clinician sees.
 | Date | Change |
 | --- | --- |
 | 2026-11-06 | First version: 68 items needing validation (59 own, 9 adapted), 12 rules and content components, 4 translation items. |
+| 2026-11-06 | Clinician pages translated into Swedish: TRA-3 narrowed to the clinical content, TRA-5 added (review of the Swedish interface text). |

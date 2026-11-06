@@ -18,11 +18,13 @@ import {
   PAGES,
   isShown,
   progress,
+  findItem,
 } from './questionnaire.js';
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
 import { STATUS } from './differential.js';
 import { STRINGS, LANGUAGES, itemText, optionText, sectionText, difficultyText } from './i18n.js';
 import { measurementSeries, progressSummary } from './followup.js';
+import { translator, CLINICIAN_LANGUAGES } from './i18n-clinician.js';
 
 // ---------- The escaping helper ----------
 
@@ -62,8 +64,10 @@ export function html(strings, ...values) {
 // ---------- Shared layout ----------
 
 export function layout({ title, clinician, body, language = 'en', skipScript = false }) {
+  const t = translator(clinician?.language);
+  const other = clinician?.language === 'sv' ? 'en' : 'sv';
   return html`<!doctype html>
-<html lang="${language}">
+<html lang="${clinician ? clinician.language ?? 'en' : language}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -74,13 +78,14 @@ export function layout({ title, clinician, body, language = 'en', skipScript = f
   </head>
   <body>
     <header class="topbar">
-      <span class="brand">Mental Health Assessment</span>
+      <span class="brand">${t('Mental Health Assessment')}</span>
       ${clinician
         ? html`<nav>
-            <a href="/clinician">Patients</a>
-            <a href="/clinician/patients/new">New patient</a>
-            <a href="/clinician/retention">Retention</a>
-            <form method="post" action="/logout" class="inline"><button class="link">Log out (${clinician.name})</button></form>
+            <a href="/clinician">${t('Patients')}</a>
+            <a href="/clinician/patients/new">${t('New patient')}</a>
+            <a href="/clinician/retention">${t('Retention')}</a>
+            <form method="post" action="/clinician/language" class="inline"><button class="link" name="language" value="${other}" lang="${other}">${CLINICIAN_LANGUAGES[other]}</button></form>
+            <form method="post" action="/logout" class="inline"><button class="link">${t('Log out ({name})', { name: clinician.name })}</button></form>
           </nav>`
         : ''}
     </header>
@@ -91,16 +96,21 @@ export function layout({ title, clinician, body, language = 'en', skipScript = f
 
 // ---------- Login ----------
 
-export function loginPage({ error } = {}) {
+export function loginPage({ error, language = 'en' } = {}) {
+  const t = translator(language);
+  const other = language === 'sv' ? 'en' : 'sv';
   return layout({
-    title: 'Clinician login',
+    title: t('Clinician login'),
+    language,
     body: html`
-      <h1>Clinician login</h1>
-      ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
+      <p class="lang-switch"><a href="/login?lang=${other}" lang="${other}">${CLINICIAN_LANGUAGES[other]}</a></p>
+      <h1>${t('Clinician login')}</h1>
+      ${error ? html`<p class="error" role="alert">${t(error)}</p>` : ''}
       <form method="post" action="/login" class="card narrow">
-        <label>Email <input type="email" name="email" required autocomplete="username" /></label>
-        <label>Password <input type="password" name="password" required autocomplete="current-password" /></label>
-        <button>Log in</button>
+        <input type="hidden" name="language" value="${language}" />
+        <label>${t('Email')} <input type="email" name="email" required autocomplete="username" /></label>
+        <label>${t('Password')} <input type="password" name="password" required autocomplete="current-password" /></label>
+        <button>${t('Log in')}</button>
       </form>`,
   });
 }
@@ -108,22 +118,23 @@ export function loginPage({ error } = {}) {
 // ---------- Clinician: patient list ----------
 
 export function dashboardPage({ clinician, patients }) {
+  const t = translator(clinician?.language);
   return layout({
-    title: 'Patients',
+    title: t('Patients'),
     clinician,
     body: html`
-      <h1>Patients</h1>
-      <p><a class="button" href="/clinician/patients/new">+ Add patient</a></p>
+      <h1>${t('Patients')}</h1>
+      <p><a class="button" href="/clinician/patients/new">${t('+ Add patient')}</a></p>
       ${patients.length === 0
-        ? html`<p>No patients yet.</p>`
+        ? html`<p>${t('No patients yet.')}</p>`
         : html`<table>
-            <thead><tr><th>Name</th><th>Age</th><th>Latest questionnaire</th></tr></thead>
+            <thead><tr><th>${t('Name')}</th><th>${t('Age')}</th><th>${t('Latest questionnaire')}</th></tr></thead>
             <tbody>
               ${patients.map(
                 (p) => html`<tr>
-                  <td><a href="/clinician/patients/${p.id}">${p.last_name}, ${p.first_name}</a>${p.shared ? html` <span class="badge info">Shared by ${p.owner_name}</span>` : ''}</td>
+                  <td><a href="/clinician/patients/${p.id}">${p.last_name}, ${p.first_name}</a>${p.shared ? html` <span class="badge info">${t('Shared by {name}', { name: p.owner_name })}</span>` : ''}</td>
                   <td>${p.age}</td>
-                  <td>${p.latest_completed ? html`Completed ${p.latest_completed}${p.latest_safety ? html` <span class="badge danger">Safety alert</span>` : ''}` : p.has_pending ? 'Link sent, not completed' : '—'}</td>
+                  <td>${p.latest_completed ? html`${t('Completed {date}', { date: p.latest_completed })}${p.latest_safety ? html` <span class="badge danger">${t('Safety alert')}</span>` : ''}` : p.has_pending ? t('Link sent, not completed') : '—'}</td>
                 </tr>`
               )}
             </tbody>
@@ -143,41 +154,43 @@ export const EDUCATION_OPTIONS = [
   'Other / unknown',
 ];
 
-function select(name, options, selected) {
+function select(t, name, options, selected) {
+  // The stored value stays English; only the shown text is translated.
   return html`<select name="${name}" required>
-    <option value="">Choose…</option>
-    ${options.map((o) => html`<option ${o === selected ? html`selected` : ''}>${o}</option>`)}
+    <option value="">${t('Choose…')}</option>
+    ${options.map((o) => html`<option value="${o}" ${o === selected ? html`selected` : ''}>${t(o)}</option>`)}
   </select>`;
 }
 
 // New patient, or editing an existing one (when `patient` is given).
 export function newPatientPage({ clinician, patient, errors = [], values = {} }) {
-  const title = patient ? 'Edit patient details' : 'New patient';
+  const t = translator(clinician?.language);
+  const title = patient ? t('Edit patient details') : t('New patient');
   return layout({
     title,
     clinician,
     body: html`
       ${patient ? html`<p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>` : ''}
       <h1>${title}</h1>
-      ${patient ? html`<p class="hint">Changes are recorded in the audit log (which fields changed, by whom and when).</p>` : ''}
-      ${errors.length ? html`<div class="error" role="alert"><p>Please fix:</p><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
+      ${patient ? html`<p class="hint">${t('Changes are recorded in the audit log (which fields changed, by whom and when).')}</p>` : ''}
+      ${errors.length ? html`<div class="error" role="alert"><p>${t('Please fix:')}</p><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : ''}
       <form method="post" action="${patient ? `/clinician/patients/${patient.id}/edit` : '/clinician/patients'}" class="card">
         <div class="grid2">
-          <label>First name <input name="first_name" required maxlength="100" value="${values.first_name}" /></label>
-          <label>Last name <input name="last_name" required maxlength="100" value="${values.last_name}" /></label>
+          <label>${t('First name')} <input name="first_name" required maxlength="100" value="${values.first_name}" /></label>
+          <label>${t('Last name')} <input name="last_name" required maxlength="100" value="${values.last_name}" /></label>
         </div>
-        <label>Personal number <input name="personal_number" required maxlength="20" value="${values.personal_number}" placeholder="e.g. YYYYMMDD-XXXX" /></label>
+        <label>${t('Personal number')} <input name="personal_number" required maxlength="20" value="${values.personal_number}" placeholder="${t('e.g. YYYYMMDD-XXXX')}" /></label>
         <div class="grid2">
-          <label>Gender ${select('gender', GENDER_OPTIONS, values.gender)}</label>
-          <label>Age <input name="age" type="number" min="16" max="120" required value="${values.age}" /></label>
+          <label>${t('Gender')} ${select(t, 'gender', GENDER_OPTIONS, values.gender)}</label>
+          <label>${t('Age')} <input name="age" type="number" min="16" max="120" required value="${values.age}" /></label>
         </div>
-        <label>Level of education ${select('education', EDUCATION_OPTIONS, values.education)}</label>
+        <label>${t('Level of education')} ${select(t, 'education', EDUCATION_OPTIONS, values.education)}</label>
         <fieldset>
-          <legend>Currently employed?</legend>
-          <label class="choice"><input type="radio" name="employed" value="1" required ${values.employed === '1' ? html`checked` : ''} /> Yes</label>
-          <label class="choice"><input type="radio" name="employed" value="0" ${values.employed === '0' ? html`checked` : ''} /> No</label>
+          <legend>${t('Currently employed?')}</legend>
+          <label class="choice"><input type="radio" name="employed" value="1" required ${values.employed === '1' ? html`checked` : ''} /> ${t('Yes')}</label>
+          <label class="choice"><input type="radio" name="employed" value="0" ${values.employed === '0' ? html`checked` : ''} /> ${t('No')}</label>
         </fieldset>
-        <button>${patient ? 'Save changes' : 'Save patient'}</button>
+        <button>${patient ? t('Save changes') : t('Save patient')}</button>
       </form>`,
   });
 }
@@ -189,183 +202,187 @@ function languageSelect() {
 }
 
 export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [], access = { owner: true }, grants = [], owner, keptUntil, retentionYears = 10 }) {
+  const t = translator(clinician?.language);
   return layout({
     title: `${patient.first_name} ${patient.last_name}`,
     clinician,
     body: html`
       <h1>${patient.first_name} ${patient.last_name}</h1>
-      ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
-      <p class="record-links">${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">Edit details</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">Audit log</a>
-        ${keptUntil ? html`<br /><span class="hint">Record kept until at least ${keptUntil.toISOString().slice(0, 10)} (${retentionYears} years after the last entry).</span>` : ''}</p>
+      ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : ''}
+      <p class="record-links">${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">${t('Edit details')}</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">${t('Audit log')}</a>
+        ${keptUntil ? html`<br /><span class="hint">${t('Record kept until at least {date} ({years} years after the last entry).', { date: keptUntil.toISOString().slice(0, 10), years: retentionYears })}</span>` : ''}</p>
       ${access.owner
         ? ''
-        : html`<p class="note">You have <strong>read-only</strong> access as <strong>${ROLE_NAMES[access.role] ?? access.role}</strong>, granted by ${access.grant.granted_by_name} (treating clinician${owner ? `: ${owner.name}` : ''}) for: ${access.grant.reason}.${access.grant.expires_at ? ` Access ends ${access.grant.expires_at.slice(0, 10)}.` : ''}</p>`}
+        : html`<p class="note">${t('You have read-only access as {role}, granted by {by} (treating clinician{owner}) for: {reason}.', {
+            role: t(ROLE_NAMES[access.role] ?? access.role), by: access.grant.granted_by_name, owner: owner ? `: ${owner.name}` : '', reason: access.grant.reason,
+          })}${access.grant.expires_at ? ` ${t('Access ends {date}.', { date: access.grant.expires_at.slice(0, 10) })}` : ''}</p>`}
       <dl class="card details">
-        <dt>Personal number</dt><dd>${patient.personal_number}</dd>
-        <dt>Gender</dt><dd>${patient.gender}</dd>
-        <dt>Age</dt><dd>${patient.age}</dd>
-        <dt>Education</dt><dd>${patient.education}</dd>
-        <dt>Employed</dt><dd>${patient.employed ? 'Yes' : 'No'}</dd>
+        <dt>${t('Personal number')}</dt><dd>${patient.personal_number}</dd>
+        <dt>${t('Gender')}</dt><dd>${t(patient.gender)}</dd>
+        <dt>${t('Age')}</dt><dd>${patient.age}</dd>
+        <dt>${t('Education')}</dt><dd>${t(patient.education)}</dd>
+        <dt>${t('Employed')}</dt><dd>${patient.employed ? t('Yes') : t('No')}</dd>
       </dl>
 
       ${newLink
         ? html`<div class="card highlight">
-            <h2>Questionnaire link created</h2>
-            <p>Send this link to the patient. <strong>Copy it now</strong> — for security it is not stored and cannot be shown again. It expires ${newLink.expires}.</p>
-            <input class="linkbox" readonly value="${newLink.url}" aria-label="Questionnaire link" />
+            <h2>${t('Questionnaire link created')}</h2>
+            <p>${t('Send this link to the patient. Copy it now: for security it is not stored and cannot be shown again. It expires {date}.', { date: newLink.expires })}</p>
+            <input class="linkbox" readonly value="${newLink.url}" aria-label="${t('Questionnaire link')}" />
           </div>`
         : ''}
 
       ${access.owner ? html`
       <section class="card">
-        <h2>Start a new assessment</h2>
-        <p>The assessment starts with the intake screening. Choose how the patient answers it:</p>
+        <h2>${t('Start a new assessment')}</h2>
+        <p>${t('The assessment starts with the intake screening. Choose how the patient answers it:')}</p>
         <div class="start-options">
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="link" />
-            <label>Questionnaire language ${languageSelect()}</label>
-            <button>Send link to patient</button>
-            <p class="hint">The patient answers at home. You get an email when it is done.</p>
+            <label>${t('Questionnaire language')} ${languageSelect()}</label>
+            <button>${t('Send link to patient')}</button>
+            <p class="hint">${t('The patient answers at home. You get an email when it is done.')}</p>
           </form>
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="onsite" />
-            <label>Questionnaire language ${languageSelect()}</label>
-            <button>Conduct on site</button>
-            <p class="hint">You go through the questions with the patient now, on this device.</p>
+            <label>${t('Questionnaire language')} ${languageSelect()}</label>
+            <button>${t('Conduct on site')}</button>
+            <p class="hint">${t('You go through the questions with the patient now, on this device.')}</p>
           </form>
         </div>
-        <p class="hint">Starting a new assessment cancels any earlier one for this patient that has not started yet.</p>
+        <p class="hint">${t('Starting a new assessment cancels any earlier one for this patient that has not started yet.')}</p>
       </section>` : ''}
 
-      <h2>Assessments</h2>
+      <h2>${t('Assessments')}</h2>
       ${assessments.length === 0
-        ? html`<p>None yet.</p>`
+        ? html`<p>${t('None yet.')}</p>`
         : html`<table>
-            <thead><tr><th>Created</th><th>How</th><th>Status</th><th>Depression</th><th>Anxiety</th></tr></thead>
+            <thead><tr><th>${t('Created')}</th><th>${t('How')}</th><th>${t('Status')}</th><th>${t('Depression')}</th><th>${t('Anxiety')}</th></tr></thead>
             <tbody>
               ${assessments.map((a) => {
                 const r = a.results_json ? JSON.parse(a.results_json) : null;
                 const link = (text) => html`<a href="/clinician/assessments/${a.id}">${text}</a>`;
                 let status;
-                if (a.finalized_at) status = link(`Finalized ${a.finalized_at}`);
-                else if (a.completed_at) status = link(`Screening done ${a.completed_at} — continue`);
-                else if (a.revoked) status = 'Cancelled';
-                else if (a.mode === 'onsite') status = link('On-site screening not finished — continue');
-                else if (new Date(a.expires_at) < new Date()) status = 'Link expired';
-                else status = 'Waiting for patient';
+                if (a.finalized_at) status = link(t('Finalized {date}', { date: a.finalized_at }));
+                else if (a.completed_at) status = link(t('Screening done {date}: continue', { date: a.completed_at }));
+                else if (a.revoked) status = t('Cancelled');
+                else if (a.mode === 'onsite') status = link(t('On-site screening not finished: continue'));
+                else if (new Date(a.expires_at) < new Date()) status = t('Link expired');
+                else status = t('Waiting for patient');
                 return html`<tr>
                   <td>${a.created_at}</td>
-                  <td>${a.mode === 'onsite' ? 'On site' : 'Link'}</td>
-                  <td>${status} ${r?.safetyFlag ? html`<span class="badge danger">Safety alert</span>` : ''} ${r?.differential?.summary.priority.length ? html`<span class="badge danger">Priority differential</span>` : ''}</td>
-                  <td>${r ? html`${likelihoodBadge(r.depression.likelihood)} PHQ-9 ${r.depression.total}` : ''}</td>
-                  <td>${r ? html`${likelihoodBadge(r.anxiety.likelihood)} GAD-7 ${r.anxiety.total}` : ''}</td>
+                  <td>${a.mode === 'onsite' ? t('On site') : t('Link')}</td>
+                  <td>${status} ${r?.safetyFlag ? html`<span class="badge danger">${t('Safety alert')}</span>` : ''} ${r?.differential?.summary.priority.length ? html`<span class="badge danger">${t('Priority differential')}</span>` : ''}</td>
+                  <td>${r ? html`${likelihoodBadge(r.depression.likelihood, t)} PHQ-9 ${r.depression.total}` : ''}</td>
+                  <td>${r ? html`${likelihoodBadge(r.anxiety.likelihood, t)} GAD-7 ${r.anxiety.total}` : ''}</td>
                 </tr>`;
               })}
             </tbody>
           </table>`}
 
-      ${followupSection(patient, assessments, followups, followupLink, access.owner)}
+      ${followupSection(t, patient, assessments, followups, followupLink, access.owner)}
 
-      ${access.owner ? accessSection(patient, grants) : ''}
+      ${access.owner ? accessSection(t, patient, grants) : ''}
 
       ${access.owner ? html`<details class="card danger-zone">
-        <summary>Delete patient record</summary>
-        <p>This permanently deletes the patient and all assessments. Use it only for records created by mistake or when the law requires deletion: health records usually have to be kept for a set time (in Sweden, at least 10 years under Patientdatalagen). The deletion is kept in the audit log.</p>
+        <summary>${t('Delete patient record')}</summary>
+        <p>${t('This permanently deletes the patient and all assessments. Use it only for records created by mistake or when the law requires deletion: health records usually have to be kept for a set time (in Sweden, at least 10 years under Patientdatalagen). The deletion is kept in the audit log.')}</p>
         <form method="post" action="/clinician/patients/${patient.id}/delete">
-          <label>Type the patient’s last name to confirm <input name="confirm_last_name" required autocomplete="off" /></label>
-          <label>Reason <input name="reason" maxlength="300" /></label>
-          <button class="danger">Delete permanently</button>
+          <label>${t('Type the patient’s last name to confirm')} <input name="confirm_last_name" required autocomplete="off" /></label>
+          <label>${t('Reason')} <input name="reason" maxlength="300" /></label>
+          <button class="danger">${t('Delete permanently')}</button>
         </form>
       </details>` : ''}`,
   });
 }
 
-export function likelihoodBadge(likelihood) {
+export function likelihoodBadge(likelihood, t = (x) => x) {
   const cls = {
     [LIKELIHOOD.HIGH]: 'danger',
     [LIKELIHOOD.MODERATE]: 'warn',
     [LIKELIHOOD.SUBCLINICAL]: 'info',
     [LIKELIHOOD.MINIMAL]: 'ok',
   }[likelihood];
-  return html`<span class="badge ${cls}">${likelihood}</span>`;
+  return html`<span class="badge ${cls}">${t(likelihood)}</span>`;
 }
 
 // ---------- Clinician: full report ----------
 
-function symptomList(list) {
-  if (list.length === 0) return html`<p class="hint">None.</p>`;
-  return html`<ul>${list.map((s) => html`<li>${s.symptom} — <em>${s.frequency}</em></li>`)}</ul>`;
+function symptomList(t, list) {
+  if (list.length === 0) return html`<p class="hint">${t('None.')}</p>`;
+  return html`<ul>${list.map((s) => html`<li>${s.symptom} — <em>${t(s.frequency)}</em></li>`)}</ul>`;
 }
 
-function itemTable(items) {
+function itemTable(t, items) {
+  // Question texts in Swedish come from the patient translations (i18n.js).
   return html`<table class="items">
-    <thead><tr><th>Question</th><th>Answer</th><th>Score</th></tr></thead>
-    <tbody>${items.map((i) => html`<tr><td>${i.text}</td><td>${i.answer}</td><td>${i.score}</td></tr>`)}</tbody>
+    <thead><tr><th>${t('Question')}</th><th>${t('Answer')}</th><th>${t('Score')}</th></tr></thead>
+    <tbody>${items.map((i) => html`<tr><td>${itemText(t.language, findItem(i.id) ?? i)}</td><td>${t(i.answer)}</td><td>${i.score}</td></tr>`)}</tbody>
   </table>`;
 }
 
 // ---------- Clinician: differential diagnosis section ----------
 
-function statusBadge(status) {
+function statusBadge(t, status) {
   const cls = {
     [STATUS.FLAGGED]: 'danger',
     [STATUS.POSSIBLE]: 'warn',
     [STATUS.CLINICIAN]: 'info',
     [STATUS.NOT_INDICATED]: 'ok',
   }[status];
-  return html`<span class="badge ${cls}">${status}</span>`;
+  return html`<span class="badge ${cls}">${t(status)}</span>`;
 }
 
-function differentialSection(differential) {
+function differentialSection(t, differential) {
   if (!differential) {
-    return html`<section class="card"><h2>Differential diagnosis screening</h2>
-      <p class="hint">Not available: this questionnaire was completed before differential screening was added.</p></section>`;
+    return html`<section class="card"><h2>${t('Differential diagnosis screening')}</h2>
+      <p class="hint">${t('Not available: this questionnaire was completed before differential screening was added.')}</p></section>`;
   }
   const { summary, entries, overlap } = differential;
   return html`<section class="card">
-    <h2>Differential diagnosis screening</h2>
-    <p class="hint">${summary.checked} alternative or co-occurring conditions checked against DSM-5-TR differentials for MDD and GAD. This shows what to explore in the interview; it does not confirm or exclude any diagnosis.</p>
+    <h2>${t('Differential diagnosis screening')}</h2>
+    <p class="hint">${t('{n} alternative or co-occurring conditions checked against DSM-5-TR differentials for MDD and GAD. This shows what to explore in the interview; it does not confirm or exclude any diagnosis.', { n: summary.checked })}</p>
     ${summary.priority.length
-      ? html`<div class="alert" role="alert"><strong>Priority:</strong> screen positive for ${summary.priority.join('; ')}.</div>`
+      ? html`<div class="alert" role="alert"><strong>${t('Priority:')}</strong> ${t('screen positive for {list}.', { list: summary.priority.join('; ') })}</div>`
       : ''}
 
     <table class="diff-summary">
-      <thead><tr><th>Condition</th><th>Relevant to</th><th>Status</th></tr></thead>
+      <thead><tr><th>${t('Condition')}</th><th>${t('Relevant to')}</th><th>${t('Status')}</th></tr></thead>
       <tbody>
         ${entries.map(
           (e) => html`<tr>
             <td><a href="#diff-${e.id}">${e.condition}</a></td>
             <td>${e.relevantTo.join(', ')}</td>
-            <td>${statusBadge(e.status)}</td>
+            <td>${statusBadge(t, e.status)}</td>
           </tr>`
         )}
       </tbody>
     </table>
 
-    <h3>Overlap between depression and anxiety symptoms</h3>
+    <h3>${t('Overlap between depression and anxiety symptoms')}</h3>
     <table>
-      <thead><tr><th>Shared symptom</th><th>Counted for depression</th><th>Counted for anxiety</th></tr></thead>
+      <thead><tr><th>${t('Shared symptom')}</th><th>${t('Counted for depression')}</th><th>${t('Counted for anxiety')}</th></tr></thead>
       <tbody>
         ${overlap.shared.map(
-          (o) => html`<tr><td>${o.symptom}</td><td>${o.onDepressionSide ? 'Yes' : 'No'}</td><td>${o.onAnxietySide ? 'Yes' : 'No'}</td></tr>`
+          (o) => html`<tr><td>${o.symptom}</td><td>${o.onDepressionSide ? t('Yes') : t('No')}</td><td>${o.onAnxietySide ? t('Yes') : t('No')}</td></tr>`
         )}
       </tbody>
     </table>
     ${overlap.notes.map((n) => html`<p class="note">${n}</p>`)}
 
-    <h3>Detailed reasoning</h3>
+    <h3>${t('Detailed reasoning')}</h3>
     ${entries.map(
       (e) => html`<details class="diff" id="diff-${e.id}" ${e.status === STATUS.FLAGGED || e.status === STATUS.POSSIBLE ? html`open` : ''}>
-        <summary><strong>${e.condition}</strong> ${statusBadge(e.status)}</summary>
+        <summary><strong>${e.condition}</strong> ${statusBadge(t, e.status)}</summary>
         <dl>
-          <dt>Why checked</dt><dd>${e.why}</dd>
-          <dt>Rule applied</dt><dd>${e.rule}</dd>
+          <dt>${t('Why checked')}</dt><dd>${e.why}</dd>
+          <dt>${t('Rule applied')}</dt><dd>${e.rule}</dd>
           ${e.evidence.length
-            ? html`<dt>Answers used</dt><dd><ul>${e.evidence.map((ev) => html`<li>${ev.question} — <strong>${ev.answer}</strong></li>`)}</ul></dd>`
+            ? html`<dt>${t('Answers used')}</dt><dd><ul>${e.evidence.map((ev) => html`<li>${ev.question} — <strong>${t(ev.answer)}</strong></li>`)}</ul></dd>`
             : ''}
-          <dt>Finding</dt><dd>${e.finding}</dd>
-          <dt>What it means</dt><dd>${e.implication}</dd>
-          <dt>Next step</dt><dd>${e.nextStep}</dd>
+          <dt>${t('Finding')}</dt><dd>${e.finding}</dd>
+          <dt>${t('What it means')}</dt><dd>${e.implication}</dd>
+          <dt>${t('Next step')}</dt><dd>${e.nextStep}</dd>
         </dl>
       </details>`
     )}
@@ -373,55 +390,56 @@ function differentialSection(differential) {
 }
 
 // The screening part of an assessment (results of the intake questionnaire).
-export function screeningSections(results) {
+export function screeningSections(results, t = translator('en')) {
   const d = results.depression;
   const a = results.anxiety;
+  const yes = (v) => (v ? t('Yes') : t('No'));
   return html`
       ${results.safetyFlag
         ? html`<div class="alert" role="alert">
-            <h2>Safety alert</h2>
-            <p>The patient answered <strong>“${results.safetyAnswer}”</strong> to PHQ-9 item 9 (thoughts of being better off dead or of self-harm). Follow up promptly with a suicide risk assessment.</p>
+            <h2>${t('Safety alert')}</h2>
+            <p>${t('The patient answered “{answer}” to PHQ-9 item 9 (thoughts of being better off dead or of self-harm). Follow up promptly with a suicide risk assessment.', { answer: t(results.safetyAnswer) })}</p>
           </div>`
         : ''}
 
       <section class="card">
-        <h2>Major depressive disorder</h2>
-        <p>Likelihood: ${likelihoodBadge(d.likelihood)}</p>
+        <h2>${t('Major depressive disorder')}</h2>
+        <p>${t('Likelihood:')} ${likelihoodBadge(d.likelihood, t)}</p>
         <ul class="facts">
-          <li>PHQ-9 total: <strong>${d.total}/${d.maxTotal}</strong> (${d.severity})</li>
-          <li>DSM-5-TR symptom count: ${d.symptomCount} of 9 at threshold; core symptom (mood or anhedonia) ${d.coreSymptomPresent ? 'present' : 'absent'}</li>
-          <li>Algorithm: ${d.syndrome}</li>
-          <li>Functional impairment: ${d.functionalDifficulty}</li>
+          <li>${t('PHQ-9 total:')} <strong>${d.total}/${d.maxTotal}</strong> (${t(d.severity)})</li>
+          <li>${t('DSM-5-TR symptom count: {n} of 9 at threshold; core symptom (mood or anhedonia) {core}', { n: d.symptomCount, core: d.coreSymptomPresent ? t('present') : t('absent') })}</li>
+          <li>${t('Algorithm:')} ${d.syndrome}</li>
+          <li>${t('Functional impairment:')} ${t(d.functionalDifficulty)}</li>
         </ul>
-        <h3>Symptoms at diagnostic threshold</h3>
-        ${symptomList(d.thresholdSymptoms)}
-        <h3>Subclinical symptoms (present, below threshold)</h3>
-        ${symptomList(d.subclinicalSymptoms)}
-        <details><summary>Item-level answers</summary>${itemTable(d.itemScores)}</details>
+        <h3>${t('Symptoms at diagnostic threshold')}</h3>
+        ${symptomList(t, d.thresholdSymptoms)}
+        <h3>${t('Subclinical symptoms (present, below threshold)')}</h3>
+        ${symptomList(t, d.subclinicalSymptoms)}
+        <details><summary>${t('Item-level answers')}</summary>${itemTable(t, d.itemScores)}</details>
       </section>
 
       <section class="card">
-        <h2>Generalized anxiety disorder</h2>
-        <p>Likelihood: ${likelihoodBadge(a.likelihood)}</p>
+        <h2>${t('Generalized anxiety disorder')}</h2>
+        <p>${t('Likelihood:')} ${likelihoodBadge(a.likelihood, t)}</p>
         <ul class="facts">
-          <li>GAD-7 total: <strong>${a.total}/${a.maxTotal}</strong> (${a.severity})</li>
-          <li>Criterion A — excessive worry, 6+ months: ${a.criteria.A ? 'Yes' : 'No'}</li>
-          <li>Criterion B — difficult to control: ${a.criteria.B ? 'Yes' : 'No'}</li>
-          <li>Criterion C — at least 3 of 6 associated symptoms: ${a.criteria.C ? 'Yes' : 'No'} (${a.criteria.associatedCount} of 6)</li>
-          <li>Functional impairment: ${a.functionalDifficulty}</li>
+          <li>${t('GAD-7 total:')} <strong>${a.total}/${a.maxTotal}</strong> (${t(a.severity)})</li>
+          <li>${t('Criterion A — excessive worry, 6+ months:')} ${yes(a.criteria.A)}</li>
+          <li>${t('Criterion B — difficult to control:')} ${yes(a.criteria.B)}</li>
+          <li>${t('Criterion C — at least 3 of 6 associated symptoms:')} ${yes(a.criteria.C)} (${t('{n} of 6', { n: a.criteria.associatedCount })})</li>
+          <li>${t('Functional impairment:')} ${t(a.functionalDifficulty)}</li>
         </ul>
         ${a.notes.map((n) => html`<p class="note">${n}</p>`)}
-        <h3>Symptoms more than half the days</h3>
-        ${symptomList(a.thresholdSymptoms)}
-        <h3>Subclinical symptoms</h3>
-        ${symptomList(a.subclinicalSymptoms)}
-        <details><summary>Item-level answers</summary>${itemTable(a.itemScores)}</details>
+        <h3>${t('Symptoms more than half the days')}</h3>
+        ${symptomList(t, a.thresholdSymptoms)}
+        <h3>${t('Subclinical symptoms')}</h3>
+        ${symptomList(t, a.subclinicalSymptoms)}
+        <details><summary>${t('Item-level answers')}</summary>${itemTable(t, a.itemScores)}</details>
       </section>
 
-      ${differentialSection(results.differential)}
+      ${differentialSection(t, results.differential)}
 
       <section class="card">
-        <h2>Before making a diagnosis</h2>
+        <h2>${t('Before making a diagnosis')}</h2>
         <ul>${CLINICIAN_CHECKLIST.map((c) => html`<li>${c}</li>`)}</ul>
       </section>`;
 }
@@ -459,6 +477,7 @@ export function questionnairePage({ action, pageIndex = 0, error, missing = [], 
   const { answered, total } = progress(answers);
   const [sectionTitle, sectionIntro] = page.section ? sectionText(language, page.section) : [null, t[page.intro]];
   const tiredOptions = Array.from({ length: 11 }, (_, n) => ({ value: n, label: String(n) }));
+  const ct = translator(clinician?.language); // the clinician's language, for on-site texts
   return layout({
     title: t.title,
     clinician,
@@ -466,10 +485,10 @@ export function questionnairePage({ action, pageIndex = 0, error, missing = [], 
     skipScript: true,
     body: html`
       ${languageSwitch(language, switchUrl)}
-      <h1>${clinician ? html`Intake screening: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
+      <h1>${clinician ? html`${ct('Intake screening')}: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
       ${pageIndex === 0
         ? clinician
-          ? html`<p class="note">On-site screening (${LANGUAGES[language]}). Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
+          ? html`<p class="note">${ct('On-site screening ({language}). Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient’s point of view.', { language: LANGUAGES[language] })}</p>`
           : html`<p>${t.intro}</p>`
         : ''}
 
@@ -482,9 +501,9 @@ export function questionnairePage({ action, pageIndex = 0, error, missing = [], 
       <form method="post" action="${action}?page=${pageIndex}">
         ${clinician && !consentDone && pageIndex === 0
           ? html`<section class="card">
-              <h2>Information to the patient</h2>
+              <h2>${ct('Information to the patient')}</h2>
               <ul>${STRINGS[language].consent.map((p) => html`<li>${p}</li>`)}</ul>
-              <label class="check"><input type="checkbox" name="consent_given" value="yes" required /> The patient has been given this information and agrees to answer</label>
+              <label class="check"><input type="checkbox" name="consent_given" value="yes" required /> ${ct('The patient has been given this information and agrees to answer')}</label>
             </section>`
           : ''}
 
@@ -514,9 +533,9 @@ export function questionnairePage({ action, pageIndex = 0, error, missing = [], 
 
         <div class="page-buttons">
           ${pageIndex > 0 ? html`<button class="secondary" name="intent" value="back" formnovalidate>${t.back}</button>` : html`<span></span>`}
-          <button>${last ? (clinician ? 'Save answers and score' : t.submit) : t.next}</button>
+          <button>${last ? (clinician ? ct('Save answers and score') : t.submit) : t.next}</button>
         </div>
-        <p class="save-later"><button class="link" name="intent" value="save" formnovalidate>${clinician ? 'Save draft and continue later' : t.save}</button></p>
+        <p class="save-later"><button class="link" name="intent" value="save" formnovalidate>${clinician ? ct('Save draft and continue later') : t.save}</button></p>
       </form>
       <p class="crisis">${t.crisis}</p>
       ${last ? html`<p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003).</p>` : ''}
@@ -596,96 +615,98 @@ export function linkInvalidPage({ language = 'en' }) {
 
 const ROLE_NAMES = { supervisor: 'Supervisor', colleague: 'Close colleague', owner: 'Treating clinician' };
 
-function grantStatus(g) {
-  if (g.revoked_at) return html`<span class="badge ok">Revoked ${g.revoked_at.slice(0, 10)}</span>`;
-  if (g.expires_at && g.expires_at <= new Date().toISOString()) return html`<span class="badge ok">Ended ${g.expires_at.slice(0, 10)}</span>`;
-  return html`<span class="badge warn">Active${g.expires_at ? ` until ${g.expires_at.slice(0, 10)}` : ''}</span>`;
+function grantStatus(t, g) {
+  if (g.revoked_at) return html`<span class="badge ok">${t('Revoked {date}', { date: g.revoked_at.slice(0, 10) })}</span>`;
+  if (g.expires_at && g.expires_at <= new Date().toISOString()) return html`<span class="badge ok">${t('Ended {date}', { date: g.expires_at.slice(0, 10) })}</span>`;
+  return html`<span class="badge warn">${g.expires_at ? t('Active until {date}', { date: g.expires_at.slice(0, 10) }) : t('Active')}</span>`;
 }
 
-function accessSection(patient, grants) {
+function accessSection(t, patient, grants) {
   const active = grants.filter((g) => !g.revoked_at && !(g.expires_at && g.expires_at <= new Date().toISOString()));
   return html`<section class="card">
-    <h2>Who has access</h2>
-    <p class="hint">Only you, as the treating clinician, and the people you name here can see this patient. Give access only to those who need it for the patient\u2019s care, such as a supervisor or a close colleague covering for you. Every grant, and every view, is in the audit log.</p>
+    <h2>${t('Who has access')}</h2>
+    <p class="hint">${t('Only you, as the treating clinician, and the people you name here can see this patient. They can read but not change anything. Give access only to those who need it for the patient’s care, such as a supervisor or a close colleague covering for you. Every grant, and every view, is in the audit log.')}</p>
     ${grants.length
       ? html`<div class="table-scroll"><table>
-          <thead><tr><th>Person</th><th>Role</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>${t('Person')}</th><th>${t('Role')}</th><th>${t('Reason')}</th><th>${t('Status')}</th><th></th></tr></thead>
           <tbody>${grants.map((g) => html`<tr>
             <td>${g.clinician_name}<br /><span class="hint">${g.clinician_email}</span></td>
-            <td>${ROLE_NAMES[g.role] ?? g.role}</td>
+            <td>${t(ROLE_NAMES[g.role] ?? g.role)}</td>
             <td>${g.reason}</td>
-            <td>${grantStatus(g)}</td>
+            <td>${grantStatus(t, g)}</td>
             <td>${active.includes(g)
-              ? html`<form method="post" action="/clinician/patients/${patient.id}/access"><input type="hidden" name="action" value="revoke" /><input type="hidden" name="grant" value="${g.id}" /><button class="small secondary">Revoke</button></form>`
+              ? html`<form method="post" action="/clinician/patients/${patient.id}/access"><input type="hidden" name="action" value="revoke" /><input type="hidden" name="grant" value="${g.id}" /><button class="small secondary">${t('Revoke')}</button></form>`
               : ''}</td>
           </tr>`)}</tbody>
         </table></div>`
-      : html`<p>Nobody else has access.</p>`}
+      : html`<p>${t('Nobody else has access.')}</p>`}
     <details>
-      <summary>Give access to a supervisor or colleague</summary>
+      <summary>${t('Give read access to a supervisor or colleague')}</summary>
       <form method="post" action="/clinician/patients/${patient.id}/access" class="grid2">
         <input type="hidden" name="action" value="grant" />
-        <label>Their email (clinician account) <input type="email" name="email" required /></label>
-        <label>Role
-          <select name="role" required><option value="supervisor">Supervisor</option><option value="colleague">Close colleague</option></select>
+        <label>${t('Their email (clinician account)')} <input type="email" name="email" required /></label>
+        <label>${t('Role')}
+          <select name="role" required><option value="supervisor">${t('Supervisor')}</option><option value="colleague">${t('Close colleague')}</option></select>
         </label>
-        <label>Access ends (optional) <input type="date" name="until" /></label>
-        <label>Why do they need access? <input name="reason" required maxlength="300" /></label>
-        <button>Give access</button>
+        <label>${t('Access ends (optional)')} <input type="date" name="until" /></label>
+        <label>${t('Why do they need access?')} <input name="reason" required maxlength="300" /></label>
+        <button>${t('Give access')}</button>
       </form>
     </details>
   </section>`;
 }
 
 export function retentionPage({ clinician, due, policy }) {
+  const t = translator(clinician?.language);
   return layout({
-    title: 'Retention review',
+    title: t('Retention review'),
     clinician,
     body: html`
-      <h1>Retention review</h1>
+      <h1>${t('Retention review')}</h1>
       <section class="card">
-        <h2>How long data is kept</h2>
+        <h2>${t('How long data is kept')}</h2>
         <ul>
-          <li>Patient records: <strong>${policy.recordYears} years after the last entry</strong>, then reviewed here and deleted.</li>
-          <li>Questionnaires never completed, including saved drafts: deleted automatically <strong>${policy.unusedDays} days</strong> after the link expired or was cancelled.</li>
-          <li>Audit log entries: deleted automatically after <strong>${policy.auditYears} years</strong>. Expired logins are deleted daily.</li>
+          <li>${t('Patient records: {years} years after the last entry, then reviewed here and deleted.', { years: policy.recordYears })}</li>
+          <li>${t('Questionnaires never completed, including saved drafts: deleted automatically {days} days after the link expired or was cancelled.', { days: policy.unusedDays })}</li>
+          <li>${t('Audit log entries: deleted automatically after {years} years. Expired logins are deleted daily.', { years: policy.auditYears })}</li>
         </ul>
-        <p class="hint">GDPR requires that personal data is kept no longer than necessary; laws such as Patientdatalagen set minimum periods for health records. The periods are set in the app's configuration; check them with your data protection officer.</p>
+        <p class="hint">${t('GDPR requires that personal data is kept no longer than necessary; laws such as Patientdatalagen set minimum periods for health records. The periods are set in the app’s configuration; check them with your data protection officer.')}</p>
       </section>
       <section class="card">
-        <h2>Records past their retention period</h2>
+        <h2>${t('Records past their retention period')}</h2>
         ${due.length
-          ? html`<p>Check that nothing requires keeping a record longer (ongoing care, a complaint, a legal hold) before deleting it.</p>
+          ? html`<p>${t('Check that nothing requires keeping a record longer (ongoing care, a complaint, a legal hold) before deleting it.')}</p>
             <div class="table-scroll"><table>
-              <thead><tr><th>Patient</th><th>Last entry</th><th>Kept until</th><th></th></tr></thead>
+              <thead><tr><th>${t('Patient')}</th><th>${t('Last entry')}</th><th>${t('Kept until')}</th><th></th></tr></thead>
               <tbody>${due.map((r) => html`<tr>
                 <td><a href="/clinician/patients/${r.id}">${r.last_name}, ${r.first_name}</a></td>
                 <td>${r.lastEntry.toISOString().slice(0, 10)}</td>
                 <td>${r.keptUntil.toISOString().slice(0, 10)}</td>
                 <td><form method="post" action="/clinician/patients/${r.id}/delete" class="inline-form">
                   <input type="hidden" name="reason" value="Retention period ended" />
-                  <label>Type the last name <input name="confirm_last_name" required autocomplete="off" /></label>
-                  <button class="small danger">Delete</button>
+                  <label>${t('Type the last name')} <input name="confirm_last_name" required autocomplete="off" /></label>
+                  <button class="small danger">${t('Delete')}</button>
                 </form></td>
               </tr>`)}</tbody>
             </table></div>`
-          : html`<p>No records of yours have reached the end of their retention period.</p>`}
+          : html`<p>${t('No records of yours have reached the end of their retention period.')}</p>`}
       </section>`,
   });
 }
 
 export function auditPage({ clinician, patient, entries, actions }) {
+  const t = translator(clinician?.language);
   return layout({
-    title: 'Audit log',
+    title: t('Audit log'),
     clinician,
     body: html`
       <p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>
-      <h1>Audit log</h1>
-      <p class="hint">Every view and change of this patient’s information (newest first, up to 500 entries).</p>
+      <h1>${t('Audit log')}</h1>
+      <p class="hint">${t('Every view and change of this patient’s information (newest first, up to 500 entries).')}</p>
       <div class="table-scroll"><table>
-        <thead><tr><th>When (UTC)</th><th>Who</th><th>What</th><th>Assessment</th><th>Detail</th></tr></thead>
+        <thead><tr><th>${t('When (UTC)')}</th><th>${t('Who')}</th><th>${t('What')}</th><th>${t('Assessment')}</th><th>${t('Detail')}</th></tr></thead>
         <tbody>${entries.map((e) => html`<tr>
-          <td class="code">${e.at}</td><td>${e.clinician_name ?? `#${e.clinician_id}`}</td><td>${actions[e.action] ?? e.action}</td>
+          <td class="code">${e.at}</td><td>${e.clinician_name ?? `#${e.clinician_id}`}</td><td>${t(actions[e.action] ?? e.action)}</td>
           <td>${e.assessment_id ? html`<a href="/clinician/assessments/${e.assessment_id}">#${e.assessment_id}</a>` : ''}</td><td>${e.detail ?? ''}</td>
         </tr>`)}</tbody>
       </table></div>`,
@@ -696,7 +717,7 @@ export function auditPage({ clinician, patient, entries, actions }) {
 
 // A line chart of PHQ-9 and GAD-7 over time, drawn as SVG on the server.
 // Colours come from classes in style.css (the CSP blocks inline styles).
-function progressChart(points) {
+function progressChart(t, points) {
   // Wide side margins so the first and last date labels are not cut off.
   const W = 640, H = 230, left = 70, right = 50, top = 14, bottom = 46;
   const maxY = 27;
@@ -705,7 +726,7 @@ function progressChart(points) {
   const line = (key) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
   const grid = [0, 5, 10, 15, 20, 27];
   return html`<figure class="chart">
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="PHQ-9 and GAD-7 scores over time">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('PHQ-9 and GAD-7 scores over time')}">
       ${grid.map((g) => html`<line class="chart-grid" x1="${left}" x2="${W - right}" y1="${y(g)}" y2="${y(g)}" /><text class="chart-label" x="${left - 30}" y="${y(g) + 4}" text-anchor="end">${g}</text>`)}
       <path class="chart-line chart-phq" d="${line('phq9')}" />
       <path class="chart-line chart-gad" d="${line('gad7')}" />
@@ -713,43 +734,43 @@ function progressChart(points) {
         <circle class="chart-dot chart-phq-dot" cx="${x(i)}" cy="${y(p.phq9)}" r="4" />
         <circle class="chart-dot chart-gad-dot" cx="${x(i)}" cy="${y(p.gad7)}" r="4" />
         <text class="chart-label" x="${x(i)}" y="${H - bottom + 18}" text-anchor="middle">${p.date.slice(0, 10)}</text>
-        <text class="chart-label" x="${x(i)}" y="${H - bottom + 32}" text-anchor="middle">${p.source === 'Follow-up' ? 'follow-up' : 'intake'}</text>`)}
+        <text class="chart-label" x="${x(i)}" y="${H - bottom + 32}" text-anchor="middle">${p.source === 'Follow-up' ? t('follow-up') : t('intake')}</text>`)}
     </svg>
-    <figcaption><span class="key key-phq"></span> PHQ-9 (0–27) <span class="key key-gad"></span> GAD-7 (0–21). Lines at 5, 10, 15 and 20 mark the severity bands.</figcaption>
+    <figcaption><span class="key key-phq"></span> PHQ-9 (0–27) <span class="key key-gad"></span> GAD-7 (0–21). ${t('Lines at 5, 10, 15 and 20 mark the severity bands.')}</figcaption>
   </figure>`;
 }
 
-function followupSection(patient, assessments, followups, followupLink, canStart = true) {
+function followupSection(t, patient, assessments, followups, followupLink, canStart = true) {
   const points = measurementSeries(assessments, followups);
   const progress = progressSummary(points);
   const pending = followups.filter((f) => !f.completed_at && !f.revoked && new Date(f.expires_at) > new Date());
   return html`<section class="card">
-    <h2>Follow-up: PHQ-9 and GAD-7 over time</h2>
-    <p class="hint">Repeat PHQ-9 and GAD-7 (18 questions, about 3 minutes) to see whether treatment helps.</p>
+    <h2>${t('Follow-up: PHQ-9 and GAD-7 over time')}</h2>
+    <p class="hint">${t('Repeat PHQ-9 and GAD-7 (18 questions, about 3 minutes) to see whether treatment helps.')}</p>
     ${followupLink
-      ? html`<div class="highlight card"><p>Send this follow-up link to the patient. <strong>Copy it now</strong>; it is not shown again. It expires ${followupLink.expires}.</p>
-          <input class="linkbox" readonly value="${followupLink.url}" aria-label="Follow-up link" /></div>`
+      ? html`<div class="highlight card"><p>${t('Send this follow-up link to the patient. Copy it now: it is not shown again. It expires {date}.', { date: followupLink.expires })}</p>
+          <input class="linkbox" readonly value="${followupLink.url}" aria-label="${t('Follow-up link')}" /></div>`
       : ''}
     ${points.length
-      ? html`${progressChart(points)}
-        ${progress ? html`<ul class="facts">${progress.notes.map((n) => html`<li>${n}</li>`)}</ul>` : html`<p class="hint">One measurement so far. Add a follow-up to see change.</p>`}
+      ? html`${progressChart(t, points)}
+        ${progress ? html`<ul class="facts">${progress.notes.map((n) => html`<li>${n}</li>`)}</ul>` : html`<p class="hint">${t('One measurement so far. Add a follow-up to see change.')}</p>`}
         <div class="table-scroll"><table>
-          <thead><tr><th>Date</th><th>Measurement</th><th>PHQ-9</th><th>GAD-7</th><th></th></tr></thead>
-          <tbody>${points.map((p) => html`<tr><td class="code">${p.date}</td><td>${p.source}</td><td>${p.phq9}</td><td>${p.gad7}</td>
-            <td>${p.safetyFlag ? html`<span class="badge danger">Item 9</span>` : ''}</td></tr>`)}</tbody>
+          <thead><tr><th>${t('Date')}</th><th>${t('Measurement')}</th><th>PHQ-9</th><th>GAD-7</th><th></th></tr></thead>
+          <tbody>${points.map((p) => html`<tr><td class="code">${p.date}</td><td>${t(p.source)}</td><td>${p.phq9}</td><td>${p.gad7}</td>
+            <td>${p.safetyFlag ? html`<span class="badge danger">${t('Item 9')}</span>` : ''}</td></tr>`)}</tbody>
         </table></div>`
-      : html`<p class="hint">No completed measurements yet.</p>`}
-    ${pending.length ? html`<p class="hint">${pending.length} follow-up ${pending.length === 1 ? 'link is' : 'links are'} waiting for the patient.</p>` : ''}
+      : html`<p class="hint">${t('No completed measurements yet.')}</p>`}
+    ${pending.length ? html`<p class="hint">${pending.length === 1 ? t('1 follow-up link is waiting for the patient.') : t('{n} follow-up links are waiting for the patient.', { n: pending.length })}</p>` : ''}
     ${canStart ? html`<div class="start-options">
       <form method="post" action="/clinician/patients/${patient.id}/followups">
         <input type="hidden" name="mode" value="link" />
-        <label>Language ${languageSelect()}</label>
-        <button>Send follow-up link</button>
+        <label>${t('Language')} ${languageSelect()}</label>
+        <button>${t('Send follow-up link')}</button>
       </form>
       <form method="post" action="/clinician/patients/${patient.id}/followups">
         <input type="hidden" name="mode" value="onsite" />
-        <label>Language ${languageSelect()}</label>
-        <button>Follow-up on site</button>
+        <label>${t('Language')} ${languageSelect()}</label>
+        <button>${t('Follow-up on site')}</button>
       </form>
     </div>` : ''}
   </section>`;
@@ -765,7 +786,7 @@ export function followupPage({ action, error, clinician, patient, language = 'en
     language,
     body: html`
       ${languageSwitch(language, switchUrl)}
-      <h1>${clinician ? html`Follow-up: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
+      <h1>${clinician ? html`${translator(clinician.language)('Follow-up')}: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
       <p class="crisis">${t.crisis}</p>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
       <form method="post" action="${action}">
@@ -781,12 +802,13 @@ export function followupPage({ action, error, clinician, patient, language = 'en
           ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
           ${radioGroup(GAD_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(GAD_DIFFICULTY_ID), language)}
         </section>
-        <button class="big">${clinician ? 'Save follow-up' : t.submit}</button>
+        <button class="big">${clinician ? translator(clinician.language)('Save follow-up') : t.submit}</button>
       </form>
       <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc.; no permission required to reproduce. ${t.translationNote}</p>`,
   });
 }
 
 export function messagePage({ title, message, clinician }) {
-  return layout({ title, clinician, body: html`<h1>${title}</h1><p>${message}</p>` });
+  const t = translator(clinician?.language);
+  return layout({ title: t(title), clinician, body: html`<h1>${t(title)}</h1><p>${t(message)}</p>` });
 }
