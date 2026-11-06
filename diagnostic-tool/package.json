@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env src/server.js",
     "create-clinician": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/create-clinician.js",
-    "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\""
+    "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "retention": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/retention.js"
   },
   "dependencies": {
     "express": "^5.1.0",

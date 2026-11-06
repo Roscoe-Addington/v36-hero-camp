@@ -37,8 +37,12 @@ use disorder) are listed as "outside this app" so they are not lost.
    history, psychotic experiences, AUDIT-C, drugs, medicines, health, life
    events, other anxiety disorders, obsessive-compulsive and related
    symptoms, PC-PTSD-5, personality traits, memory and neurological
-   symptoms. **Answers can be saved part-way** and continued later from
-   the same link; a submit with missing answers keeps the others.
+   symptoms, shown **one part per page** (10 pages) with a **progress
+   bar**. Follow-up questions ("If so…") are only asked when they apply
+   (**skip logic**, 13 questions), so many patients answer about 82. After
+   parts 3 and 6 the patient rates **how tired they feel** (0–10); 7 or
+   more offers a **break**. Answers are saved page by page and can be
+   continued later from the same link.
 3. **Intake interview.** A structured psychiatric history: reason and
    onset, previous diagnoses and treatment, previous suicide attempts and
    self-harm, family history, medical history and medicines, pregnancy,
@@ -237,6 +241,10 @@ src/views-forms.js     draws the schema forms and their summaries
 src/followup.js        follow-up scoring and change over time
 src/i18n.js            English and Swedish patient-facing text
 src/audit.js           the audit log
+src/access.js          who may see a patient (treating clinician + named colleagues)
+src/retention.js       how long data is kept, and automatic cleanup
+src/response-quality.js  signs of tired or careless answering
+public/skip.js         skip logic in the browser
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens
@@ -244,6 +252,56 @@ src/db.js              database tables (SQLite file in data/)
 scripts/create-clinician.js
 test/                  automated tests
 ```
+
+### Response quality
+
+The assessment page shows a **Response quality** box (`src/response-quality.js`),
+also summarised in the email:
+
+- **Fast answering:** a part answered at under 2 seconds per question
+  (patients answering by link only; on site the clinician may type in
+  answers from paper).
+- **Contradictions:** answers that cannot both be true, e.g. "never drinks
+  alcohol" with drinks on a typical day, or "No" to a question and "Yes"
+  to its follow-up (possible when the browser has JavaScript off).
+- **Possible inconsistencies:** answers that rarely go together.
+- **Tiredness:** ratings of 7/10 or more, and whether a break was taken.
+
+It never changes answers or scores: the clinician checks the flagged
+answers in the interview. Time per part is shown as well.
+
+## Who can see a patient
+
+Only the **treating clinician** (who created the patient) and the
+**supervisors or close colleagues they name** can see a patient
+(`src/access.js`). Everyone else gets "not found", as if the record did
+not exist.
+
+- A grant needs the colleague's clinician account, a role (supervisor or
+  close colleague), a **reason**, and optionally an **end date**.
+- Only the treating clinician can grant or revoke access and delete the
+  record. Grants, revocations and every view are in the audit log.
+- One shared access condition is used in every query that loads patient
+  data, so no page can forget the check.
+
+## How long data is kept
+
+GDPR sets no fixed periods: data may be kept "no longer than necessary"
+(Article 5(1)(e)), unless a law requires keeping it. For Swedish health
+records, Patientdatalagen requires at least 10 years after the last
+entry. The periods are set in `.env` (`src/retention.js`):
+
+| Data | Default | Then |
+| --- | --- | --- |
+| Patient records | 10 years after the last entry | Listed on **Retention** for the treating clinician to review and delete (never automatic: ongoing care or a legal hold may require keeping them) |
+| Questionnaires never completed, including drafts | 30 days after the link expired or was cancelled | Deleted automatically |
+| Audit log entries | 10 years | Deleted automatically |
+| Expired logins | – | Deleted automatically |
+
+Automatic deletion runs when the server starts and once a day; it can
+also be run by hand with `npm run retention`. Each patient page shows the
+date until which the record is kept. Emails sent to clinicians are outside
+the app: delete them according to the same rules.
 
 ## Languages
 
@@ -314,7 +372,11 @@ Before using it with real patients, at minimum:
       the official validated translations.
 - [ ] Have the data protection officer rewrite the patient information
       text (legal basis, retention, access, rights).
-- [ ] Decide the record retention rules before allowing deletion.
+- [ ] Confirm the retention periods (`.env`) with the data protection
+      officer, including how long audit logs must be kept.
+- [ ] Decide whether colleagues with access may change data or only
+      read it (today they have the same rights as the treating clinician,
+      except granting access and deleting).
 - [ ] Have clinicians review the intake interview, risk assessment and
       safety plan forms against your organisation's routines.
 - [ ] Use a validated translation if patients answer in another language

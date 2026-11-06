@@ -79,6 +79,7 @@ export function layout({ title, clinician, body, language = 'en', skipScript = f
         ? html`<nav>
             <a href="/clinician">Patients</a>
             <a href="/clinician/patients/new">New patient</a>
+            <a href="/clinician/retention">Retention</a>
             <form method="post" action="/logout" class="inline"><button class="link">Log out (${clinician.name})</button></form>
           </nav>`
         : ''}
@@ -187,14 +188,15 @@ function languageSelect() {
   return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}">${name}</option>`)}</select>`;
 }
 
-export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [], access = { owner: true }, grants = [], owner }) {
+export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [], access = { owner: true }, grants = [], owner, keptUntil, retentionYears = 10 }) {
   return layout({
     title: `${patient.first_name} ${patient.last_name}`,
     clinician,
     body: html`
       <h1>${patient.first_name} ${patient.last_name}</h1>
       ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
-      <p class="record-links"><a href="/clinician/patients/${patient.id}/edit">Edit details</a> · <a href="/clinician/patients/${patient.id}/audit">Audit log</a></p>
+      <p class="record-links"><a href="/clinician/patients/${patient.id}/edit">Edit details</a> · <a href="/clinician/patients/${patient.id}/audit">Audit log</a>
+        ${keptUntil ? html`<br /><span class="hint">Record kept until at least ${keptUntil.toISOString().slice(0, 10)} (${retentionYears} years after the last entry).</span>` : ''}</p>
       ${access.owner
         ? ''
         : html`<p class="note">You have access as <strong>${ROLE_NAMES[access.role] ?? access.role}</strong>, granted by ${access.grant.granted_by_name} (treating clinician${owner ? `: ${owner.name}` : ''}) for: ${access.grant.reason}.${access.grant.expires_at ? ` Access ends ${access.grant.expires_at.slice(0, 10)}.` : ''}</p>`}
@@ -632,6 +634,43 @@ function accessSection(patient, grants) {
       </form>
     </details>
   </section>`;
+}
+
+export function retentionPage({ clinician, due, policy }) {
+  return layout({
+    title: 'Retention review',
+    clinician,
+    body: html`
+      <h1>Retention review</h1>
+      <section class="card">
+        <h2>How long data is kept</h2>
+        <ul>
+          <li>Patient records: <strong>${policy.recordYears} years after the last entry</strong>, then reviewed here and deleted.</li>
+          <li>Questionnaires never completed, including saved drafts: deleted automatically <strong>${policy.unusedDays} days</strong> after the link expired or was cancelled.</li>
+          <li>Audit log entries: deleted automatically after <strong>${policy.auditYears} years</strong>. Expired logins are deleted daily.</li>
+        </ul>
+        <p class="hint">GDPR requires that personal data is kept no longer than necessary; laws such as Patientdatalagen set minimum periods for health records. The periods are set in the app's configuration; check them with your data protection officer.</p>
+      </section>
+      <section class="card">
+        <h2>Records past their retention period</h2>
+        ${due.length
+          ? html`<p>Check that nothing requires keeping a record longer (ongoing care, a complaint, a legal hold) before deleting it.</p>
+            <div class="table-scroll"><table>
+              <thead><tr><th>Patient</th><th>Last entry</th><th>Kept until</th><th></th></tr></thead>
+              <tbody>${due.map((r) => html`<tr>
+                <td><a href="/clinician/patients/${r.id}">${r.last_name}, ${r.first_name}</a></td>
+                <td>${r.lastEntry.toISOString().slice(0, 10)}</td>
+                <td>${r.keptUntil.toISOString().slice(0, 10)}</td>
+                <td><form method="post" action="/clinician/patients/${r.id}/delete" class="inline-form">
+                  <input type="hidden" name="reason" value="Retention period ended" />
+                  <label>Type the last name <input name="confirm_last_name" required autocomplete="off" /></label>
+                  <button class="small danger">Delete</button>
+                </form></td>
+              </tr>`)}</tbody>
+            </table></div>`
+          : html`<p>No records of yours have reached the end of their retention period.</p>`}
+      </section>`,
+  });
 }
 
 export function auditPage({ clinician, patient, entries, actions }) {

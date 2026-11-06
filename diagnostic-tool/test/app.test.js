@@ -536,3 +536,17 @@ test('access: only the treating clinician and named supervisors or colleagues', 
     .run(patientId, superId, 'colleague', 'Old cover', 1, '2020-01-01T00:00:00Z');
   assert.equal(await status(supervisor), 404);
 });
+
+test('retention: patient page shows how long the record is kept; review page lists due records', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  db.prepare("INSERT INTO patients (clinician_id, first_name, last_name, personal_number, gender, age, education, employed, created_at) VALUES (1, 'Old', 'Record', 'x', 'Male', 70, 'Other / unknown', 0, '2010-01-01 09:00:00')").run();
+  const id = db.prepare("SELECT id FROM patients WHERE last_name = 'Record'").get().id;
+  const patientHtml = await (await fetch(`${base}/clinician/patients/${id}`, { headers: { cookie } })).text();
+  assert.ok(patientHtml.includes('Record kept until at least 2020-01-01 (10 years after the last entry).'));
+  const review = await (await fetch(`${base}/clinician/retention`, { headers: { cookie } })).text();
+  assert.ok(review.includes('Record, Old'));
+  assert.ok(review.includes('10 years after the last entry'));
+  assert.equal((await post(`/clinician/patients/${id}/delete`, { confirm_last_name: 'Record', reason: 'Retention period ended' }, cookie)).status, 200);
+  assert.ok(!(await (await fetch(`${base}/clinician/retention`, { headers: { cookie } })).text()).includes('Record, Old'));
+});

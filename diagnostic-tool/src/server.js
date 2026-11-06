@@ -36,6 +36,7 @@ import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
+import { cleanup, recordsDue, keptUntil, policy as retentionPolicy } from './retention.js';
 import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
@@ -269,6 +270,11 @@ clinician.post('/patients/:id/access', (req, res) => {
   res.redirect(`/clinician/patients/${patient.id}`);
 });
 
+// Records whose retention period has ended, for the treating clinician to review.
+clinician.get('/retention', (req, res) => {
+  send(res, views.retentionPage({ clinician: req.clinician, due: recordsDue(req.clinician.id), policy: retentionPolicy() }));
+});
+
 clinician.get('/patients/:id/audit', (req, res) => {
   const patient = accessiblePatient(req);
   if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
@@ -295,6 +301,7 @@ function showPatient(req, res, { newLink = null, followupLink = null, errors = [
   send(res, views.patientPage({
     clinician: req.clinician, patient, assessments, newLink, followupLink, followups: followupsOf(patient.id), errors,
     access: req.access, grants: req.access.owner ? grantsFor(patient.id) : [], owner: ownerOf(patient),
+    keptUntil: keptUntil(patient.id), retentionYears: retentionPolicy().recordYears,
   }), status);
 }
 
@@ -892,6 +899,13 @@ app.use((err, req, res, next) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
+  // Delete short-lived data now and then once a day (retention.js).
+  const runCleanup = () => {
+    const counts = cleanup();
+    if (Object.values(counts).some((n) => n > 0)) console.log('[retention] deleted', counts);
+  };
+  runCleanup();
+  setInterval(runCleanup, 24 * 3600 * 1000).unref();
   app.listen(PORT, () => console.log(`Listening on ${BASE_URL}`));
 }
 
