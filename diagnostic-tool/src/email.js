@@ -152,11 +152,19 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
   return lines.join('\n');
 }
 
+export function isUrgent(results) {
+  return results.safetyFlag || (results.differential?.summary.priority.length ?? 0) > 0;
+}
+
+export function buildEmailSubject(patient, results) {
+  if (!isUrgent(results)) return `Screening results ready (${patient.last_name})`;
+  const reason = results.safetyFlag ? 'safety alert' : 'priority differential';
+  return `URGENT: ${reason} in screening results (${patient.last_name})`;
+}
+
 export async function sendResultsEmail({ to, patient, results, completedAt, reportUrl }) {
-  const urgent = results.safetyFlag || (results.differential?.summary.priority.length ?? 0) > 0;
-  const subject = urgent
-    ? `URGENT: ${results.safetyFlag ? 'safety alert' : 'priority differential'} in screening results (${patient.last_name})`
-    : `Screening results ready (${patient.last_name})`;
+  const urgent = isUrgent(results);
+  const subject = buildEmailSubject(patient, results);
   const text = buildReportText({ patient, results, completedAt, reportUrl });
   const message = {
     from: process.env.MAIL_FROM || 'screening@localhost',
