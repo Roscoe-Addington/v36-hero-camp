@@ -479,3 +479,42 @@ dl.summary-list dd {
 button.danger {
   background: var(--danger);
 }
+
+/* Follow-up chart */
+.chart {
+  margin: 1rem 0;
+}
+.chart svg {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.chart-grid {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+.chart-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.chart-line {
+  fill: none;
+  stroke-width: 2.5;
+}
+.chart-phq, .chart-phq-dot { stroke: var(--accent); }
+.chart-gad, .chart-gad-dot { stroke: var(--warn); }
+.chart-phq-dot { fill: var(--accent); }
+.chart-gad-dot { fill: var(--warn); }
+.chart figcaption {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.key {
+  display: inline-block;
+  width: 1.2rem;
+  height: 0.25rem;
+  vertical-align: middle;
+  margin: 0 0.25rem 0 0.6rem;
+}
+.key-phq { background: var(--accent); }
+.key-gad { background: var(--warn); }

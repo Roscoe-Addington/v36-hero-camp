@@ -385,3 +385,47 @@ test('data protection: edit details, audit log, reopen with history, delete with
   assert.ok(log.includes('reopen'));
   assert.ok(log.includes('view_final'));
 });
+
+test('follow-up by link (Swedish) and on site, with chart and change on the patient page', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Nils', last_name: 'Ström', personal_number: '19800101-0000', gender: 'Male',
+    age: '46', education: 'University — master level or higher', employed: '1',
+  }, cookie);
+  const patientPath = created.headers.get('location');
+
+  // Intake screening on site: PHQ-9 15
+  const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
+  await post(start.headers.get('location'), { ...makeAnswers({ phq1: 3, phq2: 3, phq3: 3, phq4: 3, phq7: 3, gad1: 2, gad2: 2 }), consent_given: 'yes' }, cookie);
+
+  // Follow-up link in Swedish
+  const page = await (await post(`${patientPath}/followups`, { mode: 'link', language: 'sv' }, cookie)).text();
+  const link = page.match(/value="(http[^"]+\/f\/[^"]+)"/)[1];
+  const fPath = new URL(link).pathname;
+  const form = await (await fetch(base + fPath)).text();
+  assert.ok(form.includes('Nästan varje dag'));
+  const followupAnswers = Object.fromEntries(['phq1', 'phq2', 'phq3', 'phq4', 'phq5', 'phq6', 'phq7', 'phq8', 'phq9', 'phqDifficulty',
+    'gad1', 'gad2', 'gad3', 'gad4', 'gad5', 'gad6', 'gad7', 'gadDifficulty'].map((id) => [id, '0']));
+  assert.equal((await post(fPath, { phq1: '1' })).status, 400);
+  const done = await post(fPath, { ...followupAnswers, phq1: '2', phq9: '1' });
+  assert.ok((await done.text()).includes('Tack'));
+  assert.equal((await fetch(base + fPath)).status, 404, 'link works once');
+
+  // On-site follow-up
+  const onsite = await post(`${patientPath}/followups`, { mode: 'onsite', language: 'en' }, cookie);
+  const onsitePath = onsite.headers.get('location');
+  assert.equal((await post(onsitePath, followupAnswers, cookie)).status, 302);
+
+  // Patient page: chart, table, change summary, item 9 badge
+  const patientHtml = await (await fetch(base + patientPath, { headers: { cookie } })).text();
+  assert.ok(patientHtml.includes('<svg viewBox'));
+  assert.ok(patientHtml.includes('PHQ-9 fell by 15 points: a clinically meaningful improvement.'));
+  assert.ok(patientHtml.includes('PHQ-9 remission range'));
+  assert.ok(patientHtml.includes('Item 9'));
+
+  // Email for the follow-up with item 9 answered is urgent
+  await new Promise((r) => setTimeout(r, 100));
+  const followupEmails = readdirSync('outbox').filter((f) => f.endsWith('-followup.txt')).map((f) => readFileSync(`outbox/${f}`, 'utf8'));
+  assert.ok(followupEmails.some((e) => e.includes('URGENT: safety alert in follow-up (Ström)')));
+});

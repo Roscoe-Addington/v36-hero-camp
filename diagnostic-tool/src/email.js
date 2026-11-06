@@ -208,3 +208,27 @@ export async function sendResultsEmail({ to, patient, results, suggestions, comp
   await transport.sendMail(message);
   return 'sent';
 }
+
+// Short email when a follow-up (PHQ-9 + GAD-7) is completed.
+export async function sendFollowupEmail({ to, patient, result, completedAt, patientUrl }) {
+  const subject = result.safetyFlag
+    ? `URGENT: safety alert in follow-up (${patient.last_name})`
+    : `Follow-up completed (${patient.last_name})`;
+  const lines = [
+    ...(result.safetyFlag ? [`!!! SAFETY ALERT: PHQ-9 item 9 answered "${result.safetyAnswer}". Assess suicide risk. !!!`, ''] : []),
+    `Follow-up for ${patient.first_name} ${patient.last_name}, completed ${completedAt} (UTC).`,
+    `PHQ-9: ${result.phq9}/27 (${result.phq9Severity})`,
+    `GAD-7: ${result.gad7}/21 (${result.gad7Severity})`,
+    '',
+    `See the change over time on the patient page: ${patientUrl}`,
+  ];
+  const text = lines.join('\n');
+  const message = { from: process.env.MAIL_FROM || 'screening@localhost', to, subject, text, priority: result.safetyFlag ? 'high' : 'normal' };
+  if (!transport) {
+    mkdirSync('outbox', { recursive: true });
+    writeFileSync(`outbox/${Date.now()}-followup.txt`, `To: ${to}\nSubject: ${subject}\n\n${text}\n`);
+    return 'saved to outbox (SMTP not configured)';
+  }
+  await transport.sendMail(message);
+  return 'sent';
+}

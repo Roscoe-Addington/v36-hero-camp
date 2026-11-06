@@ -24,7 +24,8 @@ import { parseAnswers, parsePartialAnswers } from './questionnaire.js';
 import { lang, STRINGS } from './i18n.js';
 import { scoreAll } from './scoring.js';
 import { runDifferential } from './differential.js';
-import { sendResultsEmail } from './email.js';
+import { sendResultsEmail, sendFollowupEmail } from './email.js';
+import { parseFollowupAnswers, scoreFollowup } from './followup.js';
 import * as views from './views.js';
 import * as workflow from './views-workflow.js';
 import { buildSuggestions } from './suggestions.js';
@@ -600,6 +601,107 @@ async function emailResults(assessment, patient, { answers, results, completedAt
   }
   db.prepare('UPDATE assessments SET email_status = ? WHERE id = ?').run(emailStatus, assessment.id);
 }
+
+// ---------- Follow-up measurements (PHQ-9 + GAD-7) ----------
+
+clinician.post('/patients/:id/followups', (req, res) => {
+  const patient = ownPatient(req);
+  if (!patient) return res.status(404).send('Not found');
+  const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
+  const language = lang(req.body.language);
+  const token = newToken();
+  const expires = new Date(Date.now() + LINK_VALID_DAYS * 24 * 3600 * 1000);
+  const result = db
+    .prepare('INSERT INTO followups (patient_id, token_hash, expires_at, mode, language) VALUES (?, ?, ?, ?, ?)')
+    .run(patient.id, hashToken(token), expires.toISOString(), mode, language);
+  audit(req.clinician.id, 'start_followup', { patientId: patient.id, detail: `${mode}, ${language}` });
+  if (mode === 'onsite') return res.redirect(`/clinician/followups/${result.lastInsertRowid}`);
+
+  const assessments = db.prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY id DESC').all(patient.id);
+  send(res, views.patientPage({
+    clinician: req.clinician, patient, assessments, followups: followupsOf(patient.id),
+    followupLink: { url: `${BASE_URL}/f/${token}`, expires: expires.toISOString().slice(0, 10) },
+  }));
+});
+
+function ownFollowup(req) {
+  return db
+    .prepare(
+      `SELECT f.* FROM followups f JOIN patients p ON p.id = f.patient_id
+        WHERE f.id = ? AND p.clinician_id = ? AND f.revoked = 0`
+    )
+    .get(Number(req.params.id), req.clinician.id);
+}
+
+// Scores and saves a follow-up once; emails the clinician in the background.
+function completeFollowup(followup, answers) {
+  const result = scoreFollowup(answers);
+  const completedAt = now();
+  const saved = db
+    .prepare('UPDATE followups SET completed_at = ?, answers_json = ?, results_json = ? WHERE id = ? AND completed_at IS NULL')
+    .run(completedAt, JSON.stringify(answers), JSON.stringify(result), followup.id);
+  if (saved.changes === 0) return null;
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(followup.patient_id);
+  const to = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id).email;
+  sendFollowupEmail({ to, patient, result, completedAt, patientUrl: `${BASE_URL}/clinician/patients/${patient.id}` })
+    .catch((err) => console.error('[email] follow-up failed:', err.message));
+  return result;
+}
+
+clinician.get('/followups/:id', (req, res) => {
+  const f = ownFollowup(req);
+  if (!f || f.completed_at || f.mode !== 'onsite') return res.redirect('/clinician');
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(f.patient_id);
+  audit(req.clinician.id, 'view_followup', { patientId: patient.id });
+  send(res, views.followupPage({ action: `/clinician/followups/${f.id}`, clinician: req.clinician, patient, language: lang(f.language) }));
+});
+
+clinician.post('/followups/:id', (req, res) => {
+  const f = ownFollowup(req);
+  if (!f || f.completed_at || f.mode !== 'onsite') return res.redirect('/clinician');
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(f.patient_id);
+  const { answers, errors } = parseFollowupAnswers(req.body);
+  if (errors.length) {
+    return send(res, views.followupPage({
+      action: `/clinician/followups/${f.id}`, clinician: req.clinician, patient, language: lang(f.language),
+      answers: parsePartialAnswers(req.body), error: `${errors.length} questions are not answered yet.`,
+    }), 400);
+  }
+  completeFollowup(f, answers);
+  res.redirect(`/clinician/patients/${patient.id}`);
+});
+
+function openFollowup(token) {
+  const f = db.prepare('SELECT * FROM followups WHERE token_hash = ?').get(hashToken(token));
+  if (!f || f.revoked || f.completed_at || f.mode !== 'link' || new Date(f.expires_at) < new Date()) return null;
+  return f;
+}
+
+app.get('/f/:token', (req, res) => {
+  const f = openFollowup(req.params.token);
+  if (!f) return send(res, views.linkInvalidPage({}), 404);
+  const wanted = req.query.lang;
+  if (wanted && lang(wanted) === wanted) {
+    db.prepare('UPDATE followups SET language = ? WHERE id = ?').run(wanted, f.id);
+    f.language = wanted;
+  }
+  const url = `/f/${req.params.token}`;
+  send(res, views.followupPage({ action: url, language: lang(f.language), switchUrl: url }));
+});
+
+app.post('/f/:token', (req, res) => {
+  const f = openFollowup(req.params.token);
+  if (!f) return send(res, views.linkInvalidPage({}), 404);
+  const language = lang(f.language);
+  const url = `/f/${req.params.token}`;
+  const { answers, errors } = parseFollowupAnswers(req.body);
+  if (errors.length) {
+    return send(res, views.followupPage({ action: url, language, switchUrl: url, answers: parsePartialAnswers(req.body), error: STRINGS[language].missing(errors.length) }), 400);
+  }
+  const result = completeFollowup(f, answers);
+  if (!result) return send(res, views.linkInvalidPage({ language }), 409);
+  send(res, views.thankYouPage({ safetyFlag: result.safetyFlag, language }));
+});
 
 // ---------- Patient questionnaire (no login; the secret link is the key) ----------
 

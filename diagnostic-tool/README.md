@@ -30,30 +30,57 @@ use disorder) are listed as "outside this app" so they are not lost.
 
 1. **Start.** On the patient's page the clinician chooses **Send link to
    patient** (the patient answers at home and the clinician is emailed) or
-   **Conduct on site** (the clinician goes through the questions with the
-   patient on the same device).
-2. **Intake screening.** 95 questions (about 25 minutes): PHQ-9, GAD-7,
-   GAD criteria items, mood history, psychotic experiences (timing and
-   duration), AUDIT-C, drugs, medicines, health, life events, other
-   anxiety disorders, obsessive-compulsive and related symptoms,
-   PC-PTSD-5, personality traits, memory and neurological symptoms.
-3. **Clinician intake.** On site, the clinician enters the **MoCA** domain
-   scores (the app adds them up and adds 1 point for 12 years of education
-   or fewer), signs of **delirium** and **catatonia** they observe, and
-   interview notes.
-4. **Suggestions.** The app lists the disorders to assess in depth, each
-   marked *Suggested* or *Consider*, with the reasons from the screening.
-   The clinician can also open any other disorder.
-5. **In-depth assessment.** For each disorder, the clinician rates every
+   **Conduct on site**, and the questionnaire language (English or Swedish).
+2. **Intake screening.** The patient first confirms an information page
+   (on site, the clinician confirms the patient was informed). Then 95
+   questions (about 25 minutes): PHQ-9, GAD-7, GAD criteria items, mood
+   history, psychotic experiences, AUDIT-C, drugs, medicines, health, life
+   events, other anxiety disorders, obsessive-compulsive and related
+   symptoms, PC-PTSD-5, personality traits, memory and neurological
+   symptoms. **Answers can be saved part-way** and continued later from
+   the same link; a submit with missing answers keeps the others.
+3. **Intake interview.** A structured psychiatric history: reason and
+   onset, previous diagnoses and treatment, previous suicide attempts and
+   self-harm, family history, medical history and medicines, pregnancy,
+   substance use, social situation and development, and a **mental status
+   examination**.
+4. **MoCA and observed signs.** On site, the clinician enters the **MoCA**
+   domain scores (the app adds them up and adds 1 point for 12 years of
+   education or fewer), and signs of **delirium** and **catatonia**.
+5. **Informant.** Information from someone who knows the patient well
+   (memory decline, everyday functioning, past periods of elevated mood,
+   long-standing traits, safety worries). Saved only with the patient's
+   consent.
+6. **Suicide risk assessment.** Current thoughts and behaviour, previous
+   attempts, risk and protective factors, a written formulation, an
+   immediate-action decision, a management plan and a 7-step **safety
+   plan** page for the patient. The app does **not** compute a risk score
+   or category: guidelines such as NICE (2022) advise against using risk
+   scales to predict suicide. A risk assessment is **required before
+   finalizing** when item 9 is answered, self-harm or a previous attempt is
+   reported, the informant is worried, or the MSE shows psychotic symptoms.
+7. **Suggestions.** The app lists the disorders to assess in depth, each
+   marked *Suggested* or *Consider*, with the reasons from the screening,
+   interview, MoCA, observations and informant.
+8. **In-depth assessment.** For each disorder, the clinician rates every
    DSM-5-TR criterion as *present*, *absent* or *unclear* and picks
    specifiers (e.g. severity). The app shows whether the criteria are
-   **met**, **not met** or still **incomplete**, and the ICD-10 code.
-6. **Diagnosis.** The clinician confirms diagnoses. Confirming one whose
+   **met**, **not met** or still **incomplete**, the ICD-10 code, and a
+   rule-out table.
+9. **Diagnosis.** The clinician confirms diagnoses. Confirming one whose
    criteria are not met requires a written reason. The app checks every
    combination of diagnoses (see below).
-7. **Final report.** Finalizing locks the assessment and produces a report
-   with the diagnoses, ICD-10 codes, checklist results, MoCA and screening
-   summary.
+10. **Final report.** Finalizing (only after the intake interview, and the
+    risk assessment where required) locks the assessment and produces a
+    report with diagnoses, ICD-10 codes, checklist results, interview, MSE,
+    informant, risk assessment and screening summary. A finalized
+    assessment can be **reopened with a written reason**; the earlier
+    diagnoses and the reason are kept in a change history.
+11. **Follow-up.** PHQ-9 and GAD-7 (18 questions) can be repeated by link
+    or on site. The patient page shows a chart and a table of all
+    measurements and describes the change: 5+ points on PHQ-9 or 4+ on
+    GAD-7 counts as clinically meaningful, plus PHQ-9 response (50% fall)
+    and remission (below 5).
 
 ### Differential diagnosis and conflict checks
 
@@ -204,6 +231,12 @@ src/differential-lists.js  what to rule out for each disorder
 src/conflicts.js       which diagnoses may be given together
 src/diagnosis.js       confirming and removing diagnoses (shared with the demo)
 src/intake.js          reading the clinician intake form (shared with the demo)
+src/forms.js           generic forms described as data (schemas)
+src/clinical-forms.js  intake interview, MSE, risk assessment, informant
+src/views-forms.js     draws the schema forms and their summaries
+src/followup.js        follow-up scoring and change over time
+src/i18n.js            English and Swedish patient-facing text
+src/audit.js           the audit log
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens
@@ -211,6 +244,34 @@ src/db.js              database tables (SQLite file in data/)
 scripts/create-clinician.js
 test/                  automated tests
 ```
+
+## Languages
+
+Patient pages (information page, questionnaire, follow-up, thank-you
+page) are in **English or Swedish** (`src/i18n.js`). The clinician picks
+the language when starting; the patient can switch. Clinician pages are in
+English.
+
+> **The Swedish PHQ-9, GAD-7, AUDIT-C and PC-PTSD-5 wording is an
+> unofficial translation written for this app.** Validated Swedish
+> versions exist. Changed wording can change how an instrument performs,
+> so replace them with the official translations before real use. The
+> other Swedish questions should be checked by a native speaker.
+
+## Data protection features
+
+- **Information page** before the questionnaire (template text in
+  `src/i18n.js` for your data protection officer to adapt), with the time
+  of confirmation saved.
+- **Audit log** of every view and change of a patient's information
+  (`src/audit.js`), shown per patient. Edits record which fields changed,
+  not the new values. The log is kept even after a record is deleted.
+- **Edit patient details**, with the same checks as a new patient.
+- **Delete a patient record** only after typing the last name. Health
+  records usually must be kept for a set time (in Sweden at least 10 years
+  under Patientdatalagen), so this is meant for records created by mistake.
+- **Reopen** a finalized assessment only with a reason, kept in a change
+  history.
 
 ## Security measures already in place
 
@@ -249,6 +310,13 @@ Before using it with real patients, at minimum:
 - [ ] Clarify the medical device (MDR) classification. Software that
       suggests diagnoses is likely class IIa or higher.
 - [ ] Decide how 16–17-year-olds consent and who may see their results.
+- [ ] Replace the Swedish PHQ-9, GAD-7, AUDIT-C and PC-PTSD-5 items with
+      the official validated translations.
+- [ ] Have the data protection officer rewrite the patient information
+      text (legal basis, retention, access, rights).
+- [ ] Decide the record retention rules before allowing deletion.
+- [ ] Have clinicians review the intake interview, risk assessment and
+      safety plan forms against your organisation's routines.
 - [ ] Use a validated translation if patients answer in another language
       (official PHQ-9 and GAD-7 translations exist, including Swedish).
 - [ ] Check the MDR classification question with your organisation.

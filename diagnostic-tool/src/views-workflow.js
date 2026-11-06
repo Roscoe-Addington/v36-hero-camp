@@ -114,12 +114,10 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
           </div>`
         : ''}
       ${amendmentHistory(c.amendments)}
-      ${r.safetyFlag ? html`<div class="alert" role="alert"><strong>Safety alert:</strong> the patient answered “${r.safetyAnswer}” to PHQ-9 item 9 (thoughts of death or self-harm). Assess suicide risk.</div>` : ''}
+      ${r.safetyFlag ? html`<div class="alert" role="alert"><strong>Safety alert:</strong> the patient answered “${r.safetyAnswer}” to PHQ-9 item 9 (thoughts of death or self-harm). <a href="${base}/risk">${c.risk?.updated_at ? 'Open the risk assessment' : 'Start the suicide risk assessment'}</a>.</div>` : ''}
       ${suggestions.neuroReferral.some((n) => n.urgent)
         ? html`<div class="alert" role="alert"><strong>Possible urgent neurological symptoms:</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. Ask when they started; if within the last days, arrange emergency assessment.</div>`
         : ''}
-
-      ${riskCard(base, c, locked)}
 
       <section class="card">
         <h2>2. Intake interview</h2>
@@ -142,6 +140,8 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
           : html`<p class="hint">No informant recorded.</p>`}
         <p><a class="button secondary-link" href="${base}/informant">${c.informant?.updated_at ? 'Open informant information' : 'Add informant information'}</a></p>
       </section>
+
+      ${riskCard(base, c, locked)}
 
       <section class="card">
         <h2>6. In-depth assessment</h2>

@@ -19,6 +19,7 @@ import {
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
 import { STATUS } from './differential.js';
 import { STRINGS, LANGUAGES, itemText, optionText, sectionText, difficultyText } from './i18n.js';
+import { measurementSeries, progressSummary } from './followup.js';
 
 // ---------- The escaping helper ----------
 
@@ -570,9 +571,99 @@ export function auditPage({ clinician, patient, entries, actions }) {
   });
 }
 
-// Filled in by phase D (follow-up measurements).
-function followupSection() {
-  return '';
+// ---------- Follow-up measurements on the patient page ----------
+
+// A line chart of PHQ-9 and GAD-7 over time, drawn as SVG on the server.
+// Colours come from classes in style.css (the CSP blocks inline styles).
+function progressChart(points) {
+  // Wide side margins so the first and last date labels are not cut off.
+  const W = 640, H = 230, left = 70, right = 50, top = 14, bottom = 46;
+  const maxY = 27;
+  const x = (i) => left + (points.length === 1 ? (W - left - right) / 2 : (i * (W - left - right)) / (points.length - 1));
+  const y = (v) => top + (1 - v / maxY) * (H - top - bottom);
+  const line = (key) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
+  const grid = [0, 5, 10, 15, 20, 27];
+  return html`<figure class="chart">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="PHQ-9 and GAD-7 scores over time">
+      ${grid.map((g) => html`<line class="chart-grid" x1="${left}" x2="${W - right}" y1="${y(g)}" y2="${y(g)}" /><text class="chart-label" x="${left - 30}" y="${y(g) + 4}" text-anchor="end">${g}</text>`)}
+      <path class="chart-line chart-phq" d="${line('phq9')}" />
+      <path class="chart-line chart-gad" d="${line('gad7')}" />
+      ${points.map((p, i) => html`
+        <circle class="chart-dot chart-phq-dot" cx="${x(i)}" cy="${y(p.phq9)}" r="4" />
+        <circle class="chart-dot chart-gad-dot" cx="${x(i)}" cy="${y(p.gad7)}" r="4" />
+        <text class="chart-label" x="${x(i)}" y="${H - bottom + 18}" text-anchor="middle">${p.date.slice(0, 10)}</text>
+        <text class="chart-label" x="${x(i)}" y="${H - bottom + 32}" text-anchor="middle">${p.source === 'Follow-up' ? 'follow-up' : 'intake'}</text>`)}
+    </svg>
+    <figcaption><span class="key key-phq"></span> PHQ-9 (0–27) <span class="key key-gad"></span> GAD-7 (0–21). Lines at 5, 10, 15 and 20 mark the severity bands.</figcaption>
+  </figure>`;
+}
+
+function followupSection(patient, assessments, followups, followupLink) {
+  const points = measurementSeries(assessments, followups);
+  const progress = progressSummary(points);
+  const pending = followups.filter((f) => !f.completed_at && !f.revoked && new Date(f.expires_at) > new Date());
+  return html`<section class="card">
+    <h2>Follow-up: PHQ-9 and GAD-7 over time</h2>
+    <p class="hint">Repeat PHQ-9 and GAD-7 (18 questions, about 3 minutes) to see whether treatment helps.</p>
+    ${followupLink
+      ? html`<div class="highlight card"><p>Send this follow-up link to the patient. <strong>Copy it now</strong>; it is not shown again. It expires ${followupLink.expires}.</p>
+          <input class="linkbox" readonly value="${followupLink.url}" aria-label="Follow-up link" /></div>`
+      : ''}
+    ${points.length
+      ? html`${progressChart(points)}
+        ${progress ? html`<ul class="facts">${progress.notes.map((n) => html`<li>${n}</li>`)}</ul>` : html`<p class="hint">One measurement so far. Add a follow-up to see change.</p>`}
+        <div class="table-scroll"><table>
+          <thead><tr><th>Date</th><th>Measurement</th><th>PHQ-9</th><th>GAD-7</th><th></th></tr></thead>
+          <tbody>${points.map((p) => html`<tr><td class="code">${p.date}</td><td>${p.source}</td><td>${p.phq9}</td><td>${p.gad7}</td>
+            <td>${p.safetyFlag ? html`<span class="badge danger">Item 9</span>` : ''}</td></tr>`)}</tbody>
+        </table></div>`
+      : html`<p class="hint">No completed measurements yet.</p>`}
+    ${pending.length ? html`<p class="hint">${pending.length} follow-up ${pending.length === 1 ? 'link is' : 'links are'} waiting for the patient.</p>` : ''}
+    <div class="start-options">
+      <form method="post" action="/clinician/patients/${patient.id}/followups">
+        <input type="hidden" name="mode" value="link" />
+        <label>Language ${languageSelect()}</label>
+        <button>Send follow-up link</button>
+      </form>
+      <form method="post" action="/clinician/patients/${patient.id}/followups">
+        <input type="hidden" name="mode" value="onsite" />
+        <label>Language ${languageSelect()}</label>
+        <button>Follow-up on site</button>
+      </form>
+    </div>
+  </section>`;
+}
+
+// The follow-up questionnaire: PHQ-9 and GAD-7 only.
+export function followupPage({ action, error, clinician, patient, language = 'en', answers = {}, switchUrl }) {
+  const t = STRINGS[language];
+  const pick = (id) => answers[id];
+  return layout({
+    title: t.title,
+    clinician,
+    language,
+    body: html`
+      ${languageSwitch(language, switchUrl)}
+      <h1>${clinician ? html`Follow-up: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
+      <p class="crisis">${t.crisis}</p>
+      ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
+      <form method="post" action="${action}">
+        <section class="card">
+          <h2>${t.part} 1</h2>
+          <p><strong>${t.twoWeeks}</strong></p>
+          ${PHQ9_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
+          ${radioGroup(PHQ_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(PHQ_DIFFICULTY_ID), language)}
+        </section>
+        <section class="card">
+          <h2>${t.part} 2</h2>
+          <p><strong>${t.twoWeeks}</strong></p>
+          ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
+          ${radioGroup(GAD_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(GAD_DIFFICULTY_ID), language)}
+        </section>
+        <button class="big">${clinician ? 'Save follow-up' : t.submit}</button>
+      </form>
+      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc.; no permission required to reproduce. ${t.translationNote}</p>`,
+  });
 }
 
 export function messagePage({ title, message, clinician }) {
