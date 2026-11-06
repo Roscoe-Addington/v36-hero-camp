@@ -1,0 +1,28 @@
+// Readable names for the audit log actions. Kept separate from audit.js
+// (which needs the database) so the browser demo can use them too.
+
+export const ACTIONS = {
+  view_patient: 'Viewed patient',
+  create_patient: 'Created patient',
+  edit_patient: 'Edited patient details',
+  delete_patient: 'Deleted patient record',
+  start_assessment: 'Started assessment',
+  view_assessment: 'Viewed assessment',
+  view_final: 'Viewed final report',
+  view_safety_plan: 'Viewed safety plan',
+  view_interview: 'Viewed intake interview',
+  view_informant: 'Viewed informant information',
+  view_risk: 'Viewed risk assessment',
+  save_screening: 'Saved on-site screening',
+  save_interview: 'Saved intake interview',
+  save_informant: 'Saved informant information',
+  save_risk: 'Saved risk assessment',
+  save_intake: 'Saved MoCA and observations',
+  save_checklist: 'Saved criteria checklist',
+  diagnosis: 'Changed diagnoses',
+  finalize: 'Finalized assessment',
+  reopen: 'Reopened assessment',
+  view_audit: 'Viewed audit log',
+  start_followup: 'Started follow-up',
+  view_followup: 'Viewed follow-up',
+};
