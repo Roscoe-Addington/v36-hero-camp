@@ -75,6 +75,9 @@ const NEW_ASSESSMENT_COLUMNS = {
   interview_json: 'TEXT', // intake interview and mental status examination
   risk_json: 'TEXT', // suicide risk assessment and safety plan
   informant_json: 'TEXT', // information from someone who knows the patient
+  language: "TEXT NOT NULL DEFAULT 'en'", // questionnaire language: 'en' or 'sv'
+  draft_json: 'TEXT', // answers saved part-way through the questionnaire
+  consent_at: 'TEXT', // when the patient confirmed they had read the information
 };
 const existing = new Set(db.prepare('PRAGMA table_info(assessments)').all().map((c) => c.name));
 for (const [name, type] of Object.entries(NEW_ASSESSMENT_COLUMNS)) {

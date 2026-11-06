@@ -20,7 +20,8 @@ import {
   recordFailure,
   clearFailures,
 } from './auth.js';
-import { parseAnswers } from './questionnaire.js';
+import { parseAnswers, parsePartialAnswers } from './questionnaire.js';
+import { lang, STRINGS } from './i18n.js';
 import { scoreAll } from './scoring.js';
 import { runDifferential } from './differential.js';
 import { sendResultsEmail } from './email.js';
@@ -223,6 +224,7 @@ clinician.post('/patients/:id/assessments', (req, res) => {
   const patient = ownPatient(req);
   if (!patient) return res.status(404).send('Not found');
   const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
+  const language = lang(req.body.language);
 
   // Only one open assessment per patient: cancel any not yet started.
   db.prepare('UPDATE assessments SET revoked = 1 WHERE patient_id = ? AND completed_at IS NULL').run(patient.id);
@@ -232,8 +234,8 @@ clinician.post('/patients/:id/assessments', (req, res) => {
   const token = newToken();
   const expires = new Date(Date.now() + LINK_VALID_DAYS * 24 * 3600 * 1000);
   const result = db
-    .prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode) VALUES (?, ?, ?, ?)')
-    .run(patient.id, hashToken(token), expires.toISOString(), mode);
+    .prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode, language) VALUES (?, ?, ?, ?, ?)')
+    .run(patient.id, hashToken(token), expires.toISOString(), mode, language);
 
   if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}/screening`);
   showPatient(req, res, { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) });
@@ -306,28 +308,46 @@ clinician.get('/assessments/:id', (req, res) => {
 
 // ---------- On-site screening ----------
 
+function onsitePage(req, c, extra = {}) {
+  return views.questionnairePage({
+    action: `/clinician/assessments/${c.assessment.id}/screening`,
+    clinician: req.clinician,
+    patient: c.patient,
+    language: c.assessment.language,
+    answers: parseJson(c.assessment.draft_json, {}),
+    consentDone: Boolean(c.assessment.consent_at),
+    ...extra,
+  });
+}
+
 clinician.get('/assessments/:id/screening', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
-  send(res, views.questionnairePage({ action: `/clinician/assessments/${c.assessment.id}/screening`, clinician: req.clinician, patient: c.patient }));
+  send(res, onsitePage(req, c));
 });
 
-clinician.post('/assessments/:id/screening', async (req, res) => {
+clinician.post('/assessments/:id/screening', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const draft = parsePartialAnswers(req.body);
+  saveDraft(c.assessment.id, draft);
+  if (req.body.intent === 'save') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+
+  if (!c.assessment.consent_at) {
+    if (req.body.consent_given !== 'yes') {
+      return send(res, onsitePage(req, c, { answers: draft, error: 'Confirm that the patient has been given the information.' }), 400);
+    }
+    db.prepare('UPDATE assessments SET consent_at = ? WHERE id = ?').run(now(), c.assessment.id);
+  }
   const { answers, errors } = parseAnswers(req.body);
   if (errors.length) {
-    return send(res, views.questionnairePage({
-      action: `/clinician/assessments/${c.assessment.id}/screening`, clinician: req.clinician, patient: c.patient,
-      error: 'Please answer every question before saving.',
-    }), 400);
+    return send(res, onsitePage(req, c, { answers: draft, consentDone: true, error: `${errors.length} questions are not answered yet. The answers so far are saved.` }), 400);
   }
   const done = completeScreening(c.assessment, c.patient, answers);
-  if (!done) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
-  emailResults(c.assessment, c.patient, done);
+  if (done) emailResults(c.assessment, c.patient, done);
 });
 
 // ---------- Clinician intake (MoCA, delirium signs, notes) ----------
@@ -469,7 +489,7 @@ function completeScreening(assessment, patient, answers) {
   const completedAt = now();
   const saved = db
     .prepare(
-      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?
+      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?, draft_json = NULL
         WHERE id = ? AND completed_at IS NULL`
     )
     .run(completedAt, JSON.stringify(answers), JSON.stringify(results), assessment.id);
@@ -504,31 +524,68 @@ function openAssessment(token) {
   return a;
 }
 
-const LINK_INVALID = {
-  title: 'Link not valid',
-  message: 'This link has expired, has already been used, or is not valid. Please contact your clinician for a new link.',
-};
+function saveDraft(assessmentId, answers) {
+  db.prepare('UPDATE assessments SET draft_json = ? WHERE id = ? AND completed_at IS NULL').run(JSON.stringify(answers), assessmentId);
+}
+
+// The patient's language: ?lang=sv switches it and remembers the choice.
+function patientLanguage(req, assessment) {
+  const wanted = req.query.lang;
+  if (wanted && lang(wanted) === wanted && wanted !== assessment.language) {
+    db.prepare('UPDATE assessments SET language = ? WHERE id = ?').run(wanted, assessment.id);
+    assessment.language = wanted;
+  }
+  return lang(assessment.language);
+}
+
+const invalidLink = (res) => send(res, views.linkInvalidPage({}), 404);
 
 app.get('/q/:token', (req, res) => {
-  if (!openAssessment(req.params.token)) return send(res, views.messagePage(LINK_INVALID), 404);
-  send(res, views.questionnairePage({ action: `/q/${req.params.token}` }));
+  const assessment = openAssessment(req.params.token);
+  if (!assessment) return invalidLink(res);
+  const language = patientLanguage(req, assessment);
+  const url = `/q/${req.params.token}`;
+  if (!assessment.consent_at) return send(res, views.consentPage({ action: `${url}/consent`, language, switchUrl: url }));
+  send(res, views.questionnairePage({ action: url, language, switchUrl: url, answers: parseJson(assessment.draft_json, {}) }));
+});
+
+app.post('/q/:token/consent', (req, res) => {
+  const assessment = openAssessment(req.params.token);
+  if (!assessment) return invalidLink(res);
+  const url = `/q/${req.params.token}`;
+  if (req.body.agree !== 'yes') {
+    const language = lang(assessment.language);
+    return send(res, views.consentPage({ action: `${url}/consent`, language, switchUrl: url, error: STRINGS[language].consentNeeded }), 400);
+  }
+  db.prepare('UPDATE assessments SET consent_at = ? WHERE id = ? AND consent_at IS NULL').run(now(), assessment.id);
+  res.redirect(url);
 });
 
 app.post('/q/:token', (req, res) => {
   const assessment = openAssessment(req.params.token);
-  if (!assessment) return send(res, views.messagePage(LINK_INVALID), 404);
+  if (!assessment) return invalidLink(res);
+  const url = `/q/${req.params.token}`;
+  if (!assessment.consent_at) return res.redirect(url);
+  const language = lang(assessment.language);
+
+  // Every submit keeps what has been answered so far.
+  const draft = parsePartialAnswers(req.body);
+  saveDraft(assessment.id, draft);
+  if (req.body.intent === 'save') {
+    return send(res, views.savedPage({ language, expires: assessment.expires_at.slice(0, 10) }));
+  }
 
   const { answers, errors } = parseAnswers(req.body);
   if (errors.length) {
-    return send(res, views.questionnairePage({ action: `/q/${req.params.token}`, error: 'Please answer every question before submitting.' }), 400);
+    return send(res, views.questionnairePage({ action: url, language, switchUrl: url, answers: draft, error: STRINGS[language].missing(errors.length) }), 400);
   }
 
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
   const done = completeScreening(assessment, patient, answers);
-  if (!done) return send(res, views.messagePage(LINK_INVALID), 409);
+  if (!done) return invalidLink(res);
 
   // Show the patient the thank-you page straight away; email in the background.
-  send(res, views.thankYouPage({ safetyFlag: done.results.safetyFlag }));
+  send(res, views.thankYouPage({ safetyFlag: done.results.safetyFlag, language }));
   emailResults(assessment, patient, done);
 });
 

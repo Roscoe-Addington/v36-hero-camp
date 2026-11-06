@@ -18,6 +18,7 @@ import {
 } from './questionnaire.js';
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
 import { STATUS } from './differential.js';
+import { STRINGS, LANGUAGES, itemText, optionText, sectionText, difficultyText } from './i18n.js';
 
 // ---------- The escaping helper ----------
 
@@ -56,13 +57,9 @@ export function html(strings, ...values) {
 
 // ---------- Shared layout ----------
 
-const CRISIS_TEXT =
-  process.env.CRISIS_TEXT ||
-  'If you are in danger or thinking about harming yourself, call 112 (emergency) now. In Sweden you can also call Mind Självmordslinjen on 90101 or 1177 for healthcare advice.';
-
-export function layout({ title, clinician, body }) {
+export function layout({ title, clinician, body, language = 'en' }) {
   return html`<!doctype html>
-<html lang="en">
+<html lang="${language}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -177,6 +174,10 @@ export function newPatientPage({ clinician, errors = [], values = {} }) {
 
 // ---------- Clinician: one patient ----------
 
+function languageSelect() {
+  return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}">${name}</option>`)}</select>`;
+}
+
 export function patientPage({ clinician, patient, assessments, newLink }) {
   return layout({
     title: `${patient.first_name} ${patient.last_name}`,
@@ -205,11 +206,13 @@ export function patientPage({ clinician, patient, assessments, newLink }) {
         <div class="start-options">
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="link" />
+            <label>Questionnaire language ${languageSelect()}</label>
             <button>Send link to patient</button>
             <p class="hint">The patient answers at home. You get an email when it is done.</p>
           </form>
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="onsite" />
+            <label>Questionnaire language ${languageSelect()}</label>
             <button>Conduct on site</button>
             <p class="hint">You go through the questions with the patient now, on this device.</p>
           </form>
@@ -394,80 +397,141 @@ export function screeningSections(results) {
 
 // ---------- Patient: the questionnaire ----------
 
-function radioGroup(id, question, options, number) {
+function radioGroup(id, question, options, number, selected, language) {
   return html`<fieldset class="question">
     <legend>${number ? html`<span class="num">${number}.</span> ` : ''}${question}</legend>
     <div class="options">
       ${options.map(
-        (o) => html`<label class="choice"><input type="radio" name="${id}" value="${o.value}" required /> ${o.label}</label>`
+        (o) => html`<label class="choice"><input type="radio" name="${id}" value="${o.value}" required ${selected === o.value ? html`checked` : ''} /> ${optionText(language, o.label)}</label>`
       )}
     </div>
   </fieldset>`;
 }
 
-// action: where the form is sent. onsite: the clinician is filling it in
-// together with the patient (then the clinician's menu is shown too).
-export function questionnairePage({ action, error, clinician, patient }) {
+// Links to switch the patient's questionnaire language.
+function languageSwitch(language, switchUrl) {
+  if (!switchUrl) return '';
+  return html`<p class="lang-switch">${Object.entries(LANGUAGES)
+    .filter(([code]) => code !== language)
+    .map(([code, name]) => html`<a href="${switchUrl}?lang=${code}" lang="${code}">${name}</a>`)}</p>`;
+}
+
+// action: where the form is sent. clinician: set when the clinician fills it
+// in on site (then the clinician's menu and the consent confirmation show).
+// answers: answers already given (from a saved draft or a failed submit).
+export function questionnairePage({ action, error, clinician, patient, language = 'en', answers = {}, switchUrl, consentDone }) {
+  const t = STRINGS[language];
+  const pick = (id) => answers[id];
   return layout({
-    title: 'Questionnaire',
+    title: t.title,
     clinician,
+    language,
     body: html`
-      <h1>${clinician ? html`Intake screening: ${patient.first_name} ${patient.last_name}` : 'Questionnaire about your health'}</h1>
+      ${languageSwitch(language, switchUrl)}
+      <h1>${clinician ? html`Intake screening: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
       ${clinician
-        ? html`<p class="note">On-site screening. Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
-        : html`<p>Your clinician has asked you to fill in this questionnaire. It takes about 20–25 minutes. Please answer every question. Your answers go only to your clinician.</p>`}
-      <p class="crisis">${CRISIS_TEXT}</p>
+        ? html`<p class="note">On-site screening (${LANGUAGES[language]}). Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
+        : html`<p>${t.intro}</p>`}
+      <p class="crisis">${t.crisis}</p>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
 
       <form method="post" action="${action}">
+        ${clinician && !consentDone
+          ? html`<section class="card">
+              <h2>Information to the patient</h2>
+              <ul>${STRINGS[language].consent.map((p) => html`<li>${p}</li>`)}</ul>
+              <label class="check"><input type="checkbox" name="consent_given" value="yes" required /> The patient has been given this information and agrees to answer</label>
+            </section>`
+          : ''}
+
         <section class="card">
-          <h2>Part 1</h2>
-          <p><strong>Over the last 2 weeks</strong>, how often have you been bothered by any of the following problems?</p>
-          ${PHQ9_ITEMS.map((item, i) => radioGroup(item.id, item.text, FREQUENCY_OPTIONS, i + 1))}
-          ${radioGroup(PHQ_DIFFICULTY_ID, DIFFICULTY_QUESTION, DIFFICULTY_OPTIONS)}
+          <h2>${t.part} 1</h2>
+          <p><strong>${t.twoWeeks}</strong></p>
+          ${PHQ9_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
+          ${radioGroup(PHQ_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(PHQ_DIFFICULTY_ID), language)}
         </section>
 
         <section class="card">
-          <h2>Part 2</h2>
-          <p><strong>Over the last 2 weeks</strong>, how often have you been bothered by the following problems?</p>
-          ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, item.text, FREQUENCY_OPTIONS, i + 1))}
-          ${radioGroup(GAD_DIFFICULTY_ID, DIFFICULTY_QUESTION, DIFFICULTY_OPTIONS)}
+          <h2>${t.part} 2</h2>
+          <p><strong>${t.twoWeeks}</strong></p>
+          ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
+          ${radioGroup(GAD_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(GAD_DIFFICULTY_ID), language)}
         </section>
 
         <section class="card">
-          <h2>Part 3</h2>
-          <p>These questions are about the <strong>last 6 months</strong>.</p>
-          ${GAD_CRITERIA_ITEMS.map((item, i) => radioGroup(item.id, item.text, YES_NO_OPTIONS, i + 1))}
+          <h2>${t.part} 3</h2>
+          <p>${t.sixMonths}</p>
+          ${GAD_CRITERIA_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), YES_NO_OPTIONS, i + 1, pick(item.id), language))}
         </section>
 
-        ${SCREENING_SECTIONS.map(
-          (section, s) => html`<section class="card">
-            <h2>Part ${s + 4}: ${section.title}</h2>
-            ${section.intro ? html`<p>${section.intro}</p>` : ''}
-            ${section.items.map((item, i) => radioGroup(item.id, item.text, item.options, i + 1))}
-          </section>`
-        )}
+        ${SCREENING_SECTIONS.map((section, n) => {
+          const [title, intro] = sectionText(language, section);
+          return html`<section class="card">
+            <h2>${t.part} ${n + 4}: ${title}</h2>
+            ${intro ? html`<p>${intro}</p>` : ''}
+            ${section.items.map((item, i) => radioGroup(item.id, itemText(language, item), item.options, i + 1, pick(item.id), language))}
+          </section>`;
+        })}
 
-        <button class="big">Submit answers</button>
+        <div class="form-buttons">
+          <button class="big">${clinician ? 'Save answers and score' : t.submit}</button>
+          <button class="secondary" name="intent" value="save" formnovalidate>${clinician ? 'Save draft and continue later' : t.save}</button>
+        </div>
       </form>
-      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003).</p>`,
+      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003). ${t.translationNote}</p>`,
   });
 }
 
-export function thankYouPage({ safetyFlag }) {
+export function consentPage({ action, language = 'en', switchUrl, error }) {
+  const t = STRINGS[language];
   return layout({
-    title: 'Thank you',
+    title: t.consentTitle,
+    language,
     body: html`
-      <h1>Thank you</h1>
-      <p>Your answers have been sent to your clinician, who will go through them with you.</p>
+      ${languageSwitch(language, switchUrl)}
+      <h1>${t.consentTitle}</h1>
+      ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
+      <section class="card">
+        ${t.consent.map((p) => html`<p>${p}</p>`)}
+        <form method="post" action="${action}">
+          <label class="check"><input type="checkbox" name="agree" value="yes" required /> ${t.consentCheck}</label>
+          <button>${t.start}</button>
+        </form>
+      </section>
+      <p class="crisis">${t.crisis}</p>`,
+  });
+}
+
+export function savedPage({ language = 'en', expires }) {
+  const t = STRINGS[language];
+  return layout({
+    title: t.savedTitle,
+    language,
+    body: html`<h1>${t.savedTitle}</h1><p>${t.savedText(expires)}</p><p class="crisis">${t.crisis}</p>`,
+  });
+}
+
+export function thankYouPage({ safetyFlag, language = 'en' }) {
+  const t = STRINGS[language];
+  return layout({
+    title: t.thanksTitle,
+    language,
+    body: html`
+      <h1>${t.thanksTitle}</h1>
+      <p>${t.thanksText}</p>
       ${safetyFlag
         ? html`<div class="alert" role="alert">
-            <p><strong>You mentioned having thoughts of being better off dead or of hurting yourself.</strong> You do not have to wait for your appointment.</p>
-            <p>${CRISIS_TEXT}</p>
+            <p><strong>${t.safety}</strong></p>
+            <p>${t.crisis}</p>
           </div>`
-        : html`<p class="crisis">${CRISIS_TEXT}</p>`}
-      <p>You can close this page now.</p>`,
+        : html`<p class="crisis">${t.crisis}</p>`}
+      <p>${t.close}</p>`,
   });
+}
+
+export function linkInvalidPage({ language = 'en' }) {
+  const t = STRINGS[language];
+  return layout({ title: t.invalidTitle, language, body: html`<h1>${t.invalidTitle}</h1><p>${t.invalidText}</p>` });
 }
 
 export function messagePage({ title, message, clinician }) {

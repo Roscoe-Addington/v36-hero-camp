@@ -96,6 +96,12 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
     // Differential items: past elevated mood with reduced sleep -> bipolar flag
     bp1: 1, bp2: 1, bp3: 0, auditc1: 3, auditc2: 1, auditc3: 1, ptsd0: 1, ptsd1: 1, ptsd3: 1, ptsd4: 1,
   });
+  // Answers are refused until the information page is confirmed
+  assert.equal((await post(qPath, answers)).status, 302);
+  assert.ok((await (await fetch(base + qPath)).text()).includes('Before you start'));
+  assert.equal((await post(`${qPath}/consent`, {})).status, 400);
+  assert.equal((await post(`${qPath}/consent`, { agree: 'yes' })).status, 302);
+
   const submit = await post(qPath, answers);
   assert.equal(submit.status, 200);
   const thanks = await submit.text();
@@ -181,7 +187,8 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   assert.equal((await fetch(base + screeningPath, { redirect: 'manual' })).status, 302);
 
   // Clinician records the answers: depression + memory complaint
-  const saved = await post(screeningPath, makeAnswers({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 3, phq6: 2, cog1: 1, cog2: 1 }), cookie);
+  assert.equal((await post(screeningPath, makeAnswers({ phq1: 2 }), cookie)).status, 400, 'patient information must be confirmed');
+  const saved = await post(screeningPath, { ...makeAnswers({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 3, phq6: 2, cog1: 1, cog2: 1 }), consent_given: 'yes' }, cookie);
   assert.equal(saved.status, 302);
   assert.equal(saved.headers.get('location'), casePath);
 
@@ -273,7 +280,7 @@ test('a required risk assessment blocks finalizing until it is done, then gives 
   }, cookie);
   const start = await post(`${created.headers.get('location')}/assessments`, { mode: 'onsite' }, cookie);
   const casePath = start.headers.get('location').replace('/screening', '');
-  await post(`${casePath}/screening`, makeAnswers({ phq2: 3, phq9: 2 }), cookie);
+  await post(`${casePath}/screening`, { ...makeAnswers({ phq2: 3, phq9: 2 }), consent_given: 'yes' }, cookie);
   await post(`${casePath}/interview`, { reason: 'Crisis after break-up' }, cookie);
 
   const blocked = await post(`${casePath}/finalize`, {}, cookie);
@@ -295,3 +302,43 @@ test('a required risk assessment blocks finalizing until it is done, then gives 
   assert.ok(final.includes('Recent loss, crisis or humiliation, Hopelessness'));
   assert.ok(final.includes('Daily phone contact this week.'));
 });
+
+test('patient link: Swedish, save part-way, keep answers when some are missing', async () => {
+  const { hashToken } = await import('../src/auth.js');
+  const patientId = db.prepare('SELECT id FROM patients LIMIT 1').get().id;
+  db.prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode, language) VALUES (?, ?, ?, ?, ?)')
+    .run(patientId, hashToken('swedish-token'), '2099-01-01T00:00:00Z', 'link', 'sv');
+  const q = `${base}/q/swedish-token`;
+
+  const consent = await (await fetch(q)).text();
+  assert.ok(consent.includes('Innan du börjar'));
+  assert.ok(consent.includes('lang="sv"'));
+  await post('/q/swedish-token/consent', { agree: 'yes' });
+
+  const form = await (await fetch(q)).text();
+  assert.ok(form.includes('Frågeformulär om din hälsa'));
+  assert.ok(form.includes('Känt dig nedstämd, deprimerad eller hopplös'));
+  assert.ok(form.includes('Nästan varje dag'));
+  assert.ok(form.includes('inte den officiella'), 'unofficial translation note');
+
+  // Switch to English and back
+  assert.ok((await (await fetch(`${q}?lang=en`)).text()).includes('Questionnaire about your health'));
+  await fetch(`${q}?lang=sv`);
+
+  // Save part-way: answers come back when the link is opened again
+  const saved = await post('/q/swedish-token', { phq1: '3', phq2: '2', intent: 'save' });
+  assert.ok((await saved.text()).includes('Dina svar är sparade'));
+  const again = await (await fetch(q)).text();
+  assert.match(again, /name="phq1" value="3" required checked/);
+
+  // Submitting with answers missing keeps the given ones and says how many are missing
+  const partial = await post('/q/swedish-token', { phq1: '3', phq2: '2', phq3: '1' });
+  assert.equal(partial.status, 400);
+  const page = await partial.text();
+  assert.match(page, new RegExp(`${makeAnswersCount() - 3} frågor är inte besvarade`));
+  assert.match(page, /name="phq3" value="1" required checked/);
+});
+
+function makeAnswersCount() {
+  return Object.keys(makeAnswers()).length;
+}

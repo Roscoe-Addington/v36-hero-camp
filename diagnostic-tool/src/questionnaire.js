@@ -304,3 +304,14 @@ export function parseAnswers(body) {
   }
   return { answers, errors };
 }
+
+// Like parseAnswers, but for a saved draft: keeps every valid answer and
+// ignores missing ones.
+export function parsePartialAnswers(body) {
+  const answers = {};
+  for (const field of ALL_FIELDS) {
+    const value = Number(body?.[field.id]);
+    if (body?.[field.id] !== undefined && body[field.id] !== '' && field.allowed.includes(value)) answers[field.id] = value;
+  }
+  return answers;
+}

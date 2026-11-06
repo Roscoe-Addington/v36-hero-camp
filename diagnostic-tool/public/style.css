@@ -453,3 +453,15 @@ dl.summary-list dd {
 @media print {
   .topbar, a[href^="/clinician"] { display: none; }
 }
+
+.form-buttons {
+  display: grid;
+  gap: 0.6rem;
+}
+.form-buttons button.secondary {
+  justify-self: center;
+}
+.lang-switch {
+  text-align: right;
+  margin: 0;
+}
