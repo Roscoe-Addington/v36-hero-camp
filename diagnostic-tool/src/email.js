@@ -79,7 +79,28 @@ export function buildDifferentialText(differential) {
   return lines;
 }
 
-export function buildReportText({ patient, results, completedAt, reportUrl }) {
+// Suggested in-depth assessments from the intake screening, as plain text.
+export function buildSuggestionsText(suggestions) {
+  if (!suggestions) return [];
+  const lines = ['SUGGESTED IN-DEPTH ASSESSMENTS'];
+  if (suggestions.suggestions.length === 0) lines.push('  The screening does not point toward any disorder in this app.');
+  for (const s of suggestions.suggestions) {
+    lines.push(`  - ${s.name} [${s.strength}]`);
+    for (const reason of s.reasons) lines.push(`      ${reason}`);
+  }
+  if (suggestions.neuroReferral.length) {
+    lines.push('', '  Neurological symptoms (refer, do not diagnose here):');
+    for (const n of suggestions.neuroReferral) lines.push(`  - ${n.urgent ? '[URGENT] ' : ''}${n.finding}. ${n.action}`);
+  }
+  if (suggestions.outOfScope.length) {
+    lines.push('', '  Findings outside this app:');
+    for (const o of suggestions.outOfScope) lines.push(`  - ${o.condition}`);
+  }
+  lines.push('', '  The MoCA and the clinician observations are added on site and can change these suggestions.');
+  return lines;
+}
+
+export function buildReportText({ patient, results, suggestions, completedAt, reportUrl }) {
   const d = results.depression;
   const a = results.anxiety;
   const lines = [];
@@ -105,7 +126,7 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
   }
 
   lines.push(
-    'SCREENING RESULT — NOT A DIAGNOSIS',
+    'INTAKE SCREENING RESULT — NOT A DIAGNOSIS',
     '',
     'Patient',
     `  Name:            ${patient.first_name} ${patient.last_name}`,
@@ -143,6 +164,8 @@ export function buildReportText({ patient, results, completedAt, reportUrl }) {
     ...CLINICIAN_CHECKLIST.map((c) => `  - ${c}`),
     '',
     '='.repeat(70),
+    ...buildSuggestionsText(suggestions),
+    '='.repeat(70),
     ...buildDifferentialText(results.differential),
     '='.repeat(70),
     '',
@@ -162,10 +185,10 @@ export function buildEmailSubject(patient, results) {
   return `URGENT: ${reason} in screening results (${patient.last_name})`;
 }
 
-export async function sendResultsEmail({ to, patient, results, completedAt, reportUrl }) {
+export async function sendResultsEmail({ to, patient, results, suggestions, completedAt, reportUrl }) {
   const urgent = isUrgent(results);
   const subject = buildEmailSubject(patient, results);
-  const text = buildReportText({ patient, results, completedAt, reportUrl });
+  const text = buildReportText({ patient, results, suggestions, completedAt, reportUrl });
   const message = {
     from: process.env.MAIL_FROM || 'screening@localhost',
     to,

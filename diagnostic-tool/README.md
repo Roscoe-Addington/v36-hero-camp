@@ -1,48 +1,79 @@
-# Mood & Anxiety Screening
+# Mental Health Assessment
 
-A small web app where a clinician registers a patient, sends them a private
-link, and receives the scored results by email when the patient has answered.
+A web app that supports a clinician through the whole assessment of a
+patient aged **16 or older**, from the intake screening to a confirmed
+diagnosis with an ICD-10 code.
 
-It screens for:
+It covers four groups of DSM-5-TR disorders (31 in total):
 
-- **Major depressive disorder (MDD)** with the **PHQ-9**, scored with the
-  published DSM-based algorithm (Kroenke et al., 2001).
-- **Generalized anxiety disorder (GAD)** with the **GAD-7** (Spitzer et al.,
-  2006), plus 8 yes/no questions covering DSM-5-TR criteria A–C (6 months of
-  hard-to-control worry and 3+ associated symptoms), which the GAD-7 alone
-  does not ask about.
+| Group | Disorders |
+| --- | --- |
+| Mood disorders | Major depressive disorder, persistent depressive disorder, PMDD, DMDD (under 18 only), bipolar I and II, cyclothymic disorder, substance/medication-induced and medical-condition mood disorders |
+| Anxiety disorders | Separation anxiety, selective mutism, specific phobia, social anxiety, panic disorder, agoraphobia, GAD, substance/medication-induced and medical-condition anxiety disorders |
+| Personality disorders | All 10 (paranoid, schizoid, schizotypal, antisocial, borderline, histrionic, narcissistic, avoidant, dependent, obsessive-compulsive) |
+| Neurocognitive disorders | Delirium, major neurocognitive disorder (dementia), mild neurocognitive disorder |
 
-> **This is a screening tool, not a diagnostic tool.** It gives a likelihood
-> (High / Moderate / Low–subclinical / Minimal), never a diagnosis. A
-> diagnosis needs a clinical interview. The app is not a certified medical
-> device; see "Before real patients use this" below.
+Other neurological symptoms (seizures, weakness, speech or vision loss,
+tremor, new headaches, head injury) are **flagged for referral**, not
+diagnosed. Findings outside these groups (psychosis, PTSD, OCD, adjustment
+disorder, substance use disorder and others) are listed as "outside this
+app" so they are not lost.
 
-## How it works
+> **This app supports clinical judgement; it does not replace it.** The
+> clinician confirms every diagnosis. Software that suggests diagnoses is
+> likely a medical device under the EU MDR and must not be used with real
+> patients without CE marking. See "Before real patients use this".
 
-1. The clinician logs in and adds a patient: first name, last name, personal
-   number, gender, age, education level, employed yes/no.
-2. The clinician clicks **Create new questionnaire link** and sends the link
-   to the patient (e.g. via the clinic's secure messaging).
-3. The patient opens the link (no login needed), answers 56 questions and
-   submits. The link then stops working.
-4. The app scores the answers and emails the result to the clinician's email
-   address. The full report, with every answer, is in the clinician portal.
+## The assessment process
 
-If the patient answers anything other than "Not at all" to PHQ-9 question 9
-(thoughts of death or self-harm), the patient is immediately shown crisis
-phone numbers, and the clinician's email is marked **URGENT**.
+1. **Start.** On the patient's page the clinician chooses **Send link to
+   patient** (the patient answers at home and the clinician is emailed) or
+   **Conduct on site** (the clinician goes through the questions with the
+   patient on the same device).
+2. **Intake screening.** 88 questions (about 20–25 minutes): PHQ-9, GAD-7,
+   GAD criteria items, mood history, AUDIT-C, drugs, medicines, health,
+   life events, other anxiety disorders, PC-PTSD-5, personality traits,
+   memory and neurological symptoms.
+3. **Clinician intake.** On site, the clinician enters the **MoCA** domain
+   scores (the app adds them up and adds 1 point for 12 years of education
+   or fewer), signs of **delirium** they observe, and interview notes.
+4. **Suggestions.** The app lists the disorders to assess in depth, each
+   marked *Suggested* or *Consider*, with the reasons from the screening.
+   The clinician can also open any other disorder.
+5. **In-depth assessment.** For each disorder, the clinician rates every
+   DSM-5-TR criterion as *present*, *absent* or *unclear* and picks
+   specifiers (e.g. severity). The app shows whether the criteria are
+   **met**, **not met** or still **incomplete**, and the ICD-10 code.
+6. **Diagnosis.** The clinician confirms diagnoses. Confirming one whose
+   criteria are not met requires a written reason.
+7. **Final report.** Finalizing locks the assessment and produces a report
+   with the diagnoses, ICD-10 codes, checklist results, MoCA and screening
+   summary.
 
-## What the report contains
+### About the MoCA
 
-For each condition:
+The MoCA test itself is **not** in the app. It is copyrighted, must be given
+by a trained and certified person, and its owners must give permission for
+any digital version. The clinician gives the paper test and types in the
+seven domain scores. The cut-off of 26 is shown with its range bands; many
+studies suggest a lower cut-off (23–24), so the clinician decides.
 
-- the likelihood level and the total score with its severity band
-- whether the DSM-5-TR symptom criteria were endorsed
-- **symptoms at diagnostic threshold** (e.g. "more than half the days")
-- **subclinical symptoms**: symptoms the person has, but below the
-  threshold that counts toward a diagnosis
-- functional impairment
-- a checklist of what the clinician must still rule out
+### About the criteria and codes
+
+The checklists show **short labels written for this app**, not the DSM-5-TR
+text, which is copyrighted. Keep the DSM-5-TR at hand for the full wording.
+Codes are WHO ICD-10; check them against ICD-10-SE before reporting. Where
+ICD-10 has no direct code (e.g. PMDD, narcissistic personality disorder),
+the checklist page explains the code used.
+
+### Age rules
+
+- Patients must be 16 or older (the form and the server both check this).
+- Antisocial personality disorder cannot be met under 18.
+- DMDD cannot be met over 18.
+- Other personality disorders under 18 need features present for 1 year or more.
+
+## Intake screening details
 
 ### Differential diagnosis screening
 
@@ -88,6 +119,23 @@ How the likelihood is decided (see `src/scoring.js`):
 These are ordered categories, not percentages. The questionnaires do not
 give a valid individual probability, so the app does not invent one.
 
+### How suggestions are made (`src/suggestions.js`)
+
+| Screening finding | Suggests |
+| --- | --- |
+| PHQ-9 ≥ 10 or DSM algorithm met | Major depressive disorder |
+| GAD-7 ≥ 10 or 6-month criteria met | Generalized anxiety disorder |
+| Past elevated mood with less sleep or consequences | Bipolar I and II |
+| Personality screen ≥ 3 of 8 plus a matching trait | The matching personality disorder (*Consider*) |
+| 5 or more of 8 borderline traits | Borderline personality disorder |
+| MoCA below 26 | Mild neurocognitive disorder |
+| MoCA below 18, or below 26 with everyday activities affected | Major neurocognitive disorder |
+| Memory complaint without a MoCA | Mild NCD (*Suggested* from age 60), and a prompt to give the MoCA |
+| Acute onset + inattention + disorganised thinking or altered consciousness | Delirium |
+
+The other disorders each have their own screening question (e.g. panic
+attacks, agoraphobic situations, separation worry).
+
 ## Running it on your computer
 
 You need [Node.js](https://nodejs.org) version 22.5 or newer.
@@ -116,6 +164,11 @@ src/server.js          URLs and what happens on each one
 src/questionnaire.js   the questions and answer options
 src/scoring.js         the scoring rules  <- the clinical logic
 src/differential.js    the differential diagnosis rules
+src/suggestions.js     which disorders to assess in depth, and why
+src/disorders.js       the 31 disorders: criteria, rules, ICD-10 codes
+src/criteria.js        evaluates a checklist (met / not met / incomplete)
+src/moca.js            MoCA score entry and interpretation
+src/views-workflow.js  assessment, checklist and final report pages
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens
@@ -151,9 +204,14 @@ Before using it with real patients, at minimum:
       read the results in the portal.
 - [ ] Encrypt the database at rest and set up backups.
 - [ ] Add an audit log (who viewed which patient, when).
-- [ ] Have a clinician who knows the instruments review `src/scoring.js`,
-      `src/differential.js` and the questions written for this tool (they
-      are not a validated instrument).
+- [ ] Have clinicians review `src/scoring.js`, `src/differential.js`,
+      `src/suggestions.js`, every criteria label and rule in
+      `src/disorders.js`, and the ICD-10 codes against ICD-10-SE.
+- [ ] Get the screening questions written for this tool validated, or
+      replace them with validated instruments (they are not validated).
+- [ ] Clarify the medical device (MDR) classification. Software that
+      suggests diagnoses is likely class IIa or higher.
+- [ ] Decide how 16–17-year-olds consent and who may see their results.
 - [ ] Use a validated translation if patients answer in another language
       (official PHQ-9 and GAD-7 translations exist, including Swedish).
 - [ ] Check the MDR classification question with your organisation.

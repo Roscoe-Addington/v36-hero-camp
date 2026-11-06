@@ -96,7 +96,7 @@ export const YES_NO_NA_OPTIONS = [
   { value: 2, label: 'Does not apply to me' },
 ];
 
-export const DIFFERENTIAL_SECTIONS = [
+export const SCREENING_SECTIONS = [
   {
     title: 'Your mood over time',
     intro: 'These questions are about your whole life, not only the last few weeks.',
@@ -105,6 +105,7 @@ export const DIFFERENTIAL_SECTIONS = [
       { id: 'bp2', text: 'During such a period, did you need much less sleep than usual but still not feel tired?', options: YES_NO_NA_OPTIONS },
       { id: 'bp3', text: 'During such a period, did other people notice the change, or did it cause problems (for example at work, with money or in relationships)?', options: YES_NO_NA_OPTIONS },
       { id: 'pdd1', text: 'Have you felt down or depressed on most days for at least the past 2 years?', options: YES_NO_OPTIONS },
+      { id: 'cyclo1', text: 'For at least the past 2 years, has your mood often swung between periods of feeling unusually up or energetic and periods of feeling down?', options: YES_NO_OPTIONS },
       { id: 'psy1', text: 'Have you heard voices or seen things that other people could not hear or see, or strongly felt that others were watching you or trying to harm you?', options: YES_NO_OPTIONS },
     ],
   },
@@ -190,6 +191,10 @@ export const DIFFERENTIAL_SECTIONS = [
       { id: 'ocd1', text: 'Are you bothered by unwanted thoughts, images or urges that keep coming back even though you try to stop them (for example fear of germs or of causing harm)?', options: YES_NO_OPTIONS },
       { id: 'ocd2', text: 'Do you feel driven to repeat actions or mental routines (for example washing, checking, counting or arranging) to reduce anxiety?', options: YES_NO_OPTIONS },
       { id: 'ill1', text: 'Is most of your worry about having or getting a serious illness?', options: YES_NO_OPTIONS },
+      { id: 'phobia1', text: 'Do you have a strong fear of a particular thing or situation (for example animals, heights, flying, blood or injections) that you avoid or can hardly bear?', options: YES_NO_OPTIONS },
+      { id: 'agora1', text: 'Do you fear or avoid two or more of these: public transport, open spaces, shops or cinemas, queues or crowds, being outside your home alone?', options: YES_NO_OPTIONS },
+      { id: 'sep1', text: 'Do you worry much more than other people about being separated from someone close to you, or that something bad will happen to them?', options: YES_NO_OPTIONS },
+      { id: 'mutism1', text: 'Are there situations (for example at work or school) where you are unable to speak, even though you speak normally at home?', options: YES_NO_OPTIONS },
     ],
   },
   {
@@ -205,13 +210,54 @@ export const DIFFERENTIAL_SECTIONS = [
       { id: 'ptsd5', text: 'In the past month, have you felt guilty or unable to stop blaming yourself or others for the event(s) or any problems the event(s) may have caused?', options: YES_NO_NA_OPTIONS },
     ],
   },
+  {
+    title: 'How you usually are',
+    intro: 'These questions are about how you usually are, for most of your adult life (or since your teens). There are no right or wrong answers.',
+    items: [
+      // pd1-pd8 follow the eight personality areas of the SAPAS screen
+      // (Moran et al., 2003), reworded. pd14-pd19 follow borderline traits.
+      { id: 'pd1', text: 'In general, do you find it hard to make and keep friends?', options: YES_NO_OPTIONS },
+      { id: 'pd2', text: 'Would you normally describe yourself as a loner?', options: YES_NO_OPTIONS },
+      { id: 'pd3', text: 'In general, do you trust other people?', options: YES_NO_OPTIONS },
+      { id: 'pd4', text: 'Do you normally lose your temper easily?', options: YES_NO_OPTIONS },
+      { id: 'pd5', text: 'Are you normally an impulsive sort of person?', options: YES_NO_OPTIONS },
+      { id: 'pd6', text: 'Are you normally a worrier?', options: YES_NO_OPTIONS },
+      { id: 'pd7', text: 'In general, do you depend on others a lot?', options: YES_NO_OPTIONS },
+      { id: 'pd8', text: 'In general, are you a perfectionist?', options: YES_NO_OPTIONS },
+      { id: 'pd9', text: 'Do other people often find you odd, or do you have unusual experiences (for example sensing a presence, or believing you can influence events with your thoughts)?', options: YES_NO_OPTIONS },
+      { id: 'pd10', text: 'Do you feel uncomfortable when you are not the centre of attention?', options: YES_NO_OPTIONS },
+      { id: 'pd11', text: 'Do you feel you are special, and that others should recognise this and admire you?', options: YES_NO_OPTIONS },
+      { id: 'pd12', text: 'Since your teens, have you repeatedly broken rules or laws, lied to or hurt others, without feeling sorry afterwards?', options: YES_NO_OPTIONS },
+      { id: 'pd13', text: 'Do you avoid people, jobs or activities because you fear being criticised or rejected?', options: YES_NO_OPTIONS },
+      { id: 'pd14', text: 'Are your close relationships often stormy, with intense ups and downs?', options: YES_NO_OPTIONS },
+      { id: 'pd15', text: 'Do you go to great lengths to avoid being left or abandoned by people close to you?', options: YES_NO_OPTIONS },
+      { id: 'pd16', text: 'Have you ever deliberately hurt yourself (for example by cutting or burning)?', options: YES_NO_OPTIONS },
+      { id: 'pd17', text: 'Do you often feel empty inside?', options: YES_NO_OPTIONS },
+      { id: 'pd18', text: 'Do you often feel unsure of who you really are?', options: YES_NO_OPTIONS },
+      { id: 'pd19', text: 'Does your mood often change strongly within a few hours (for example from content to very low or very angry)?', options: YES_NO_OPTIONS },
+    ],
+  },
+  {
+    title: 'Memory and the nervous system',
+    intro: 'If any of the problems below started suddenly in the last few days, call 112 now.',
+    items: [
+      { id: 'cog1', text: 'Have you, or people close to you, noticed that your memory or thinking has got worse during the past year?', options: YES_NO_OPTIONS },
+      { id: 'cog2', text: 'Do memory or thinking problems make it harder to manage everyday things (for example money, medicines, appointments or cooking)?', options: YES_NO_OPTIONS },
+      { id: 'neuro1', text: 'Have you had seizures (fits) or unexplained blackouts?', options: YES_NO_OPTIONS },
+      { id: 'neuro2', text: 'Have you had new weakness, numbness or paralysis in your face, an arm or a leg?', options: YES_NO_OPTIONS },
+      { id: 'neuro3', text: 'Have you had new trouble speaking or understanding speech, or sudden loss of vision?', options: YES_NO_OPTIONS },
+      { id: 'neuro4', text: 'Have you developed shaking (tremor), stiffness or slowed movements?', options: YES_NO_OPTIONS },
+      { id: 'neuro5', text: 'Have you had new, severe headaches unlike any you had before?', options: YES_NO_OPTIONS },
+      { id: 'neuro6', text: 'Have you had a head injury where you were knocked out?', options: YES_NO_OPTIONS },
+    ],
+  },
 ];
 
-export const DIFFERENTIAL_ITEMS = DIFFERENTIAL_SECTIONS.flatMap((section) => section.items);
+export const SCREENING_ITEMS = SCREENING_SECTIONS.flatMap((section) => section.items);
 
 // Looks up any question by id (used to quote questions in the report).
 export function findItem(id) {
-  return [...PHQ9_ITEMS, ...GAD7_ITEMS, ...GAD_CRITERIA_ITEMS, ...DIFFERENTIAL_ITEMS].find((item) => item.id === id);
+  return [...PHQ9_ITEMS, ...GAD7_ITEMS, ...GAD_CRITERIA_ITEMS, ...SCREENING_ITEMS].find((item) => item.id === id);
 }
 
 // The answer label for a question, e.g. ('phq1', 2) -> 'More than half the days'.
@@ -232,7 +278,7 @@ export const ALL_FIELDS = [
   ...GAD7_ITEMS.map((item) => ({ id: item.id, allowed: [0, 1, 2, 3] })),
   { id: GAD_DIFFICULTY_ID, allowed: [0, 1, 2, 3] },
   ...GAD_CRITERIA_ITEMS.map((item) => ({ id: item.id, allowed: [0, 1] })),
-  ...DIFFERENTIAL_ITEMS.map((item) => ({ id: item.id, allowed: item.options.map((o) => o.value) })),
+  ...SCREENING_ITEMS.map((item) => ({ id: item.id, allowed: item.options.map((o) => o.value) })),
 ];
 
 // Turns the raw form body (all strings) into numbers, or returns a list of

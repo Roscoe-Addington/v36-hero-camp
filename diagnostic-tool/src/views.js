@@ -14,7 +14,7 @@ import {
   DIFFICULTY_QUESTION,
   PHQ_DIFFICULTY_ID,
   GAD_DIFFICULTY_ID,
-  DIFFERENTIAL_SECTIONS,
+  SCREENING_SECTIONS,
 } from './questionnaire.js';
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
 import { STATUS } from './differential.js';
@@ -60,7 +60,7 @@ const CRISIS_TEXT =
   process.env.CRISIS_TEXT ||
   'If you are in danger or thinking about harming yourself, call 112 (emergency) now. In Sweden you can also call Mind Självmordslinjen on 90101 or 1177 for healthcare advice.';
 
-function layout({ title, clinician, body }) {
+export function layout({ title, clinician, body }) {
   return html`<!doctype html>
 <html lang="en">
   <head>
@@ -72,7 +72,7 @@ function layout({ title, clinician, body }) {
   </head>
   <body>
     <header class="topbar">
-      <span class="brand">Mood &amp; Anxiety Screening</span>
+      <span class="brand">Mental Health Assessment</span>
       ${clinician
         ? html`<nav>
             <a href="/clinician">Patients</a>
@@ -199,26 +199,43 @@ export function patientPage({ clinician, patient, assessments, newLink }) {
           </div>`
         : ''}
 
-      <form method="post" action="/clinician/patients/${patient.id}/links">
-        <button>Create new questionnaire link</button>
-      </form>
-      <p class="hint">Creating a new link cancels any earlier link for this patient that has not been used yet.</p>
+      <section class="card">
+        <h2>Start a new assessment</h2>
+        <p>The assessment starts with the intake screening. Choose how the patient answers it:</p>
+        <div class="start-options">
+          <form method="post" action="/clinician/patients/${patient.id}/assessments">
+            <input type="hidden" name="mode" value="link" />
+            <button>Send link to patient</button>
+            <p class="hint">The patient answers at home. You get an email when it is done.</p>
+          </form>
+          <form method="post" action="/clinician/patients/${patient.id}/assessments">
+            <input type="hidden" name="mode" value="onsite" />
+            <button>Conduct on site</button>
+            <p class="hint">You go through the questions with the patient now, on this device.</p>
+          </form>
+        </div>
+        <p class="hint">Starting a new assessment cancels any earlier one for this patient that has not started yet.</p>
+      </section>
 
-      <h2>Questionnaires</h2>
+      <h2>Assessments</h2>
       ${assessments.length === 0
         ? html`<p>None yet.</p>`
         : html`<table>
-            <thead><tr><th>Created</th><th>Status</th><th>Depression</th><th>Anxiety</th></tr></thead>
+            <thead><tr><th>Created</th><th>How</th><th>Status</th><th>Depression</th><th>Anxiety</th></tr></thead>
             <tbody>
               ${assessments.map((a) => {
                 const r = a.results_json ? JSON.parse(a.results_json) : null;
+                const link = (text) => html`<a href="/clinician/assessments/${a.id}">${text}</a>`;
                 let status;
-                if (a.completed_at) status = html`<a href="/clinician/assessments/${a.id}">Completed ${a.completed_at}</a>`;
+                if (a.finalized_at) status = link(`Finalized ${a.finalized_at}`);
+                else if (a.completed_at) status = link(`Screening done ${a.completed_at} — continue`);
                 else if (a.revoked) status = 'Cancelled';
-                else if (new Date(a.expires_at) < new Date()) status = 'Expired';
+                else if (a.mode === 'onsite') status = link('On-site screening not finished — continue');
+                else if (new Date(a.expires_at) < new Date()) status = 'Link expired';
                 else status = 'Waiting for patient';
                 return html`<tr>
                   <td>${a.created_at}</td>
+                  <td>${a.mode === 'onsite' ? 'On site' : 'Link'}</td>
                   <td>${status} ${r?.safetyFlag ? html`<span class="badge danger">Safety alert</span>` : ''} ${r?.differential?.summary.priority.length ? html`<span class="badge danger">Priority differential</span>` : ''}</td>
                   <td>${r ? html`${likelihoodBadge(r.depression.likelihood)} PHQ-9 ${r.depression.total}` : ''}</td>
                   <td>${r ? html`${likelihoodBadge(r.anxiety.likelihood)} GAD-7 ${r.anxiety.total}` : ''}</td>
@@ -229,7 +246,7 @@ export function patientPage({ clinician, patient, assessments, newLink }) {
   });
 }
 
-function likelihoodBadge(likelihood) {
+export function likelihoodBadge(likelihood) {
   const cls = {
     [LIKELIHOOD.HIGH]: 'danger',
     [LIKELIHOOD.MODERATE]: 'warn',
@@ -321,18 +338,11 @@ function differentialSection(differential) {
   </section>`;
 }
 
-export function reportPage({ clinician, patient, assessment, results, emailStatus }) {
+// The screening part of an assessment (results of the intake questionnaire).
+export function screeningSections(results) {
   const d = results.depression;
   const a = results.anxiety;
-  return layout({
-    title: `Report — ${patient.last_name}`,
-    clinician,
-    body: html`
-      <p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>
-      <h1>Screening report</h1>
-      <p class="hint">Completed ${assessment.completed_at} (UTC). Email: ${emailStatus || 'unknown'}.</p>
-      <p class="disclaimer"><strong>Screening result, not a diagnosis.</strong> Confirm in a clinical interview.</p>
-
+  return html`
       ${results.safetyFlag
         ? html`<div class="alert" role="alert">
             <h2>Safety alert</h2>
@@ -379,8 +389,7 @@ export function reportPage({ clinician, patient, assessment, results, emailStatu
       <section class="card">
         <h2>Before making a diagnosis</h2>
         <ul>${CLINICIAN_CHECKLIST.map((c) => html`<li>${c}</li>`)}</ul>
-      </section>`,
-  });
+      </section>`;
 }
 
 // ---------- Patient: the questionnaire ----------
@@ -396,16 +405,21 @@ function radioGroup(id, question, options, number) {
   </fieldset>`;
 }
 
-export function questionnairePage({ token, error }) {
+// action: where the form is sent. onsite: the clinician is filling it in
+// together with the patient (then the clinician's menu is shown too).
+export function questionnairePage({ action, error, clinician, patient }) {
   return layout({
     title: 'Questionnaire',
+    clinician,
     body: html`
-      <h1>Questionnaire about mood and worry</h1>
-      <p>Your clinician has asked you to fill in this questionnaire. It takes about 10–15 minutes. Please answer every question. Your answers go only to your clinician.</p>
+      <h1>${clinician ? html`Intake screening: ${patient.first_name} ${patient.last_name}` : 'Questionnaire about your health'}</h1>
+      ${clinician
+        ? html`<p class="note">On-site screening. Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
+        : html`<p>Your clinician has asked you to fill in this questionnaire. It takes about 20–25 minutes. Please answer every question. Your answers go only to your clinician.</p>`}
       <p class="crisis">${CRISIS_TEXT}</p>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
 
-      <form method="post" action="/q/${token}">
+      <form method="post" action="${action}">
         <section class="card">
           <h2>Part 1</h2>
           <p><strong>Over the last 2 weeks</strong>, how often have you been bothered by any of the following problems?</p>
@@ -426,7 +440,7 @@ export function questionnairePage({ token, error }) {
           ${GAD_CRITERIA_ITEMS.map((item, i) => radioGroup(item.id, item.text, YES_NO_OPTIONS, i + 1))}
         </section>
 
-        ${DIFFERENTIAL_SECTIONS.map(
+        ${SCREENING_SECTIONS.map(
           (section, s) => html`<section class="card">
             <h2>Part ${s + 4}: ${section.title}</h2>
             ${section.intro ? html`<p>${section.intro}</p>` : ''}
@@ -436,7 +450,7 @@ export function questionnairePage({ token, error }) {
 
         <button class="big">Submit answers</button>
       </form>
-      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD.</p>`,
+      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003).</p>`,
   });
 }
 

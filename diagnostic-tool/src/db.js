@@ -62,3 +62,18 @@ db.exec(`
     email_status TEXT
   );
 `);
+
+// ---------- Migrations ----------
+// Columns added after the first version. ALTER TABLE adds them to an existing
+// database file; a new database gets them the same way.
+const NEW_ASSESSMENT_COLUMNS = {
+  mode: "TEXT NOT NULL DEFAULT 'link'", // 'link' = patient answers via link, 'onsite' = with the clinician
+  intake_json: 'TEXT', // clinician intake: MoCA scores, observations, notes
+  checklists_json: 'TEXT', // in-depth criteria ratings per disorder
+  diagnoses_json: 'TEXT', // diagnoses the clinician confirmed
+  finalized_at: 'TEXT',
+};
+const existing = new Set(db.prepare('PRAGMA table_info(assessments)').all().map((c) => c.name));
+for (const [name, type] of Object.entries(NEW_ASSESSMENT_COLUMNS)) {
+  if (!existing.has(name)) db.exec(`ALTER TABLE assessments ADD COLUMN ${name} ${type}`);
+}

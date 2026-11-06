@@ -79,7 +79,7 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.ok(!patientHtml.includes('Ada<script>'));
 
   // 3. Create a questionnaire link
-  const linkPage = await (await post(`${patientPath}/links`, {}, cookie)).text();
+  const linkPage = await (await post(`${patientPath}/assessments`, { mode: 'link' }, cookie)).text();
   const link = linkPage.match(/value="(http[^"]+\/q\/[^"]+)"/)[1];
   const qPath = new URL(link).pathname;
 
@@ -128,6 +128,11 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.ok(report.includes('PHQ-9 total: <strong>13/27</strong>'));
   assert.ok(report.includes('Differential diagnosis screening'));
   assert.ok(report.includes('Priority:</strong> screen positive for Bipolar I or II disorder'));
+  // Suggestions from the screening, in the portal and in the email
+  assert.ok(report.includes('3. In-depth assessment'));
+  assert.ok(report.includes('checklist?disorder=bipolar1'));
+  assert.ok(email.includes('SUGGESTED IN-DEPTH ASSESSMENTS'));
+  assert.ok(email.includes('Bipolar I disorder [Suggested]'));
 });
 
 test('a clinician cannot see another clinician\'s patient', async () => {
@@ -149,4 +154,84 @@ test('posts from another website are blocked', async () => {
     body: 'email=a&password=b',
   });
   assert.equal(res.status, 403);
+});
+
+test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Bo', last_name: 'Berg', personal_number: '19500101-0000', gender: 'Male',
+    age: '75', education: 'Primary / compulsory school', employed: '0',
+  }, cookie);
+  const patientPath = created.headers.get('location');
+
+  // Start on site: goes straight to the screening form, no link shown
+  const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
+  assert.equal(start.status, 302);
+  const screeningPath = start.headers.get('location');
+  assert.match(screeningPath, /^\/clinician\/assessments\/\d+\/screening$/);
+  const casePath = screeningPath.replace('/screening', '');
+  const form = await (await fetch(base + screeningPath, { headers: { cookie } })).text();
+  assert.ok(form.includes('On-site screening'));
+
+  // The screening form needs a login
+  assert.equal((await fetch(base + screeningPath, { redirect: 'manual' })).status, 302);
+
+  // Clinician records the answers: depression + memory complaint
+  const saved = await post(screeningPath, makeAnswers({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 3, phq6: 2, cog1: 1, cog2: 1 }), cookie);
+  assert.equal(saved.status, 302);
+  assert.equal(saved.headers.get('location'), casePath);
+
+  let page = await (await fetch(base + casePath, { headers: { cookie } })).text();
+  assert.ok(page.includes('checklist?disorder=mdd'), 'MDD suggested');
+  assert.ok(page.includes('Give the MoCA'), 'asks for MoCA before it is given');
+
+  // MoCA 20 raw + 1 education point = 21 -> mild range
+  const moca = { moca_administered: 'yes', moca_visexec: '3', moca_naming: '3', moca_attention: '4', moca_language: '2',
+    moca_abstraction: '1', moca_recall: '1', moca_orientation: '6', moca_low_education: 'yes' };
+  assert.equal((await post(`${casePath}/intake`, { ...moca, moca_visexec: '9' }, cookie)).status, 400, 'invalid score rejected');
+  assert.equal((await post(`${casePath}/intake`, moca, cookie)).status, 302);
+  page = await (await fetch(base + casePath, { headers: { cookie } })).text();
+  assert.ok(page.includes('<strong>21/30</strong>'));
+  assert.ok(page.includes('checklist?disorder=major_ncd'), 'major NCD suggested (MoCA low + daily life affected)');
+
+  // Confirming before assessing is refused
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'mdd', action: 'confirm' }, cookie)).status, 400);
+
+  // MDD checklist: all criteria present, recurrent, moderate
+  const mddRatings = Object.fromEntries(
+    ['mdd_a1', 'mdd_a2', 'mdd_a3', 'mdd_a4', 'mdd_a6', 'mdd_a7', 'mdd_a8', 'mdd_b', 'mdd_c', 'mdd_d', 'mdd_e'].map((id) => [id, 'present'])
+  );
+  await post(`${casePath}/checklist?disorder=mdd`, { ...mddRatings, spec_episode: 'recurrent', spec_severity: 'moderate', spec_psychotic: 'no' }, cookie);
+  const checklist = await (await fetch(`${base}${casePath}/checklist?disorder=mdd`, { headers: { cookie } })).text();
+  assert.ok(checklist.includes('Criteria met'));
+  assert.ok(checklist.includes('F33.1'));
+
+  // Major NCD checklist partly rated: incomplete; confirming needs a note
+  await post(`${casePath}/checklist?disorder=major_ncd`, { mncd_a1: 'present', mncd_a2: 'unclear' }, cookie);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'major_ncd', action: 'confirm', note: '' }, cookie)).status, 400);
+
+  // Confirm MDD and finalize
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'mdd', action: 'confirm', note: '' }, cookie)).status, 302);
+  const fin = await post(`${casePath}/finalize`, { final_note: 'Recurrent depression; cognition to be followed up.' }, cookie);
+  assert.equal(fin.headers.get('location'), `${casePath}/final`);
+  const final = await (await fetch(`${base}${casePath}/final`, { headers: { cookie } })).text();
+  assert.ok(final.includes('Final assessment report'));
+  assert.ok(final.includes('F33.1'));
+  assert.ok(final.includes('Major depressive disorder'));
+  assert.ok(final.includes('21/30'));
+
+  // Finalized: no more changes
+  assert.equal((await post(`${casePath}/checklist?disorder=mdd`, mddRatings, cookie)).status, 409);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'mdd', action: 'remove' }, cookie)).status, 409);
+});
+
+test('an on-site assessment cannot be answered through a patient link', async () => {
+  const { hashToken } = await import('../src/auth.js');
+  const patientId = db.prepare('SELECT id FROM patients LIMIT 1').get().id;
+  const insert = db.prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode) VALUES (?, ?, ?, ?)');
+  insert.run(patientId, hashToken('known-onsite-token'), '2099-01-01T00:00:00Z', 'onsite');
+  insert.run(patientId, hashToken('known-link-token'), '2099-01-01T00:00:00Z', 'link');
+  assert.equal((await fetch(`${base}/q/known-onsite-token`)).status, 404);
+  assert.equal((await fetch(`${base}/q/known-link-token`)).status, 200);
 });

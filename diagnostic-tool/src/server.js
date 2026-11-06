@@ -25,6 +25,11 @@ import { scoreAll } from './scoring.js';
 import { runDifferential } from './differential.js';
 import { sendResultsEmail } from './email.js';
 import * as views from './views.js';
+import * as workflow from './views-workflow.js';
+import { buildSuggestions } from './suggestions.js';
+import { findDisorder, criterionIds } from './disorders.js';
+import { evaluateDisorder, RATINGS, STATUS as CRITERIA } from './criteria.js';
+import { parseMoca, defaultLowEducation } from './moca.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -209,49 +214,266 @@ function showPatient(req, res, newLink) {
 
 clinician.get('/patients/:id', (req, res) => showPatient(req, res, null));
 
-clinician.post('/patients/:id/links', (req, res) => {
+// ---------- Starting an assessment: link or on site ----------
+
+clinician.post('/patients/:id/assessments', (req, res) => {
   const patient = ownPatient(req);
   if (!patient) return res.status(404).send('Not found');
+  const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
 
-  // Only one open link per patient: cancel any unused earlier ones.
+  // Only one open assessment per patient: cancel any not yet started.
   db.prepare('UPDATE assessments SET revoked = 1 WHERE patient_id = ? AND completed_at IS NULL').run(patient.id);
 
+  // Every assessment gets a random token. For on-site assessments it is never
+  // shown, so the questionnaire can only be answered in the clinician portal.
   const token = newToken();
   const expires = new Date(Date.now() + LINK_VALID_DAYS * 24 * 3600 * 1000);
-  db.prepare('INSERT INTO assessments (patient_id, token_hash, expires_at) VALUES (?, ?, ?)').run(
-    patient.id,
-    hashToken(token),
-    expires.toISOString()
-  );
+  const result = db
+    .prepare('INSERT INTO assessments (patient_id, token_hash, expires_at, mode) VALUES (?, ?, ?, ?)')
+    .run(patient.id, hashToken(token), expires.toISOString(), mode);
+
+  if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}/screening`);
   showPatient(req, res, { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) });
 });
 
-clinician.get('/assessments/:id', (req, res) => {
+// ---------- Loading one assessment ("case") ----------
+
+const parseJson = (text, fallback) => (text ? JSON.parse(text) : fallback);
+
+// Loads an assessment only if its patient belongs to the logged-in clinician.
+function loadCase(req) {
   const assessment = db
     .prepare(
       `SELECT a.* FROM assessments a JOIN patients p ON p.id = a.patient_id
-        WHERE a.id = ? AND p.clinician_id = ? AND a.completed_at IS NOT NULL`
+        WHERE a.id = ? AND p.clinician_id = ? AND a.revoked = 0`
     )
     .get(Number(req.params.id), req.clinician.id);
-  if (!assessment) return send(res, views.messagePage({ title: 'Not found', message: 'No such report.', clinician: req.clinician }), 404);
+  if (!assessment) return null;
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
-  send(
-    res,
-    views.reportPage({
-      clinician: req.clinician,
-      patient,
-      assessment,
-      results: JSON.parse(assessment.results_json),
-      emailStatus: assessment.email_status,
-    })
-  );
+  return {
+    assessment,
+    patient,
+    answers: parseJson(assessment.answers_json, null),
+    results: parseJson(assessment.results_json, null),
+    intake: parseJson(assessment.intake_json, null),
+    checklists: parseJson(assessment.checklists_json, {}),
+    diagnoses: parseJson(assessment.diagnoses_json, { items: [], finalNote: '' }),
+    defaultLowEducation: defaultLowEducation(patient),
+  };
+}
+
+function suggestionsFor(c) {
+  return buildSuggestions({ answers: c.answers, results: c.results, patient: c.patient, intake: c.intake });
+}
+
+const notFound = (req, res) =>
+  send(res, views.messagePage({ title: 'Not found', message: 'No such assessment.', clinician: req.clinician }), 404);
+
+// Pages after the screening need a completed, not finalized assessment.
+function editableCase(req, res) {
+  // Always return null after sending a response, so callers can do
+  // `if (!c) return;` (res.send() returns the response object, which is truthy).
+  const c = loadCase(req);
+  if (!c) {
+    notFound(req, res);
+    return null;
+  }
+  if (!c.assessment.completed_at) {
+    res.redirect(`/clinician/assessments/${c.assessment.id}`);
+    return null;
+  }
+  if (c.assessment.finalized_at) {
+    send(res, views.messagePage({ title: 'Assessment finalized', message: 'A finalized assessment cannot be changed.', clinician: req.clinician }), 409);
+    return null;
+  }
+  return c;
+}
+
+const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+
+clinician.get('/assessments/:id', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  const suggestions = c.results ? suggestionsFor(c) : null;
+  send(res, workflow.casePage({ clinician: req.clinician, c, suggestions }));
 });
+
+// ---------- On-site screening ----------
+
+clinician.get('/assessments/:id/screening', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  send(res, views.questionnairePage({ action: `/clinician/assessments/${c.assessment.id}/screening`, clinician: req.clinician, patient: c.patient }));
+});
+
+clinician.post('/assessments/:id/screening', async (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const { answers, errors } = parseAnswers(req.body);
+  if (errors.length) {
+    return send(res, views.questionnairePage({
+      action: `/clinician/assessments/${c.assessment.id}/screening`, clinician: req.clinician, patient: c.patient,
+      error: 'Please answer every question before saving.',
+    }), 400);
+  }
+  const done = completeScreening(c.assessment, c.patient, answers);
+  if (!done) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  emailResults(c.assessment, c.patient, done);
+});
+
+// ---------- Clinician intake (MoCA, delirium signs, notes) ----------
+
+clinician.post('/assessments/:id/intake', (req, res) => {
+  const c = editableCase(req, res);
+  if (!c) return;
+  const { moca, errors } = parseMoca(req.body);
+  if (errors.length) {
+    return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
+  }
+  const yes = (name) => (req.body[name] === 'yes' ? 'yes' : 'no');
+  const intake = {
+    moca,
+    delirium: {
+      acute: yes('del_acute'),
+      inattention: yes('del_inattention'),
+      disorganized: yes('del_disorganized'),
+      consciousness: yes('del_consciousness'),
+    },
+    notes: String(req.body.notes ?? '').slice(0, 5000),
+    updated_at: now(),
+  };
+  db.prepare('UPDATE assessments SET intake_json = ? WHERE id = ?').run(JSON.stringify(intake), c.assessment.id);
+  res.redirect(`/clinician/assessments/${c.assessment.id}`);
+});
+
+// ---------- In-depth criteria checklists ----------
+
+function checklistDisorder(req) {
+  return findDisorder(String(req.query.disorder ?? ''));
+}
+
+clinician.get('/assessments/:id/checklist', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (!c.assessment.completed_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const disorder = checklistDisorder(req);
+  if (!disorder) return notFound(req, res);
+  const suggestion = suggestionsFor(c).suggestions.find((s) => s.disorderId === disorder.id);
+  send(res, workflow.checklistPage({ clinician: req.clinician, c, disorder, suggestion }));
+});
+
+clinician.post('/assessments/:id/checklist', (req, res) => {
+  const c = editableCase(req, res);
+  if (!c) return;
+  const disorder = checklistDisorder(req);
+  if (!disorder) return notFound(req, res);
+
+  // Keep only known criteria and allowed values.
+  const ratings = {};
+  for (const id of criterionIds(disorder)) {
+    if (RATINGS.includes(req.body[id])) ratings[id] = req.body[id];
+  }
+  const specifiers = {};
+  for (const sp of disorder.specifiers) {
+    const value = req.body[`spec_${sp.id}`];
+    if (sp.options.some((o) => o.value === value)) specifiers[sp.id] = value;
+  }
+  c.checklists[disorder.id] = { ratings, specifiers, notes: String(req.body.notes ?? '').slice(0, 5000), updated_at: now() };
+  db.prepare('UPDATE assessments SET checklists_json = ? WHERE id = ?').run(JSON.stringify(c.checklists), c.assessment.id);
+  res.redirect(`/clinician/assessments/${c.assessment.id}/checklist?disorder=${disorder.id}`);
+});
+
+// ---------- Diagnoses and finalizing ----------
+
+clinician.post('/assessments/:id/diagnoses', (req, res) => {
+  const c = editableCase(req, res);
+  if (!c) return;
+  const disorder = findDisorder(String(req.body.disorder ?? ''));
+  if (!disorder) return notFound(req, res);
+  const items = c.diagnoses.items.filter((d) => d.disorderId !== disorder.id);
+
+  if (req.body.action === 'confirm') {
+    const checklist = c.checklists[disorder.id];
+    if (!checklist) {
+      const errors = [`Assess ${disorder.name} with the checklist before confirming it.`];
+      return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
+    }
+    const ev = evaluateDisorder(disorder, checklist, c.patient);
+    const note = clean(req.body.note, 1000);
+    if (ev.status !== CRITERIA.MET && !note) {
+      const errors = [`The criteria for ${disorder.name} are not met (${ev.status.toLowerCase()}). Write a note explaining why you confirm it.`];
+      return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
+    }
+    items.push({ disorderId: disorder.id, name: disorder.name, code: ev.code, criteriaStatus: ev.status, note, confirmed_at: now() });
+  }
+  c.diagnoses.items = items;
+  db.prepare('UPDATE assessments SET diagnoses_json = ? WHERE id = ?').run(JSON.stringify(c.diagnoses), c.assessment.id);
+  res.redirect(`/clinician/assessments/${c.assessment.id}`);
+});
+
+clinician.post('/assessments/:id/finalize', (req, res) => {
+  const c = editableCase(req, res);
+  if (!c) return;
+  c.diagnoses.finalNote = String(req.body.final_note ?? '').slice(0, 5000);
+  db.prepare('UPDATE assessments SET diagnoses_json = ?, finalized_at = ? WHERE id = ? AND finalized_at IS NULL').run(
+    JSON.stringify(c.diagnoses), now(), c.assessment.id
+  );
+  res.redirect(`/clinician/assessments/${c.assessment.id}/final`);
+});
+
+clinician.get('/assessments/:id/final', (req, res) => {
+  const c = loadCase(req);
+  if (!c) return notFound(req, res);
+  if (!c.assessment.finalized_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  send(res, workflow.finalReportPage({ clinician: req.clinician, c, suggestions: suggestionsFor(c) }));
+});
+
+// ---------- Scoring and emailing a finished screening ----------
+
+// Scores the answers and saves them. Returns null if it was already saved
+// (e.g. a double-click), so it is never saved or emailed twice.
+function completeScreening(assessment, patient, answers) {
+  const results = scoreAll(answers);
+  // The differential uses the patient's recorded gender and age as well.
+  results.differential = runDifferential(answers, patient, results);
+  const completedAt = now();
+  const saved = db
+    .prepare(
+      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?
+        WHERE id = ? AND completed_at IS NULL`
+    )
+    .run(completedAt, JSON.stringify(answers), JSON.stringify(results), assessment.id);
+  if (saved.changes === 0) return null;
+  return { answers, results, completedAt };
+}
+
+async function emailResults(assessment, patient, { answers, results, completedAt }) {
+  const clinicianRow = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id);
+  let emailStatus;
+  try {
+    emailStatus = await sendResultsEmail({
+      to: clinicianRow.email,
+      patient,
+      results,
+      suggestions: buildSuggestions({ answers, results, patient, intake: null }),
+      completedAt,
+      reportUrl: `${BASE_URL}/clinician/assessments/${assessment.id}`,
+    });
+  } catch (err) {
+    console.error('[email] failed:', err.message);
+    emailStatus = `FAILED: ${err.message}`.slice(0, 200);
+  }
+  db.prepare('UPDATE assessments SET email_status = ? WHERE id = ?').run(emailStatus, assessment.id);
+}
 
 // ---------- Patient questionnaire (no login; the secret link is the key) ----------
 
 function openAssessment(token) {
   const a = db.prepare('SELECT * FROM assessments WHERE token_hash = ?').get(hashToken(token));
-  if (!a || a.revoked || a.completed_at || new Date(a.expires_at) < new Date()) return null;
+  if (!a || a.revoked || a.completed_at || a.mode !== 'link' || new Date(a.expires_at) < new Date()) return null;
   return a;
 }
 
@@ -262,55 +484,25 @@ const LINK_INVALID = {
 
 app.get('/q/:token', (req, res) => {
   if (!openAssessment(req.params.token)) return send(res, views.messagePage(LINK_INVALID), 404);
-  send(res, views.questionnairePage({ token: req.params.token }));
+  send(res, views.questionnairePage({ action: `/q/${req.params.token}` }));
 });
 
-app.post('/q/:token', async (req, res) => {
+app.post('/q/:token', (req, res) => {
   const assessment = openAssessment(req.params.token);
   if (!assessment) return send(res, views.messagePage(LINK_INVALID), 404);
 
   const { answers, errors } = parseAnswers(req.body);
   if (errors.length) {
-    return send(
-      res,
-      views.questionnairePage({ token: req.params.token, error: 'Please answer every question before submitting.' }),
-      400
-    );
+    return send(res, views.questionnairePage({ action: `/q/${req.params.token}`, error: 'Please answer every question before submitting.' }), 400);
   }
 
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
-  const results = scoreAll(answers);
-  // The differential uses the patient's recorded gender and age as well.
-  results.differential = runDifferential(answers, patient, results);
-  const completedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
-
-  // "AND completed_at IS NULL" makes sure a double-click cannot save twice.
-  const saved = db
-    .prepare(
-      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?
-        WHERE id = ? AND completed_at IS NULL`
-    )
-    .run(completedAt, JSON.stringify(answers), JSON.stringify(results), assessment.id);
-  if (saved.changes === 0) return send(res, views.messagePage(LINK_INVALID), 409);
+  const done = completeScreening(assessment, patient, answers);
+  if (!done) return send(res, views.messagePage(LINK_INVALID), 409);
 
   // Show the patient the thank-you page straight away; email in the background.
-  send(res, views.thankYouPage({ safetyFlag: results.safetyFlag }));
-
-  const clinicianRow = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id);
-  let emailStatus;
-  try {
-    emailStatus = await sendResultsEmail({
-      to: clinicianRow.email,
-      patient,
-      results,
-      completedAt,
-      reportUrl: `${BASE_URL}/clinician/assessments/${assessment.id}`,
-    });
-  } catch (err) {
-    console.error('[email] failed:', err.message);
-    emailStatus = `FAILED: ${err.message}`.slice(0, 200);
-  }
-  db.prepare('UPDATE assessments SET email_status = ? WHERE id = ?').run(emailStatus, assessment.id);
+  send(res, views.thankYouPage({ safetyFlag: done.results.safetyFlag }));
+  emailResults(assessment, patient, done);
 });
 
 // ---------- Start ----------
