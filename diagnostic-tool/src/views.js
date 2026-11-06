@@ -120,7 +120,7 @@ export function dashboardPage({ clinician, patients }) {
             <tbody>
               ${patients.map(
                 (p) => html`<tr>
-                  <td><a href="/clinician/patients/${p.id}">${p.last_name}, ${p.first_name}</a></td>
+                  <td><a href="/clinician/patients/${p.id}">${p.last_name}, ${p.first_name}</a>${p.shared ? html` <span class="badge info">Shared by ${p.owner_name}</span>` : ''}</td>
                   <td>${p.age}</td>
                   <td>${p.latest_completed ? html`Completed ${p.latest_completed}${p.latest_safety ? html` <span class="badge danger">Safety alert</span>` : ''}` : p.has_pending ? 'Link sent, not completed' : '—'}</td>
                 </tr>`
@@ -187,7 +187,7 @@ function languageSelect() {
   return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}">${name}</option>`)}</select>`;
 }
 
-export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [] }) {
+export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [], access = { owner: true }, grants = [], owner }) {
   return layout({
     title: `${patient.first_name} ${patient.last_name}`,
     clinician,
@@ -195,6 +195,9 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
       <h1>${patient.first_name} ${patient.last_name}</h1>
       ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
       <p class="record-links"><a href="/clinician/patients/${patient.id}/edit">Edit details</a> · <a href="/clinician/patients/${patient.id}/audit">Audit log</a></p>
+      ${access.owner
+        ? ''
+        : html`<p class="note">You have access as <strong>${ROLE_NAMES[access.role] ?? access.role}</strong>, granted by ${access.grant.granted_by_name} (treating clinician${owner ? `: ${owner.name}` : ''}) for: ${access.grant.reason}.${access.grant.expires_at ? ` Access ends ${access.grant.expires_at.slice(0, 10)}.` : ''}</p>`}
       <dl class="card details">
         <dt>Personal number</dt><dd>${patient.personal_number}</dd>
         <dt>Gender</dt><dd>${patient.gender}</dd>
@@ -260,7 +263,9 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
 
       ${followupSection(patient, assessments, followups, followupLink)}
 
-      <details class="card danger-zone">
+      ${access.owner ? accessSection(patient, grants) : ''}
+
+      ${access.owner ? html`<details class="card danger-zone">
         <summary>Delete patient record</summary>
         <p>This permanently deletes the patient and all assessments. Use it only for records created by mistake or when the law requires deletion: health records usually have to be kept for a set time (in Sweden, at least 10 years under Patientdatalagen). The deletion is kept in the audit log.</p>
         <form method="post" action="/clinician/patients/${patient.id}/delete">
@@ -268,7 +273,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
           <label>Reason <input name="reason" maxlength="300" /></label>
           <button class="danger">Delete permanently</button>
         </form>
-      </details>`,
+      </details>` : ''}`,
   });
 }
 
@@ -582,6 +587,51 @@ export function thankYouPage({ safetyFlag, language = 'en' }) {
 export function linkInvalidPage({ language = 'en' }) {
   const t = STRINGS[language];
   return layout({ title: t.invalidTitle, language, body: html`<h1>${t.invalidTitle}</h1><p>${t.invalidText}</p>` });
+}
+
+// ---------- Who has access (treating clinician only) ----------
+
+const ROLE_NAMES = { supervisor: 'Supervisor', colleague: 'Close colleague', owner: 'Treating clinician' };
+
+function grantStatus(g) {
+  if (g.revoked_at) return html`<span class="badge ok">Revoked ${g.revoked_at.slice(0, 10)}</span>`;
+  if (g.expires_at && g.expires_at <= new Date().toISOString()) return html`<span class="badge ok">Ended ${g.expires_at.slice(0, 10)}</span>`;
+  return html`<span class="badge warn">Active${g.expires_at ? ` until ${g.expires_at.slice(0, 10)}` : ''}</span>`;
+}
+
+function accessSection(patient, grants) {
+  const active = grants.filter((g) => !g.revoked_at && !(g.expires_at && g.expires_at <= new Date().toISOString()));
+  return html`<section class="card">
+    <h2>Who has access</h2>
+    <p class="hint">Only you, as the treating clinician, and the people you name here can see this patient. Give access only to those who need it for the patient\u2019s care, such as a supervisor or a close colleague covering for you. Every grant, and every view, is in the audit log.</p>
+    ${grants.length
+      ? html`<div class="table-scroll"><table>
+          <thead><tr><th>Person</th><th>Role</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+          <tbody>${grants.map((g) => html`<tr>
+            <td>${g.clinician_name}<br /><span class="hint">${g.clinician_email}</span></td>
+            <td>${ROLE_NAMES[g.role] ?? g.role}</td>
+            <td>${g.reason}</td>
+            <td>${grantStatus(g)}</td>
+            <td>${active.includes(g)
+              ? html`<form method="post" action="/clinician/patients/${patient.id}/access"><input type="hidden" name="action" value="revoke" /><input type="hidden" name="grant" value="${g.id}" /><button class="small secondary">Revoke</button></form>`
+              : ''}</td>
+          </tr>`)}</tbody>
+        </table></div>`
+      : html`<p>Nobody else has access.</p>`}
+    <details>
+      <summary>Give access to a supervisor or colleague</summary>
+      <form method="post" action="/clinician/patients/${patient.id}/access" class="grid2">
+        <input type="hidden" name="action" value="grant" />
+        <label>Their email (clinician account) <input type="email" name="email" required /></label>
+        <label>Role
+          <select name="role" required><option value="supervisor">Supervisor</option><option value="colleague">Close colleague</option></select>
+        </label>
+        <label>Access ends (optional) <input type="date" name="until" /></label>
+        <label>Why do they need access? <input name="reason" required maxlength="300" /></label>
+        <button>Give access</button>
+      </form>
+    </details>
+  </section>`;
 }
 
 export function auditPage({ clinician, patient, entries, actions }) {

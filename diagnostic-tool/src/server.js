@@ -36,6 +36,7 @@ import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
+import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -141,11 +142,21 @@ const clinician = express.Router();
 clinician.use(requireClinician);
 app.use('/clinician', clinician);
 
-// Loads a patient only if it belongs to the logged-in clinician.
-function ownPatient(req) {
-  return db
-    .prepare('SELECT * FROM patients WHERE id = ? AND clinician_id = ?')
-    .get(Number(req.params.id), req.clinician.id);
+// Loads a patient only if the logged-in clinician may see it: as the
+// treating clinician, or with access granted by them (access.js). Anyone
+// else gets null, which every route answers with "not found".
+function accessiblePatient(req) {
+  const patient = db
+    .prepare(`SELECT p.* FROM patients p WHERE p.id = :id AND ${ACCESS_SQL}`)
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
+  if (patient) req.access = accessOf(req.clinician.id, patient);
+  return patient;
+}
+
+// For actions only the treating clinician may take (grant access, delete).
+function ownedPatient(req) {
+  const patient = accessiblePatient(req);
+  return patient && req.access.owner ? patient : null;
 }
 
 clinician.get('/', (req, res) => {
@@ -157,12 +168,14 @@ clinician.get('/', (req, res) => {
                  WHERE a.patient_id = p.id AND completed_at IS NOT NULL
                  ORDER BY completed_at DESC LIMIT 1) AS latest_safety,
               EXISTS (SELECT 1 FROM assessments a WHERE a.patient_id = p.id
-                        AND completed_at IS NULL AND revoked = 0 AND expires_at > ?) AS has_pending
+                        AND completed_at IS NULL AND revoked = 0 AND expires_at > :now) AS has_pending,
+              p.clinician_id <> :me AS shared,
+              (SELECT name FROM clinicians c WHERE c.id = p.clinician_id) AS owner_name
          FROM patients p
-        WHERE p.clinician_id = ?
+        WHERE ${ACCESS_SQL}
         ORDER BY p.last_name, p.first_name`
     )
-    .all(new Date().toISOString(), req.clinician.id);
+    .all(accessParams(req.clinician.id));
   send(res, views.dashboardPage({ clinician: req.clinician, patients }));
 });
 
@@ -206,20 +219,20 @@ clinician.post('/patients', (req, res) => {
 });
 
 clinician.get('/patients/:id/edit', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = accessiblePatient(req);
   if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
   send(res, views.newPatientPage({ clinician: req.clinician, patient, values: { ...patient, age: String(patient.age), employed: String(patient.employed) } }));
 });
 
 clinician.post('/patients/:id/edit', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = accessiblePatient(req);
   if (!patient) return res.status(404).send('Not found');
   const { values, errors, record } = validatePatient(req.body);
   if (errors.length) return send(res, views.newPatientPage({ clinician: req.clinician, patient, errors, values }), 400);
   db.prepare(
     `UPDATE patients SET first_name = ?, last_name = ?, personal_number = ?, gender = ?, age = ?, education = ?, employed = ?
-      WHERE id = ? AND clinician_id = ?`
-  ).run(...record, patient.id, req.clinician.id);
+      WHERE id = ?`
+  ).run(...record, patient.id);
   // Record which fields changed (names only, not the values themselves).
   const fields = ['first_name', 'last_name', 'personal_number', 'gender', 'age', 'education', 'employed'];
   const changed = fields.filter((f, i) => String(patient[f]) !== String(record[i]));
@@ -228,50 +241,69 @@ clinician.post('/patients/:id/edit', (req, res) => {
 });
 
 clinician.post('/patients/:id/delete', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = ownedPatient(req);
   if (!patient) return res.status(404).send('Not found');
   // Typing the last name is a deliberate step against deleting by mistake.
   if (clean(req.body.confirm_last_name).toLowerCase() !== patient.last_name.toLowerCase()) {
-    const assessments = db.prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY id DESC').all(patient.id);
-    return send(res, views.patientPage({
-      clinician: req.clinician, patient, assessments, followups: followupsOf(patient.id),
-      errors: ['To delete, type the patient\u2019s last name exactly.'],
-    }), 400);
+    return showPatient(req, res, { errors: ['To delete, type the patient\u2019s last name exactly.'], status: 400 });
   }
   db.prepare('DELETE FROM followups WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM assessments WHERE patient_id = ?').run(patient.id);
+  db.prepare('DELETE FROM patient_access WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM patients WHERE id = ? AND clinician_id = ?').run(patient.id, req.clinician.id);
   audit(req.clinician.id, 'delete_patient', { patientId: patient.id, detail: clean(req.body.reason, 300) || null });
   send(res, views.messagePage({ title: 'Patient deleted', message: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.', clinician: req.clinician }));
 });
 
+clinician.post('/patients/:id/access', (req, res) => {
+  const patient = ownedPatient(req);
+  if (!patient) return send(res, views.messagePage({ title: 'Not allowed', message: 'Only the treating clinician can change who has access.', clinician: req.clinician }), 403);
+  const result = req.body.action === 'revoke'
+    ? revokeAccess({ patient, ownerId: req.clinician.id, grantId: req.body.grant })
+    : grantAccess({ patient, ownerId: req.clinician.id, email: req.body.email, role: req.body.role, until: req.body.until, reason: req.body.reason });
+  if (result.error) return showPatient(req, res, { errors: [result.error], status: 400 });
+  audit(req.clinician.id, req.body.action === 'revoke' ? 'revoke_access' : 'grant_access', {
+    patientId: patient.id,
+    detail: req.body.action === 'revoke' ? `Access #${req.body.grant}` : `${result.grant.name} as ${ROLES[result.grant.role]}${result.grant.expires ? ` until ${result.grant.expires.slice(0, 10)}` : ''}: ${clean(req.body.reason, 300)}`,
+  });
+  res.redirect(`/clinician/patients/${patient.id}`);
+});
+
 clinician.get('/patients/:id/audit', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = accessiblePatient(req);
   if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
   audit(req.clinician.id, 'view_audit', { patientId: patient.id });
   send(res, views.auditPage({ clinician: req.clinician, patient, entries: auditForPatient(patient.id), actions: ACTIONS }));
 });
 
+function ownerOf(patient) {
+  return db.prepare('SELECT name, email FROM clinicians WHERE id = ?').get(patient.clinician_id);
+}
+
 function followupsOf(patientId) {
   return db.prepare('SELECT * FROM followups WHERE patient_id = ? ORDER BY id DESC').all(patientId);
 }
 
-function showPatient(req, res, newLink) {
-  const patient = ownPatient(req);
+// Draws the patient page. options: { newLink, followupLink, errors, status }
+function showPatient(req, res, { newLink = null, followupLink = null, errors = [], status = 200 } = {}) {
+  const patient = accessiblePatient(req);
   if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
   const assessments = db
     .prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY created_at DESC, id DESC')
     .all(patient.id);
   audit(req.clinician.id, 'view_patient', { patientId: patient.id });
-  send(res, views.patientPage({ clinician: req.clinician, patient, assessments, newLink, followups: followupsOf(patient.id) }));
+  send(res, views.patientPage({
+    clinician: req.clinician, patient, assessments, newLink, followupLink, followups: followupsOf(patient.id), errors,
+    access: req.access, grants: req.access.owner ? grantsFor(patient.id) : [], owner: ownerOf(patient),
+  }), status);
 }
 
-clinician.get('/patients/:id', (req, res) => showPatient(req, res, null));
+clinician.get('/patients/:id', (req, res) => showPatient(req, res));
 
 // ---------- Starting an assessment: link or on site ----------
 
 clinician.post('/patients/:id/assessments', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = accessiblePatient(req);
   if (!patient) return res.status(404).send('Not found');
   const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
   const language = lang(req.body.language);
@@ -289,21 +321,21 @@ clinician.post('/patients/:id/assessments', (req, res) => {
 
   audit(req.clinician.id, 'start_assessment', { patientId: patient.id, assessmentId: Number(result.lastInsertRowid), detail: `${mode}, ${language}` });
   if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}/screening`);
-  showPatient(req, res, { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) });
+  showPatient(req, res, { newLink: { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) } });
 });
 
 // ---------- Loading one assessment ("case") ----------
 
 const parseJson = (text, fallback) => (text ? JSON.parse(text) : fallback);
 
-// Loads an assessment only if its patient belongs to the logged-in clinician.
+// Loads an assessment only if the logged-in clinician may see its patient.
 function loadCase(req) {
   const assessment = db
     .prepare(
       `SELECT a.* FROM assessments a JOIN patients p ON p.id = a.patient_id
-        WHERE a.id = ? AND p.clinician_id = ? AND a.revoked = 0`
+        WHERE a.id = :id AND a.revoked = 0 AND ${ACCESS_SQL}`
     )
-    .get(Number(req.params.id), req.clinician.id);
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
   if (!assessment) return null;
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
   return {
@@ -686,7 +718,7 @@ async function emailResults(assessment, patient, { answers, results, completedAt
 // ---------- Follow-up measurements (PHQ-9 + GAD-7) ----------
 
 clinician.post('/patients/:id/followups', (req, res) => {
-  const patient = ownPatient(req);
+  const patient = accessiblePatient(req);
   if (!patient) return res.status(404).send('Not found');
   const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
   const language = lang(req.body.language);
@@ -698,20 +730,16 @@ clinician.post('/patients/:id/followups', (req, res) => {
   audit(req.clinician.id, 'start_followup', { patientId: patient.id, detail: `${mode}, ${language}` });
   if (mode === 'onsite') return res.redirect(`/clinician/followups/${result.lastInsertRowid}`);
 
-  const assessments = db.prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY id DESC').all(patient.id);
-  send(res, views.patientPage({
-    clinician: req.clinician, patient, assessments, followups: followupsOf(patient.id),
-    followupLink: { url: `${BASE_URL}/f/${token}`, expires: expires.toISOString().slice(0, 10) },
-  }));
+  showPatient(req, res, { followupLink: { url: `${BASE_URL}/f/${token}`, expires: expires.toISOString().slice(0, 10) } });
 });
 
 function ownFollowup(req) {
   return db
     .prepare(
       `SELECT f.* FROM followups f JOIN patients p ON p.id = f.patient_id
-        WHERE f.id = ? AND p.clinician_id = ? AND f.revoked = 0`
+        WHERE f.id = :id AND f.revoked = 0 AND ${ACCESS_SQL}`
     )
-    .get(Number(req.params.id), req.clinician.id);
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
 }
 
 // Scores and saves a follow-up once; emails the clinician in the background.

@@ -119,3 +119,22 @@ db.exec(`
     results_json TEXT
   );
 `);
+
+// Who else may see a patient besides the treating clinician (the owner):
+// a supervisor or a close colleague, named one by one, for a reason, and
+// optionally only until a date. Revoked grants are kept (revoked_at) so the
+// history of who had access stays on record.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS patient_access (
+    id           INTEGER PRIMARY KEY,
+    patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    clinician_id INTEGER NOT NULL REFERENCES clinicians(id),
+    role         TEXT NOT NULL,
+    reason       TEXT NOT NULL,
+    granted_by   INTEGER NOT NULL REFERENCES clinicians(id),
+    granted_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at   TEXT,
+    revoked_at   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS access_clinician ON patient_access (clinician_id);
+`);

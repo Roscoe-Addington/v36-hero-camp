@@ -25,4 +25,7 @@ export const ACTIONS = {
   view_audit: 'Viewed audit log',
   start_followup: 'Started follow-up',
   view_followup: 'Viewed follow-up',
+  grant_access: 'Granted access',
+  revoke_access: 'Revoked access',
+  retention_delete: 'Deleted by retention rule',
 };

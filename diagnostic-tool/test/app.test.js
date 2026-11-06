@@ -479,3 +479,60 @@ test('patient link page by page: skip logic, tiredness break, response-quality b
   assert.ok(caseHtml.includes('Response quality'));
   assert.ok(caseHtml.includes('signs to check in the interview'));
 });
+
+test('access: only the treating clinician and named supervisors or colleagues', async () => {
+  const loginAs = async (email, password) =>
+    (await post('/login', { email, password })).headers.get('set-cookie').split(';')[0];
+  const owner = await loginAs('dr@example.com', 'correct horse battery');
+  db.prepare('INSERT OR IGNORE INTO clinicians (name, email, password_hash) VALUES (?, ?, ?)').run('Dr Super', 'super@example.com', hashPassword('supervisor password 1'));
+  const supervisor = await loginAs('super@example.com', 'supervisor password 1');
+  const outsider = await loginAs('other@example.com', 'another long password');
+
+  const created = await post('/clinician/patients', {
+    first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female',
+    age: '31', education: 'Upper secondary school', employed: '1',
+  }, owner);
+  const patientPath = created.headers.get('location');
+  const status = async (cookie, path = patientPath) => (await fetch(base + path, { headers: { cookie }, redirect: 'manual' })).status;
+
+  assert.equal(await status(supervisor), 404, 'no access before a grant');
+
+  // Granting needs a reason, a known account and a future end date
+  assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'super@example.com', role: 'supervisor' }, owner)).status, 400);
+  assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'nobody@example.com', role: 'supervisor', reason: 'x' }, owner)).status, 400);
+  assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'super@example.com', role: 'supervisor', reason: 'x', until: '2020-01-01' }, owner)).status, 400);
+  assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'super@example.com', role: 'supervisor', reason: 'Clinical supervision', until: '2099-12-31' }, owner)).status, 302);
+
+  // The supervisor can now see the patient and its assessments; the outsider still cannot
+  assert.equal(await status(supervisor), 200);
+  const page = await (await fetch(base + patientPath, { headers: { cookie: supervisor } })).text();
+  assert.ok(page.includes('You have access as <strong>Supervisor</strong>'));
+  assert.ok(!page.includes('Delete patient record'), 'only the treating clinician can delete');
+  assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie: supervisor } })).text()).includes('Shared by Dr Test'));
+  const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, owner);
+  const casePath = start.headers.get('location').replace('/screening', '');
+  assert.equal(await status(supervisor, casePath), 200);
+  assert.equal(await status(outsider), 404);
+  assert.equal(await status(outsider, casePath), 404);
+
+  // The supervisor cannot pass access on or delete the record
+  assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'other@example.com', role: 'colleague', reason: 'x' }, supervisor)).status, 403);
+  assert.equal((await post(`${patientPath}/delete`, { confirm_last_name: 'Sand' }, supervisor)).status, 404);
+
+  // Views by the supervisor are logged under their name
+  const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie: owner } })).text();
+  assert.ok(auditHtml.includes('Granted access'));
+  assert.ok(auditHtml.includes('Dr Super'));
+
+  // Revoking ends access at once
+  const grantId = db.prepare("SELECT id FROM patient_access WHERE revoked_at IS NULL ORDER BY id DESC LIMIT 1").get().id;
+  assert.equal((await post(`${patientPath}/access`, { action: 'revoke', grant: String(grantId) }, owner)).status, 302);
+  assert.equal(await status(supervisor), 404);
+
+  // An expired grant gives no access
+  const patientId = Number(patientPath.split('/').pop());
+  const superId = db.prepare("SELECT id FROM clinicians WHERE email = 'super@example.com'").get().id;
+  db.prepare('INSERT INTO patient_access (patient_id, clinician_id, role, reason, granted_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(patientId, superId, 'colleague', 'Old cover', 1, '2020-01-01T00:00:00Z');
+  assert.equal(await status(supervisor), 404);
+});
