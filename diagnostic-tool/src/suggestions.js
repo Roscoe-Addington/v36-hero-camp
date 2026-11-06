@@ -147,6 +147,66 @@ export function buildSuggestions({ answers: a, results, patient, intake }) {
     if (a.cog2 === YES) add('major_ncd', STRENGTH.CONSIDER, `${reason} Everyday activities affected.`);
   }
 
+  // ----- Psychotic disorders -----
+  if (a.psy1 === YES) {
+    const base = 'Reports hallucinations or persecutory ideas';
+    if (a.psy2 === YES) {
+      // Only during mood episodes: points to a mood disorder with psychotic features.
+      if (dep.total >= 10 || a.bp1 === YES) {
+        add(a.bp1 === YES ? 'bipolar1' : 'mdd', STRENGTH.SUGGESTED, `${base}, only during extreme mood: consider the "with psychotic features" specifier.`);
+      }
+      add('schizoaffective', STRENGTH.CONSIDER, `${base} during mood episodes: check whether psychosis also occurs without them.`);
+    } else if (a.psy3 === YES) {
+      add('schizophrenia', STRENGTH.SUGGESTED, `${base}, lasting more than a month and not only during mood episodes.`);
+      add('schizophreniform', STRENGTH.CONSIDER, `${base} for more than a month: schizophreniform if under 6 months.`);
+      add('delusional', STRENGTH.CONSIDER, `${base}: delusional disorder if delusions are the only symptom.`);
+      if (dep.total >= 10 || a.bp1 === YES) add('schizoaffective', STRENGTH.CONSIDER, `${base}, together with marked mood symptoms.`);
+    } else if (a.psy3 === NO) {
+      add('brief_psychotic', STRENGTH.SUGGESTED, `${base}, lasting less than a month.`);
+      add('schizophreniform', STRENGTH.CONSIDER, `${base}: check the duration.`);
+    } else {
+      add('schizophrenia', STRENGTH.CONSIDER, `${base}; duration not reported.`);
+      add('brief_psychotic', STRENGTH.CONSIDER, `${base}; duration not reported.`);
+    }
+    if (flagged('substance') || flagged('medication')) add('substance_psychotic', STRENGTH.SUGGESTED, `${base}, together with substance or medicine use.`);
+    if (flagged('medical') || possible('medical')) add('medical_psychotic', STRENGTH.CONSIDER, `${base}, together with a medical condition.`);
+  }
+  if (intake?.catatonia === 'yes') add('catatonia', STRENGTH.SUGGESTED, 'Clinician observed catatonic signs.');
+
+  // ----- Trauma- and stressor-related disorders -----
+  if (a.ptsd0 === YES) {
+    const count = ['ptsd1', 'ptsd2', 'ptsd3', 'ptsd4', 'ptsd5'].filter((id) => a[id] === YES).length;
+    const recent = a.ptsd_recent === YES;
+    const target = recent ? 'acute_stress' : 'ptsd';
+    const text = `Trauma exposure; PC-PTSD-5 ${count}/5${recent ? ', event within the past month' : ''}.`;
+    if (count >= 3) add(target, STRENGTH.SUGGESTED, text);
+    else if (count >= 1) add(target, STRENGTH.CONSIDER, text);
+  }
+  if (a.stress1 === YES && !(dep.meetsMajorCriteria || anx.meetsCriteriaABC) && (dep.total >= 5 || anx.total >= 5)) {
+    add('adjustment', STRENGTH.SUGGESTED, 'A stressor in the 3 months before onset, with symptoms that do not meet MDD or GAD criteria.');
+  }
+  if (a.grief1 === 2 && a.grief2 === YES) {
+    add('pgd', STRENGTH.SUGGESTED, 'Bereavement more than 12 months ago with intense longing or preoccupation on most days.');
+  } else if (a.grief1 === 1 && a.grief2 === YES && Number(patient.age) < 18) {
+    add('pgd', STRENGTH.CONSIDER, 'Recent bereavement with intense grief; under 18, prolonged grief can be diagnosed from 6 months after the death.');
+  }
+
+  // ----- Obsessive-compulsive and related disorders -----
+  if (a.ocd1 === YES || a.ocd2 === YES) {
+    add('ocd', STRENGTH.SUGGESTED, diff.ocd?.finding ?? 'Reports obsessions or compulsions.');
+  }
+  if (a.bdd1 === YES) add('bdd', STRENGTH.SUGGESTED, 'Preoccupied with a perceived flaw in appearance that others do not see.');
+  if (a.hoard1 === YES) add('hoarding', STRENGTH.SUGGESTED, 'Difficulty discarding possessions, with clutter at home.');
+  if (a.trich1 === YES) add('trich', STRENGTH.SUGGESTED, 'Repeated hair pulling that is hard to stop.');
+  if (a.skin1 === YES) add('skin_picking', STRENGTH.SUGGESTED, 'Repeated skin picking causing sores, hard to stop.');
+  const anyOcrd = [a.ocd1, a.ocd2, a.bdd1, a.hoard1, a.trich1, a.skin1].includes(YES);
+  if (anyOcrd && (flagged('substance') || flagged('medication'))) {
+    add('substance_ocrd', STRENGTH.CONSIDER, 'Obsessive-compulsive or related symptoms together with substance or medicine use.');
+  }
+  if (anyOcrd && (flagged('medical') || possible('medical'))) {
+    add('medical_ocrd', STRENGTH.CONSIDER, 'Obsessive-compulsive or related symptoms together with a medical condition.');
+  }
+
   // ----- Neurological findings: refer, do not diagnose here -----
   const NEURO = [
     { id: 'neuro1', finding: 'Seizures or unexplained blackouts', urgent: false },
@@ -166,12 +226,7 @@ export function buildSuggestions({ answers: a, results, patient, intake }) {
 
   // ----- Findings outside this app's scope -----
   const OUT = [
-    { id: 'psychosis', condition: 'Psychotic disorder', where: 'schizophrenia spectrum and other psychotic disorders' },
-    { id: 'ptsd', condition: 'Posttraumatic stress disorder', where: 'trauma- and stressor-related disorders' },
-    { id: 'ocd', condition: 'Obsessive-compulsive disorder', where: 'obsessive-compulsive and related disorders' },
     { id: 'illness', condition: 'Illness anxiety disorder', where: 'somatic symptom and related disorders' },
-    { id: 'adjustment', condition: 'Adjustment disorder', where: 'trauma- and stressor-related disorders' },
-    { id: 'grief', condition: 'Prolonged grief disorder', where: 'trauma- and stressor-related disorders' },
     { id: 'substance', condition: 'Substance use disorder', where: 'substance-related and addictive disorders' },
   ];
   const outOfScope = OUT.filter((o) => flagged(o.id)).map((o) => ({

@@ -98,8 +98,58 @@ test('neurological red flags give referrals, with urgent ones marked', () => {
 });
 
 test('findings outside the app scope are listed, not suggested', () => {
-  const out = suggest({ psy1: 1, ocd1: 1 });
-  assert.deepEqual(out.outOfScope.map((o) => o.condition), ['Psychotic disorder', 'Obsessive-compulsive disorder']);
+  const out = suggest({ ill1: 1, auditc1: 4, auditc2: 3, auditc3: 3 });
+  assert.deepEqual(out.outOfScope.map((o) => o.condition), ['Illness anxiety disorder', 'Substance use disorder']);
+});
+
+test('psychosis lasting more than a month, not only in mood episodes, suggests schizophrenia', () => {
+  const out = suggest({ psy1: 1, psy2: 0, psy3: 1 });
+  assert.equal(strengthOf(out, 'schizophrenia'), STRENGTH.SUGGESTED);
+  assert.equal(strengthOf(out, 'schizophreniform'), STRENGTH.CONSIDER);
+  assert.equal(strengthOf(out, 'delusional'), STRENGTH.CONSIDER);
+});
+
+test('psychosis under a month suggests brief psychotic disorder', () => {
+  assert.equal(strengthOf(suggest({ psy1: 1, psy2: 0, psy3: 0 }), 'brief_psychotic'), STRENGTH.SUGGESTED);
+});
+
+test('psychosis only during mood episodes points to the mood disorder, not schizophrenia', () => {
+  const out = suggest({ psy1: 1, psy2: 1, phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 2 });
+  assert.match(out.suggestions.find((s) => s.disorderId === 'mdd').reasons.join(' '), /psychotic features/);
+  assert.equal(strengthOf(out, 'schizophrenia'), undefined);
+  assert.equal(strengthOf(out, 'schizoaffective'), STRENGTH.CONSIDER);
+});
+
+test('psychosis with substance use suggests substance-induced psychotic disorder', () => {
+  assert.equal(strengthOf(suggest({ psy1: 1, psy3: 1, drug1: 2 }), 'substance_psychotic'), STRENGTH.SUGGESTED);
+});
+
+test('trauma: PC-PTSD-5 3+ suggests PTSD, or acute stress disorder within the first month', () => {
+  const symptoms = { ptsd0: 1, ptsd1: 1, ptsd2: 1, ptsd3: 1 };
+  assert.equal(strengthOf(suggest({ ...symptoms, ptsd_recent: 0 }), 'ptsd'), STRENGTH.SUGGESTED);
+  const recent = suggest({ ...symptoms, ptsd_recent: 1 });
+  assert.equal(strengthOf(recent, 'acute_stress'), STRENGTH.SUGGESTED);
+  assert.equal(strengthOf(recent, 'ptsd'), undefined);
+});
+
+test('adjustment disorder is only suggested when MDD/GAD criteria are not met', () => {
+  const mild = { stress1: 1, phq1: 1, phq2: 1, phq3: 1, phq4: 1, phq7: 1 };
+  assert.equal(strengthOf(suggest(mild), 'adjustment'), STRENGTH.SUGGESTED);
+  assert.equal(strengthOf(suggest({ stress1: 1, phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 2 }), 'adjustment'), undefined);
+});
+
+test('prolonged grief: more than 12 months with ongoing longing', () => {
+  assert.equal(strengthOf(suggest({ grief1: 2, grief2: 1 }), 'pgd'), STRENGTH.SUGGESTED);
+  assert.equal(strengthOf(suggest({ grief1: 1, grief2: 1 }), 'pgd'), undefined); // adult, under 12 months
+});
+
+test('obsessive-compulsive and related items suggest the matching disorders', () => {
+  const out = suggest({ ocd1: 1, bdd1: 1, hoard1: 1, trich1: 1, skin1: 1 });
+  for (const id of ['ocd', 'bdd', 'hoarding', 'trich', 'skin_picking']) assert.equal(strengthOf(out, id), STRENGTH.SUGGESTED, id);
+});
+
+test('catatonic signs observed by the clinician suggest catatonia', () => {
+  assert.equal(strengthOf(suggest({}, { catatonia: 'yes' }), 'catatonia'), STRENGTH.SUGGESTED);
 });
 
 test('antisocial suggestion for a 17-year-old explains the age limit', () => {

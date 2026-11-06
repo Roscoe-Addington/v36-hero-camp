@@ -102,3 +102,12 @@ test('confirming again replaces the earlier entry instead of adding a second one
   assert.equal(c.diagnoses.items.length, 1);
   assert.equal(c.diagnoses.items[0].note, 'updated');
 });
+
+test('new chapters: psychotic and trauma alternatives are not allowed together', () => {
+  assert.equal(conflictsFor('schizophrenia', ['schizophreniform'])[0].level, LEVEL.CONFLICT);
+  assert.equal(conflictsFor('ptsd', ['acute_stress'])[0].level, LEVEL.CONFLICT);
+  assert.equal(conflictsFor('adjustment', ['mdd'])[0].level, LEVEL.CONFLICT);
+  assert.equal(conflictsFor('delusional', ['bdd'])[0].level, LEVEL.CONFLICT);
+  assert.equal(conflictsFor('ocd', ['ocpd'])[0].level, LEVEL.CODING);
+  assert.equal(conflictsFor('catatonia', ['schizophrenia'])[0].level, LEVEL.CODING);
+});

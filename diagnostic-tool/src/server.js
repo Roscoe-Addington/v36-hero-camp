@@ -30,7 +30,8 @@ import { buildSuggestions } from './suggestions.js';
 import { findDisorder, criterionIds } from './disorders.js';
 import { RATINGS } from './criteria.js';
 import { applyDiagnosis } from './diagnosis.js';
-import { parseMoca, defaultLowEducation } from './moca.js';
+import { defaultLowEducation } from './moca.js';
+import { parseIntake } from './intake.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -330,22 +331,10 @@ clinician.post('/assessments/:id/screening', async (req, res) => {
 clinician.post('/assessments/:id/intake', (req, res) => {
   const c = editableCase(req, res);
   if (!c) return;
-  const { moca, errors } = parseMoca(req.body);
-  if (errors.length) {
+  const { intake, errors } = parseIntake(req.body);
+  if (errors) {
     return send(res, workflow.casePage({ clinician: req.clinician, c, suggestions: suggestionsFor(c), errors }), 400);
   }
-  const yes = (name) => (req.body[name] === 'yes' ? 'yes' : 'no');
-  const intake = {
-    moca,
-    delirium: {
-      acute: yes('del_acute'),
-      inattention: yes('del_inattention'),
-      disorganized: yes('del_disorganized'),
-      consciousness: yes('del_consciousness'),
-    },
-    notes: String(req.body.notes ?? '').slice(0, 5000),
-    updated_at: now(),
-  };
   db.prepare('UPDATE assessments SET intake_json = ? WHERE id = ?').run(JSON.stringify(intake), c.assessment.id);
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
 });

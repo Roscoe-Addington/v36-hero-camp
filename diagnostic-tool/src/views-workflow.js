@@ -169,6 +169,7 @@ function intakeSummary(intake, suggestions) {
       ? html`<strong>${m.adjusted}/30</strong> (${m.band}${m.educationPoint ? '; includes +1 for 12 years of education or fewer' : ''}). Cut-off ${MOCA_CUTOFF}: ${m.belowCutoff ? 'below' : 'at or above'}.`
       : 'not given'}</li>
     <li>Delirium signs (CAM-style rule): ${suggestions.delirium.positive ? html`<strong>positive</strong>` : 'negative'}</li>
+    <li>Catatonic signs: ${intake.catatonia === 'yes' ? html`<strong>observed</strong>` : 'not observed'}</li>
     ${intake.notes ? html`<li>Notes: ${intake.notes}</li>` : ''}
   </ul>`;
 }
@@ -206,6 +207,9 @@ function intakeForm(base, c) {
       ${yesNo('del_inattention', 'Inattention (e.g. easily distracted, cannot follow the conversation)', obs.inattention)}
       ${yesNo('del_disorganized', 'Disorganised thinking (rambling, illogical, switching topics)', obs.disorganized)}
       ${yesNo('del_consciousness', 'Altered level of consciousness (e.g. drowsy, hyperalert)', obs.consciousness)}
+
+      <h3>Observed signs of catatonia</h3>
+      ${yesNo('cat_signs', 'Three or more catatonic signs (e.g. stupor, mutism, posturing, negativism, waxy flexibility, echolalia)', intake.catatonia)}
 
       <label>Intake interview notes
         <textarea name="notes" rows="4" maxlength="5000">${intake.notes ?? ''}</textarea>

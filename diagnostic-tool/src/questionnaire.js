@@ -107,6 +107,8 @@ export const SCREENING_SECTIONS = [
       { id: 'pdd1', text: 'Have you felt down or depressed on most days for at least the past 2 years?', options: YES_NO_OPTIONS },
       { id: 'cyclo1', text: 'For at least the past 2 years, has your mood often swung between periods of feeling unusually up or energetic and periods of feeling down?', options: YES_NO_OPTIONS },
       { id: 'psy1', text: 'Have you heard voices or seen things that other people could not hear or see, or strongly felt that others were watching you or trying to harm you?', options: YES_NO_OPTIONS },
+      { id: 'psy2', text: 'If so: did these experiences happen ONLY at times when your mood was extremely low or extremely high?', options: YES_NO_NA_OPTIONS },
+      { id: 'psy3', text: 'If so: have these experiences gone on for more than a month in total?', options: YES_NO_NA_OPTIONS },
     ],
   },
   {
@@ -181,7 +183,7 @@ export const SCREENING_SECTIONS = [
     ],
   },
   {
-    title: 'Other kinds of anxiety',
+    title: 'Other worries, fears and habits',
     intro: '',
     items: [
       { id: 'panic1', text: 'In the past 4 weeks, have you had an attack of intense fear or discomfort that came on suddenly and peaked within minutes (for example racing heart, shortness of breath, shaking, or feeling you might die or lose control)?', options: YES_NO_OPTIONS },
@@ -194,6 +196,10 @@ export const SCREENING_SECTIONS = [
       { id: 'phobia1', text: 'Do you have a strong fear of a particular thing or situation (for example animals, heights, flying, blood or injections) that you avoid or can hardly bear?', options: YES_NO_OPTIONS },
       { id: 'agora1', text: 'Do you fear or avoid two or more of these: public transport, open spaces, shops or cinemas, queues or crowds, being outside your home alone?', options: YES_NO_OPTIONS },
       { id: 'sep1', text: 'Do you worry much more than other people about being separated from someone close to you, or that something bad will happen to them?', options: YES_NO_OPTIONS },
+      { id: 'bdd1', text: 'Do you worry a lot that some part of your appearance is ugly or flawed, even though others say it looks fine?', options: YES_NO_OPTIONS },
+      { id: 'hoard1', text: 'Do you find it very hard to throw things away, so that rooms in your home have become cluttered?', options: YES_NO_OPTIONS },
+      { id: 'trich1', text: 'Do you repeatedly pull out your hair (from your scalp, eyebrows, eyelashes or elsewhere) and find it hard to stop?', options: YES_NO_OPTIONS },
+      { id: 'skin1', text: 'Do you repeatedly pick at your skin so that it causes sores, and find it hard to stop?', options: YES_NO_OPTIONS },
       { id: 'mutism1', text: 'Are there situations (for example at work or school) where you are unable to speak, even though you speak normally at home?', options: YES_NO_OPTIONS },
     ],
   },
@@ -203,6 +209,7 @@ export const SCREENING_SECTIONS = [
       'Sometimes things happen to people that are unusually or especially frightening, horrible, or traumatic. For example: a serious accident or fire; a physical or sexual assault or abuse; an earthquake or flood; a war; seeing someone be killed or seriously injured; having a loved one die through homicide or suicide. You do not need to describe what happened.',
     items: [
       { id: 'ptsd0', text: 'Have you ever experienced this kind of event?', options: YES_NO_OPTIONS },
+      { id: 'ptsd_recent', text: 'If yes: did the (most recent) event happen within the past month?', options: YES_NO_NA_OPTIONS },
       { id: 'ptsd1', text: 'If yes, in the past month, have you had nightmares about the event(s) or thought about the event(s) when you did not want to?', options: YES_NO_NA_OPTIONS },
       { id: 'ptsd2', text: 'In the past month, have you tried hard not to think about the event(s) or gone out of your way to avoid situations that reminded you of the event(s)?', options: YES_NO_NA_OPTIONS },
       { id: 'ptsd3', text: 'In the past month, have you been constantly on guard, watchful, or easily startled?', options: YES_NO_NA_OPTIONS },

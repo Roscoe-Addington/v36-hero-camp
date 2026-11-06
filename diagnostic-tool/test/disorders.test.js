@@ -18,8 +18,9 @@ test('three-valued logic: unknown items keep a rule undecided', () => {
   assert.equal(evaluateRule({ age: { min: 18 } }, {}, teen), false);
 });
 
-test('catalog: 31 disorders in 4 categories, with unique criterion ids', () => {
-  assert.equal(DISORDERS.length, 31);
+test('catalog: 52 disorders in 7 categories, with unique criterion ids', () => {
+  assert.equal(DISORDERS.length, 52);
+  assert.equal(new Set(DISORDERS.map((d) => d.category)).size, 7);
   const all = DISORDERS.flatMap(criterionIds);
   assert.equal(new Set(all).size, all.length, 'duplicate criterion id');
   assert.equal(new Set(DISORDERS.map((d) => d.id)).size, DISORDERS.length);

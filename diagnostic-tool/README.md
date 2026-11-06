@@ -4,7 +4,7 @@ A web app that supports a clinician through the whole assessment of a
 patient aged **16 or older**, from the intake screening to a confirmed
 diagnosis with an ICD-10 code.
 
-It covers four groups of DSM-5-TR disorders (31 in total):
+It covers seven groups of DSM-5-TR disorders (52 in total):
 
 | Group | Disorders |
 | --- | --- |
@@ -12,12 +12,14 @@ It covers four groups of DSM-5-TR disorders (31 in total):
 | Anxiety disorders | Separation anxiety, selective mutism, specific phobia, social anxiety, panic disorder, agoraphobia, GAD, substance/medication-induced and medical-condition anxiety disorders |
 | Personality disorders | All 10 (paranoid, schizoid, schizotypal, antisocial, borderline, histrionic, narcissistic, avoidant, dependent, obsessive-compulsive) |
 | Neurocognitive disorders | Delirium, major neurocognitive disorder (dementia), mild neurocognitive disorder |
+| Schizophrenia spectrum and other psychotic disorders | Delusional disorder, brief psychotic disorder, schizophreniform disorder, schizophrenia, schizoaffective disorder, substance/medication-induced and medical-condition psychotic disorders, catatonia (schizotypal personality disorder is listed with the personality disorders) |
+| Trauma- and stressor-related disorders | PTSD, acute stress disorder, adjustment disorder, prolonged grief disorder, reactive attachment disorder and disinhibited social engagement disorder (both childhood-onset) |
+| Obsessive-compulsive and related disorders | OCD, body dysmorphic disorder, hoarding disorder, trichotillomania, excoriation (skin-picking) disorder, substance/medication-induced and medical-condition OCRD |
 
 Other neurological symptoms (seizures, weakness, speech or vision loss,
 tremor, new headaches, head injury) are **flagged for referral**, not
-diagnosed. Findings outside these groups (psychosis, PTSD, OCD, adjustment
-disorder, substance use disorder and others) are listed as "outside this
-app" so they are not lost.
+diagnosed. Findings outside these groups (e.g. illness anxiety, substance
+use disorder) are listed as "outside this app" so they are not lost.
 
 > **This app supports clinical judgement; it does not replace it.** The
 > clinician confirms every diagnosis. Software that suggests diagnoses is
@@ -30,13 +32,15 @@ app" so they are not lost.
    patient** (the patient answers at home and the clinician is emailed) or
    **Conduct on site** (the clinician goes through the questions with the
    patient on the same device).
-2. **Intake screening.** 88 questions (about 20–25 minutes): PHQ-9, GAD-7,
-   GAD criteria items, mood history, AUDIT-C, drugs, medicines, health,
-   life events, other anxiety disorders, PC-PTSD-5, personality traits,
-   memory and neurological symptoms.
+2. **Intake screening.** 95 questions (about 25 minutes): PHQ-9, GAD-7,
+   GAD criteria items, mood history, psychotic experiences (timing and
+   duration), AUDIT-C, drugs, medicines, health, life events, other
+   anxiety disorders, obsessive-compulsive and related symptoms,
+   PC-PTSD-5, personality traits, memory and neurological symptoms.
 3. **Clinician intake.** On site, the clinician enters the **MoCA** domain
    scores (the app adds them up and adds 1 point for 12 years of education
-   or fewer), signs of **delirium** they observe, and interview notes.
+   or fewer), signs of **delirium** and **catatonia** they observe, and
+   interview notes.
 4. **Suggestions.** The app lists the disorders to assess in depth, each
    marked *Suggested* or *Consider*, with the reasons from the screening.
    The clinician can also open any other disorder.
@@ -153,6 +157,12 @@ give a valid individual probability, so the app does not invent one.
 | MoCA below 18, or below 26 with everyday activities affected | Major neurocognitive disorder |
 | Memory complaint without a MoCA | Mild NCD (*Suggested* from age 60), and a prompt to give the MoCA |
 | Acute onset + inattention + disorganised thinking or altered consciousness | Delirium |
+| Psychotic experiences for more than a month, not only during mood episodes | Schizophrenia (*Consider* schizophreniform, delusional) |
+| Psychotic experiences for less than a month | Brief psychotic disorder |
+| Psychotic experiences only during extreme mood | The mood disorder "with psychotic features" (*Consider* schizoaffective) |
+| Trauma + PC-PTSD-5 ≥ 3 | PTSD, or acute stress disorder if the event was in the past month |
+| Bereavement over 12 months ago + ongoing longing | Prolonged grief disorder |
+| Catatonic signs observed by the clinician | Catatonia |
 
 The other disorders each have their own screening question (e.g. panic
 attacks, agoraphobic situations, separation worry).
@@ -193,6 +203,7 @@ src/views-workflow.js  assessment, checklist and final report pages
 src/differential-lists.js  what to rule out for each disorder
 src/conflicts.js       which diagnoses may be given together
 src/diagnosis.js       confirming and removing diagnoses (shared with the demo)
+src/intake.js          reading the clinician intake form (shared with the demo)
 src/email.js           the email to the clinician
 src/views.js           the HTML pages
 src/auth.js            passwords, login sessions, link tokens

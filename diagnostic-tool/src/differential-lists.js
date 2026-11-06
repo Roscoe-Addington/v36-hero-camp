@@ -13,12 +13,12 @@ const d = (id, why) => ({ id, why });
 const out = (name, why) => ({ name, why, outside: true });
 
 const ADHD = out('ADHD', 'Lifelong attention problems and restlessness since childhood, not episodic.');
-const PTSD = out('Posttraumatic stress disorder', 'Symptoms started after a trauma and include re-experiencing and avoidance of reminders.');
-const OCD = out('Obsessive-compulsive disorder', 'Intrusive, unwanted obsessions and compulsions rather than everyday worries or traits.');
-const PSYCHOTIC = out('Schizophrenia spectrum and other psychotic disorders', 'Delusions or hallucinations outside mood episodes.');
+const PTSD = d('ptsd', 'Symptoms started after a trauma and include re-experiencing and avoidance of reminders.');
+const OCD = d('ocd', 'Intrusive, unwanted obsessions and compulsions rather than everyday worries or traits.');
+const PSYCHOTIC = d('schizophrenia', 'Delusions or hallucinations outside mood episodes (see also the other psychotic disorders).');
 const AUTISM = out('Autism spectrum disorder', 'Lifelong social communication differences and restricted interests from early childhood.');
 const SUBSTANCE_USE = out('Substance use disorder', 'A pattern of problematic use; can cause or worsen the symptoms.');
-const ADJUSTMENT = out('Adjustment disorder', 'Symptoms within 3 months of a stressor and not meeting criteria for another disorder.');
+const ADJUSTMENT = d('adjustment', 'Symptoms within 3 months of a stressor and not meeting criteria for another disorder.');
 const ILLNESS_ANXIETY = out('Illness anxiety disorder', 'Worry focused mainly on having or getting a serious illness.');
 const AGEING = out('Normal ageing', 'Mild slowing and word-finding pauses without decline on testing or in daily life.');
 
@@ -35,7 +35,8 @@ export const DIFFERENTIALS = {
     ADJUSTMENT,
     out('Normal grief', 'Waves of sadness focused on the loss, with self-esteem preserved.'),
     ADHD,
-    out('Schizoaffective disorder', 'Psychotic symptoms also occur outside mood episodes.'),
+    d('schizoaffective', 'Psychotic symptoms also occur outside mood episodes, with mood episodes for most of the illness.'),
+    d('pgd', 'Grief lasting 12 months or more with intense longing or preoccupation.'),
   ],
   pdd: [
     d('mdd', 'Full major depressive episodes on top of the chronic low mood; both can be diagnosed.'),
@@ -138,7 +139,7 @@ export const DIFFERENTIALS = {
     d('separation', 'Fear of separation from attachment figures.'),
     d('mutism', 'Not speaking in specific situations.'),
     d('mdd', 'Social withdrawal because of low mood and loss of interest.'),
-    out('Body dysmorphic disorder', 'Fear of negative evaluation focused on a perceived flaw in appearance.'),
+    d('bdd', 'Fear of negative evaluation focused on a perceived flaw in appearance.'),
     AUTISM,
   ],
   panic: [
@@ -191,7 +192,7 @@ export const DIFFERENTIALS = {
     d('bpd', 'Paranoid ideas only briefly under stress.'),
     d('npd', 'Suspiciousness linked to fear of exposing flaws.'),
     d('avpd', 'Reluctance to confide from fear of embarrassment rather than malice.'),
-    out('Delusional disorder', 'Fixed delusions rather than suspicious traits.'),
+    d('delusional', 'Fixed persecutory delusions rather than suspicious traits.'),
     out('Personality change due to another medical condition', 'Traits that began with a brain injury or other illness.'),
   ],
   szpd: [
@@ -265,7 +266,7 @@ export const DIFFERENTIALS = {
     d('npd', 'Perfectionism driven by a sense of superiority.'),
     d('szpd', 'Detachment from lack of interest rather than devotion to work.'),
     d('avpd', 'Restraint from fear of rejection.'),
-    out('Hoarding disorder', 'Inability to discard possessions causing clutter, beyond keeping worthless objects.'),
+    d('hoarding', 'Inability to discard possessions causing clutter, beyond keeping worthless objects.'),
   ],
 
   // ----- Neurocognitive -----
@@ -292,5 +293,194 @@ export const DIFFERENTIALS = {
     d('gad', 'Concentration problems from worry.'),
     AGEING,
     out('Medicine side effects', 'Anticholinergic medicines, sedatives and others can impair cognition.'),
+  ],
+  // ----- Schizophrenia spectrum and other psychotic disorders -----
+  delusional: [
+    d('schizophrenia', 'Other criterion A symptoms (prominent hallucinations, disorganisation, negative symptoms).'),
+    d('schizophreniform', 'Other criterion A symptoms lasting 1–6 months.'),
+    d('schizoaffective', 'Mood episodes present for most of the illness.'),
+    d('ocd', 'Obsessions with absent insight are diagnosed as OCD, not delusional disorder.'),
+    d('bdd', 'Delusional beliefs about appearance are diagnosed as BDD with absent insight.'),
+    d('mdd', 'Delusions only during a severe depressive episode (with psychotic features).'),
+    d('bipolar1', 'Delusions only during manic episodes.'),
+    d('ppd', 'Suspicious traits without fixed delusions.'),
+    d('medical_psychotic', 'A medical cause (e.g. brain tumour, epilepsy).'),
+    d('substance_psychotic', 'Stimulants or other substances.'),
+    d('major_ncd', 'Delusions in the context of dementia.'),
+  ],
+  brief_psychotic: [
+    d('schizophreniform', 'Psychotic symptoms lasting 1 month or more.'),
+    d('mdd', 'Psychotic features during a depressive episode.'),
+    d('bipolar1', 'Psychotic features during a manic episode.'),
+    d('substance_psychotic', 'Intoxication or withdrawal (e.g. stimulants, cannabis, alcohol).'),
+    d('medical_psychotic', 'A medical cause.'),
+    d('delirium', 'Fluctuating attention and awareness.'),
+    d('acute_stress', 'Dissociative flashbacks after a trauma rather than psychosis.'),
+    d('bpd', 'Brief stress-related paranoia or dissociation.'),
+    out('Factitious disorder or malingering', 'Symptoms produced deliberately.'),
+  ],
+  schizophreniform: [
+    d('schizophrenia', 'Duration of 6 months or more.'),
+    d('brief_psychotic', 'Duration of less than 1 month.'),
+    d('schizoaffective', 'Mood episodes for most of the illness.'),
+    d('mdd', 'Psychotic features only during depressive episodes.'),
+    d('bipolar1', 'Psychotic features only during manic episodes.'),
+    d('substance_psychotic', 'Substances or medicines.'),
+    d('medical_psychotic', 'A medical cause.'),
+  ],
+  schizophrenia: [
+    d('schizophreniform', 'Duration of less than 6 months.'),
+    d('brief_psychotic', 'Duration of less than 1 month with full recovery.'),
+    d('schizoaffective', 'Mood episodes present for most of the illness.'),
+    d('delusional', 'Delusions without other criterion A symptoms.'),
+    d('mdd', 'Psychotic features only during depressive episodes.'),
+    d('bipolar1', 'Psychotic features only during manic episodes.'),
+    d('substance_psychotic', 'Cannabis, stimulants, hallucinogens or withdrawal.'),
+    d('medical_psychotic', 'A medical cause (e.g. epilepsy, encephalitis, brain tumour).'),
+    d('stpd', 'Long-standing odd beliefs and perceptions below psychotic intensity.'),
+    d('ptsd', 'Flashbacks and hypervigilance mistaken for hallucinations or paranoia.'),
+    d('ocd', 'Obsessions with poor insight.'),
+    d('delirium', 'Fluctuating attention and awareness.'),
+    AUTISM,
+  ],
+  schizoaffective: [
+    d('schizophrenia', 'Mood episodes present only briefly compared with the whole illness.'),
+    d('bipolar1', 'Psychotic symptoms only during manic episodes.'),
+    d('bipolar2', 'Hypomanic and depressive episodes without psychosis outside them.'),
+    d('mdd', 'Psychotic symptoms only during depressive episodes.'),
+    d('substance_psychotic', 'Substances or medicines.'),
+    d('medical_psychotic', 'A medical cause.'),
+  ],
+  substance_psychotic: [
+    d('schizophrenia', 'An independent psychotic disorder: started before the use, or persists about 1 month after stopping.'),
+    d('brief_psychotic', 'A brief independent psychotic episode.'),
+    d('delirium', 'Psychotic symptoms only during a delirium (e.g. alcohol withdrawal delirium).'),
+    d('medical_psychotic', 'A medical cause.'),
+    out('Substance intoxication or withdrawal', 'Perceptual changes with intact reality testing (the person knows they are caused by the drug).'),
+  ],
+  medical_psychotic: [
+    d('delirium', 'Psychotic symptoms only during a delirium.'),
+    d('major_ncd', 'Psychotic symptoms as part of dementia.'),
+    d('substance_psychotic', 'Medicines used for the illness (e.g. corticosteroids, dopamine agonists).'),
+    d('schizophrenia', 'An independent psychotic disorder.'),
+    d('delusional', 'An independent delusional disorder.'),
+  ],
+  catatonia: [
+    d('schizophrenia', 'Catatonia as part of schizophrenia (ICD-10: catatonic schizophrenia).'),
+    d('bipolar1', 'Catatonia during a manic or depressive episode.'),
+    d('mdd', 'Catatonia during a severe depressive episode.'),
+    d('delirium', 'Fluctuating attention and awareness.'),
+    d('mutism', 'Not speaking in specific situations only, without other catatonic signs.'),
+    out('Neuroleptic malignant syndrome', 'Fever, rigidity and autonomic instability after antipsychotics: a medical emergency.'),
+    out('Neurological causes', 'Encephalitis, non-convulsive status epilepticus and other brain disorders.'),
+  ],
+
+  // ----- Trauma- and stressor-related -----
+  rad: [
+    d('dsed', 'Indiscriminate social approach instead of withdrawal.'),
+    d('mdd', 'Withdrawal and low mood from depression.'),
+    AUTISM,
+    out('Intellectual disability', 'Developmental delays with attachment appropriate to developmental level.'),
+  ],
+  dsed: [
+    d('rad', 'Emotional withdrawal from caregivers instead of indiscriminate approach.'),
+    ADHD,
+    AUTISM,
+    out('Intellectual disability', 'Social behaviour that matches the developmental level.'),
+  ],
+  ptsd: [
+    d('acute_stress', 'Symptoms lasting less than 1 month after the trauma.'),
+    d('adjustment', 'The stressor does not meet criterion A, or the full symptom pattern is absent.'),
+    d('mdd', 'Low mood without intrusion or avoidance linked to a trauma.'),
+    d('panic', 'Panic attacks not triggered by trauma reminders.'),
+    d('gad', 'Worry about many topics, not trauma-related.'),
+    d('ocd', 'Intrusive thoughts not related to a traumatic event.'),
+    d('bpd', 'Long-standing emotional instability; often co-occurs with trauma.'),
+    d('schizophrenia', 'Hallucinations and delusions rather than flashbacks and hypervigilance.'),
+    out('Traumatic brain injury', 'Concentration, irritability and headaches after a head injury.'),
+  ],
+  acute_stress: [
+    d('ptsd', 'Symptoms lasting more than 1 month.'),
+    d('adjustment', 'Reaction to a stressor that is not traumatic, or fewer symptoms.'),
+    d('panic', 'Unexpected panic attacks not linked to the trauma.'),
+    d('brief_psychotic', 'Psychotic symptoms rather than dissociative reactions.'),
+    out('Traumatic brain injury', 'Symptoms caused by a head injury during the event.'),
+  ],
+  adjustment: [
+    d('ptsd', 'Criteria for PTSD are met (adjustment disorder is then not given).'),
+    d('acute_stress', 'Criteria for acute stress disorder are met within the first month after a trauma.'),
+    d('mdd', 'Criteria for a major depressive episode are met.'),
+    d('gad', 'Criteria for generalized anxiety disorder are met.'),
+    d('pdd', 'Low mood lasting 2 years or more, not tied to the stressor.'),
+    d('pgd', 'The stressor is a death and grief is prolonged.'),
+    out('Normal stress reaction', 'Expected distress that is not out of proportion and does not impair functioning.'),
+  ],
+  pgd: [
+    d('mdd', 'Pervasive low mood and worthlessness rather than grief focused on the person who died; can co-occur.'),
+    d('ptsd', 'Fear and intrusive memories of the circumstances of the death; can co-occur.'),
+    d('adjustment', 'A reaction to a stressor other than a death, or grief shorter than 12 months.'),
+    d('separation', 'Fear of separation from living attachment figures.'),
+    out('Normal grief', 'Grief within cultural norms, gradually easing.'),
+  ],
+
+  // ----- Obsessive-compulsive and related -----
+  ocd: [
+    d('gad', 'Worries about real-life concerns rather than intrusive, unwanted obsessions.'),
+    d('ocpd', 'Lifelong perfectionism and rigidity without true obsessions or compulsions; both can be given.'),
+    d('bdd', 'Obsessions only about appearance.'),
+    d('hoarding', 'Difficulty discarding as the main problem, without obsessions driving it.'),
+    d('trich', 'Hair pulling not in response to obsessions.'),
+    d('skin_picking', 'Skin picking not in response to obsessions.'),
+    d('delusional', 'Fixed beliefs without the person recognising them as excessive (OCD with absent insight is still OCD).'),
+    d('schizophrenia', 'Psychotic symptoms beyond obsessions with poor insight.'),
+    d('ptsd', 'Intrusive memories of a real trauma.'),
+    ILLNESS_ANXIETY,
+    out('Tic disorders', 'Sudden movements or sounds not driven by obsessions.'),
+    out('Eating disorders', 'Obsessions and rituals limited to food, weight and shape.'),
+  ],
+  bdd: [
+    d('social', 'Social fear not focused on a perceived flaw in appearance.'),
+    d('ocd', 'Obsessions about things other than appearance.'),
+    d('mdd', 'Negative views of appearance only during depression.'),
+    d('delusional', 'Delusional beliefs about appearance are diagnosed as BDD with absent insight.'),
+    out('Eating disorders', 'Concern only about body fat or weight.'),
+    out('Normal appearance concerns', 'Concerns that do not take up much time or cause impairment.'),
+  ],
+  hoarding: [
+    d('ocd', 'Saving driven by typical obsessions (e.g. fear of harm) instead of attachment to objects.'),
+    d('major_ncd', 'Accumulation caused by cognitive decline.'),
+    d('mdd', 'Clutter from low energy or apathy.'),
+    d('schizophrenia', 'Accumulation driven by delusions or negative symptoms.'),
+    AUTISM,
+    out('Normal collecting', 'Organised, purposeful collecting without clutter or distress.'),
+    out('Brain injury or other medical causes', 'Hoarding that began after a brain injury or cerebrovascular disease.'),
+  ],
+  trich: [
+    d('bdd', 'Hair removal to correct a perceived flaw in appearance.'),
+    d('ocd', 'Hair pulling as a compulsion in response to obsessions.'),
+    d('skin_picking', 'Picking at skin rather than pulling hair; can co-occur.'),
+    out('Medical causes of hair loss', 'Alopecia or skin conditions.'),
+    out('Stereotypic movement disorder', 'Repetitive movements from early development.'),
+  ],
+  skin_picking: [
+    d('bdd', 'Picking to remove a perceived flaw in appearance.'),
+    d('ocd', 'Picking as a compulsion in response to obsessions (e.g. contamination).'),
+    d('trich', 'Pulling hair rather than picking skin; can co-occur.'),
+    d('substance_ocrd', 'Picking caused by stimulants (e.g. cocaine, amphetamine).'),
+    out('Non-suicidal self-injury', 'Damaging the skin with the intent to hurt oneself.'),
+    out('Skin conditions', 'Scabies, eczema or other causes of itching.'),
+  ],
+  substance_ocrd: [
+    d('ocd', 'An independent OCD: started before the use, or persists after stopping.'),
+    d('bdd', 'An independent body dysmorphic disorder.'),
+    d('medical_ocrd', 'A medical cause.'),
+    d('delirium', 'Symptoms only during a delirium.'),
+  ],
+  medical_ocrd: [
+    d('ocd', 'An independent OCD in a medically ill person.'),
+    d('substance_ocrd', 'Medicines used for the illness.'),
+    d('delirium', 'Symptoms only during a delirium.'),
+    d('major_ncd', 'Repetitive behaviours as part of dementia (e.g. frontotemporal).'),
+    out('Neurological causes', 'Basal ganglia damage, infection-triggered onset (e.g. after streptococcal infection), stroke.'),
   ],
 };

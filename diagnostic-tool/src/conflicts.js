@@ -38,6 +38,21 @@ export const RULES = [
   ...rule(LEVEL.CONFLICT, 'mild_ncd', ['major_ncd'],
     'Mild and major neurocognitive disorder are two levels of the same disorder. Give the one that matches the current level.'),
 
+  // Psychotic disorders: one psychotic diagnosis for the same illness.
+  ...rule(LEVEL.CONFLICT, 'schizophrenia', ['schizophreniform', 'brief_psychotic', 'schizoaffective', 'delusional'],
+    'These are alternative diagnoses for the same psychotic illness, separated by duration (brief < 1 month, schizophreniform 1–6 months, schizophrenia 6+ months), mood episodes (schizoaffective) and symptom type (delusional). Give the one that fits.'),
+  ...rule(LEVEL.CONFLICT, 'schizophreniform', ['brief_psychotic', 'schizoaffective', 'delusional'],
+    'Alternative diagnoses for the same psychotic illness. Give the one that fits the duration and symptoms.'),
+  ...rule(LEVEL.CONFLICT, 'schizoaffective', ['mdd', 'bipolar1', 'bipolar2', 'delusional'],
+    'Schizoaffective disorder already includes the mood episodes. Do not also give a separate depressive or bipolar diagnosis (or delusional disorder) for the same illness.'),
+  ...rule(LEVEL.CONFLICT, 'delusional', ['ocd', 'bdd'],
+    'OCD or BDD with absent insight (delusional beliefs) is diagnosed as OCD or BDD with the specifier "with absent insight", not as delusional disorder.'),
+  // Trauma and stressor-related.
+  ...rule(LEVEL.CONFLICT, 'acute_stress', ['ptsd'],
+    'Acute stress disorder covers the first month after a trauma; after 1 month the diagnosis becomes PTSD. Do not give both for the same trauma.'),
+  ...rule(LEVEL.CONFLICT, 'adjustment', ['mdd', 'pdd', 'gad', 'ptsd', 'acute_stress', 'pgd'],
+    'Adjustment disorder is only given when the criteria for another specific disorder are not met (criterion C), and not for prolonged grief.'),
+
   // ----- Allowed only if a condition holds -----
   ...rule(LEVEL.CHECK, 'substance_mood', MOOD_DISORDERS,
     'A substance/medication-induced disorder is only given when the symptoms are NOT better explained by an independent disorder. Give both only if the independent disorder clearly stands on its own (e.g. it started before the use) and the substance causes separate symptoms.'),
@@ -68,6 +83,25 @@ export const RULES = [
   ...rule(LEVEL.CHECK, 'npd', ['bipolar1', 'bipolar2'],
     'Check that the grandiosity is lasting and not only present during manic or hypomanic episodes.'),
 
+  ...rule(LEVEL.CHECK, 'substance_psychotic', ['schizophrenia', 'schizophreniform', 'brief_psychotic', 'delusional', 'schizoaffective'],
+    'A substance/medication-induced psychotic disorder is only given when an independent psychotic disorder does not explain the symptoms (check: did psychosis start before the use, or persist about 1 month after stopping?).'),
+  ...rule(LEVEL.CHECK, 'medical_psychotic', ['schizophrenia', 'schizophreniform', 'brief_psychotic', 'delusional', 'schizoaffective'],
+    'A psychotic disorder due to a medical condition is only given when an independent psychotic disorder does not explain the symptoms better.'),
+  ...rule(LEVEL.CHECK, 'schizophrenia', ['mdd', 'bipolar1', 'bipolar2'],
+    'If the psychotic symptoms occur only during mood episodes, give the mood disorder with psychotic features instead. If mood episodes are present for most of the illness, consider schizoaffective disorder. Mood episodes that are brief compared with the whole illness can be noted alongside schizophrenia.'),
+  ...rule(LEVEL.CHECK, 'schizophrenia', ['stpd', 'ppd', 'szpd'],
+    'A personality disorder that was present before the schizophrenia began can be recorded with the word "premorbid". It is not given if the traits occur only during the psychotic illness.'),
+  ...rule(LEVEL.CHECK, 'ptsd', ['bpd'],
+    'Both can be given. Check that the emotional instability started before or independently of the trauma, rather than being part of the PTSD.'),
+  ...rule(LEVEL.CHECK, 'ocd', ['gad', 'hoarding'],
+    'Both can be given only if the second disorder is not explained by the obsessions (e.g. worry in GAD is about real-life concerns; hoarding is not driven by typical obsessions).'),
+  ...rule(LEVEL.CHECK, 'bdd', ['social', 'trich', 'skin_picking'],
+    'Both can be given only if the second disorder is not driven by the appearance concern (e.g. social fear only about the perceived flaw, or hair pulling or skin picking to fix it, is part of BDD).'),
+  ...rule(LEVEL.CHECK, 'substance_ocrd', ['ocd', 'bdd', 'hoarding', 'trich', 'skin_picking'],
+    'A substance/medication-induced disorder is only given when an independent obsessive-compulsive or related disorder does not explain the symptoms better.'),
+  ...rule(LEVEL.CHECK, 'medical_ocrd', ['ocd', 'bdd', 'hoarding', 'trich', 'skin_picking'],
+    'A disorder due to a medical condition is only given when an independent obsessive-compulsive or related disorder does not explain the symptoms better.'),
+
   // ----- Allowed, coded in a special way -----
   ...rule(LEVEL.CODING, 'mdd', ['pdd'],
     'Both can be given ("double depression"). DSM-5-TR names it persistent depressive disorder with persistent or intermittent major depressive episodes; ICD-10 codes both (F34.1 + F32/F33).'),
@@ -77,6 +111,16 @@ export const RULES = [
     'Both are often met and can both be given.'),
   ...rule(LEVEL.CODING, 'social', ['mutism'],
     'Both are often met and can both be given.'),
+  ...rule(LEVEL.CODING, 'catatonia', ['schizophrenia'],
+    'In DSM-5-TR, catatonia is a specifier of schizophrenia. In ICD-10, code catatonic schizophrenia (F20.2) instead of a separate F06.1.'),
+  ...rule(LEVEL.CODING, 'catatonia', ['mdd', 'bipolar1', 'schizoaffective', 'schizophreniform', 'brief_psychotic'],
+    'Record "with catatonia" as a specifier of the other disorder; DSM-5-TR also codes F06.1 (catatonia associated with another mental disorder).'),
+  ...rule(LEVEL.CODING, 'pgd', ['mdd', 'ptsd'],
+    'Both can be given; prolonged grief often co-occurs with depression and PTSD.'),
+  ...rule(LEVEL.CODING, 'ocd', ['ocpd'],
+    'Both can be given. OCD has true obsessions and compulsions; OCPD is a lifelong pattern of perfectionism and rigidity.'),
+  ...rule(LEVEL.CODING, 'trich', ['skin_picking'],
+    'Both can be given; they often occur together.'),
 ];
 
 // Every warning that applies to a set of diagnosis ids.

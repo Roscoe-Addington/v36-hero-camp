@@ -31,6 +31,9 @@ export const CATEGORIES = [
   { id: 'anxiety', title: 'Anxiety disorders' },
   { id: 'personality', title: 'Personality disorders' },
   { id: 'neurocognitive', title: 'Neurocognitive disorders' },
+  { id: 'psychotic', title: 'Schizophrenia spectrum and other psychotic disorders' },
+  { id: 'trauma', title: 'Trauma- and stressor-related disorders' },
+  { id: 'ocd', title: 'Obsessive-compulsive and related disorders' },
 ];
 
 // ---------- Mood: depressive disorders ----------
@@ -855,11 +858,634 @@ const mildNcd = {
   codeNote: 'F06.7 (mild cognitive disorder). Also code the probable cause if known.',
 };
 
+// ---------- Schizophrenia spectrum and other psychotic disorders ----------
+// (Schizotypal personality disorder is listed with the personality disorders.)
+
+// The five "criterion A" symptoms shared by schizophrenia and schizophreniform disorder.
+function psychoticA(prefix) {
+  return list(prefix, [
+    'Delusions',
+    'Hallucinations',
+    'Disorganised speech (e.g. frequent derailment or incoherence)',
+    'Grossly disorganised or catatonic behaviour',
+    'Negative symptoms (diminished emotional expression or avolition)',
+  ]);
+}
+// At least 2 of the 5, and at least one of them delusions, hallucinations or disorganised speech.
+function psychoticARule(items) {
+  return { all: [{ count: ids(items), min: 2 }, { any: ids(items).slice(0, 3) }] };
+}
+
+const delusional = {
+  id: 'delusional',
+  category: 'psychotic',
+  name: 'Delusional disorder',
+  groups: [
+    { title: 'A–E', items: [
+      one('dl_a', 'One or more delusions lasting 1 month or longer'),
+      one('dl_b', 'Criterion A for schizophrenia has never been met (hallucinations, if present, are not prominent and fit the delusional theme)'),
+      one('dl_c', 'Apart from the effects of the delusions, functioning is not markedly impaired and behaviour is not obviously bizarre'),
+      one('dl_d', 'Any manic or depressive episodes have been brief compared with the delusional periods'),
+      one('dl_e', 'Not attributable to a substance or medical condition, and not better explained by another mental disorder (e.g. BDD or OCD with absent insight)'),
+    ] },
+  ],
+  rule: { all: ['dl_a', 'dl_b', 'dl_c', 'dl_d', 'dl_e'] },
+  specifiers: [
+    { id: 'type', label: 'Type', options: [
+      { value: 'persecutory', label: 'Persecutory' },
+      { value: 'jealous', label: 'Jealous' },
+      { value: 'erotomanic', label: 'Erotomanic' },
+      { value: 'grandiose', label: 'Grandiose' },
+      { value: 'somatic', label: 'Somatic' },
+      { value: 'mixed', label: 'Mixed' },
+      { value: 'unspecified', label: 'Unspecified' },
+    ] },
+  ],
+  code: () => 'F22.0',
+};
+
+const briefA = list('bpsy_a', [
+  'Delusions',
+  'Hallucinations',
+  'Disorganised speech',
+  'Grossly disorganised or catatonic behaviour',
+]);
+const briefPsychotic = {
+  id: 'brief_psychotic',
+  category: 'psychotic',
+  name: 'Brief psychotic disorder',
+  groups: [
+    { title: 'A. At least 1 of (at least one must be delusions, hallucinations or disorganised speech)', items: briefA },
+    { title: 'B–C', items: [
+      one('bpsy_b', 'Lasts at least 1 day but less than 1 month, with full return to the previous level of functioning'),
+      one('bpsy_c', 'Not better explained by a mood disorder with psychotic features, another psychotic disorder or catatonia, and not attributable to a substance or medical condition'),
+    ] },
+  ],
+  rule: { all: [{ any: ids(briefA).slice(0, 3) }, 'bpsy_b', 'bpsy_c'] },
+  specifiers: [
+    { id: 'stressor', label: 'Specifier', options: [
+      { value: 'with', label: 'With marked stressor(s)' },
+      { value: 'without', label: 'Without marked stressor(s)' },
+      { value: 'postpartum', label: 'With postpartum onset' },
+    ] },
+  ],
+  code: () => 'F23',
+  codeNote: 'ICD-10 divides acute and transient psychotic disorders into F23.0–F23.9; choose the 4th character that matches the picture (e.g. F23.9 unspecified).',
+};
+
+const sfA = psychoticA('sf_a');
+const schizophreniform = {
+  id: 'schizophreniform',
+  category: 'psychotic',
+  name: 'Schizophreniform disorder',
+  groups: [
+    { title: 'A. At least 2 for a significant part of a 1-month period (at least one of 1–3)', items: sfA },
+    { title: 'B–D', items: [
+      one('sf_b', 'The episode lasts at least 1 month but less than 6 months'),
+      one('sf_c', 'Schizoaffective disorder and depressive or bipolar disorder with psychotic features have been ruled out'),
+      one('sf_d', NOT_SUBSTANCE),
+    ] },
+  ],
+  rule: { all: [psychoticARule(sfA), 'sf_b', 'sf_c', 'sf_d'] },
+  specifiers: [],
+  code: () => 'F20.8',
+  codeNote: 'WHO ICD-10 places schizophreniform disorder under F20.8 (other schizophrenia); some versions use F23.2 for episodes under 1 month. Check your local coding rules.',
+};
+
+const szA = psychoticA('sz_a');
+const schizophrenia = {
+  id: 'schizophrenia',
+  category: 'psychotic',
+  name: 'Schizophrenia',
+  groups: [
+    { title: 'A. At least 2 for a significant part of a 1-month period (at least one of 1–3)', items: szA },
+    { title: 'B–F', items: [
+      one('sz_b', 'Functioning (work, relationships or self-care) is markedly below the level before onset'),
+      one('sz_c', 'Continuous signs for at least 6 months, including at least 1 month of criterion A symptoms'),
+      one('sz_d', 'Schizoaffective disorder and depressive or bipolar disorder with psychotic features have been ruled out'),
+      one('sz_e', NOT_SUBSTANCE),
+      one('sz_f', 'If there is a history of autism or a childhood communication disorder: prominent delusions or hallucinations for at least 1 month (rate present if there is no such history)'),
+    ] },
+  ],
+  rule: { all: [psychoticARule(szA), 'sz_b', 'sz_c', 'sz_d', 'sz_e', 'sz_f'] },
+  specifiers: [
+    { id: 'subtype', label: 'ICD-10 subtype (not used in DSM-5-TR)', options: [
+      { value: 'paranoid', label: 'Paranoid' },
+      { value: 'hebephrenic', label: 'Hebephrenic' },
+      { value: 'catatonic', label: 'Catatonic' },
+      { value: 'undifferentiated', label: 'Undifferentiated' },
+      { value: 'residual', label: 'Residual' },
+      { value: 'simple', label: 'Simple' },
+    ] },
+  ],
+  code(s) {
+    const map = { paranoid: 'F20.0', hebephrenic: 'F20.1', catatonic: 'F20.2', undifferentiated: 'F20.3', residual: 'F20.5', simple: 'F20.6' };
+    return map[s.subtype] ?? 'F20.9';
+  },
+};
+
+const schizoaffective = {
+  id: 'schizoaffective',
+  category: 'psychotic',
+  name: 'Schizoaffective disorder',
+  groups: [
+    { title: 'A–D', items: [
+      one('sa2_a', 'An uninterrupted period with a major mood episode (depressive or manic) at the same time as criterion A of schizophrenia (a depressive episode must include depressed mood)'),
+      one('sa2_b', 'Delusions or hallucinations for 2 weeks or more WITHOUT a major mood episode, at some point in the illness'),
+      one('sa2_c', 'Mood episode symptoms are present for the majority of the total duration of the illness'),
+      one('sa2_d', NOT_SUBSTANCE),
+    ] },
+  ],
+  rule: { all: ['sa2_a', 'sa2_b', 'sa2_c', 'sa2_d'] },
+  specifiers: [
+    { id: 'type', label: 'Type', options: [
+      { value: 'bipolar', label: 'Bipolar type (manic episodes)' },
+      { value: 'mixed', label: 'Bipolar type with mixed episodes' },
+      { value: 'depressive', label: 'Depressive type' },
+    ] },
+  ],
+  code(s) {
+    return { bipolar: 'F25.0', depressive: 'F25.1', mixed: 'F25.2' }[s.type] ?? 'F25.9';
+  },
+};
+
+const substancePsychotic = {
+  id: 'substance_psychotic',
+  category: 'psychotic',
+  name: 'Substance/medication-induced psychotic disorder',
+  groups: [
+    { title: 'A–E', items: [
+      one('spsy_a', 'Delusions and/or hallucinations'),
+      one('spsy_b1', 'Symptoms developed during or soon after intoxication, withdrawal or exposure to a medicine'),
+      one('spsy_b2', 'The substance or medicine can cause these symptoms'),
+      one('spsy_c', 'Not better explained by an independent psychotic disorder (e.g. symptoms started before use, or persist about 1 month after stopping)'),
+      one('spsy_d', 'Not occurring only during a delirium'),
+      one('spsy_e', DISTRESS),
+    ] },
+  ],
+  rule: { all: ['spsy_a', 'spsy_b1', 'spsy_b2', 'spsy_c', 'spsy_d', 'spsy_e'] },
+  specifiers: [],
+  code: () => 'F1x.5 (by substance)',
+  codeNote: 'The code depends on the substance: F10.5 alcohol, F12.5 cannabis, F14.5 cocaine, F15.5 other stimulants, F16.5 hallucinogens, F19.5 multiple.',
+};
+
+const medicalPsychotic = {
+  id: 'medical_psychotic',
+  category: 'psychotic',
+  name: 'Psychotic disorder due to another medical condition',
+  groups: [
+    { title: 'A–E', items: [
+      one('mpsy_a', 'Prominent hallucinations or delusions'),
+      one('mpsy_b', 'Evidence (history, examination or tests) that it is a direct physiological consequence of another medical condition'),
+      one('mpsy_c', 'Not better explained by another mental disorder'),
+      one('mpsy_d', 'Not occurring only during a delirium'),
+      one('mpsy_e', DISTRESS),
+    ] },
+  ],
+  rule: { all: ['mpsy_a', 'mpsy_b', 'mpsy_c', 'mpsy_d', 'mpsy_e'] },
+  specifiers: [
+    { id: 'predominant', label: 'Predominant symptom', options: [
+      { value: 'delusions', label: 'Delusions' },
+      { value: 'hallucinations', label: 'Hallucinations' },
+    ] },
+  ],
+  code: (s) => (s.predominant === 'hallucinations' ? 'F06.0' : 'F06.2'),
+  codeNote: 'F06.2 organic delusional disorder; F06.0 organic hallucinosis. Also code the medical condition.',
+};
+
+const catatoniaA = list('cat_a', [
+  'Stupor (no psychomotor activity, not actively relating to the environment)',
+  'Catalepsy (passive induction of a posture held against gravity)',
+  'Waxy flexibility (slight, even resistance to positioning by the examiner)',
+  'Mutism (no or very little verbal response, not due to aphasia)',
+  'Negativism (opposing or not responding to instructions)',
+  'Posturing (spontaneous, active maintenance of a posture)',
+  'Mannerism (odd caricature of normal actions)',
+  'Stereotypy (repetitive, abnormally frequent, non-goal-directed movements)',
+  'Agitation not influenced by external stimuli',
+  'Grimacing',
+  'Echolalia (mimicking another’s speech)',
+  'Echopraxia (mimicking another’s movements)',
+]);
+const catatonia = {
+  id: 'catatonia',
+  category: 'psychotic',
+  name: 'Catatonia',
+  note: 'Catatonia can be life-threatening (dehydration, thrombosis, malignant catatonia). Rule out neuroleptic malignant syndrome and neurological causes.',
+  groups: [
+    { title: 'A. At least 3 of', items: catatoniaA },
+    { title: 'Context', items: [
+      one('cat_b', 'Associated with another mental disorder (e.g. schizophrenia, bipolar, depression) OR evidence of a medical cause'),
+      one('cat_c', 'Not occurring only during a delirium'),
+    ] },
+  ],
+  rule: { all: [{ count: ids(catatoniaA), min: 3 }, 'cat_b', 'cat_c'] },
+  specifiers: [
+    { id: 'context', label: 'Catatonia', options: [
+      { value: 'mental', label: 'Associated with another mental disorder' },
+      { value: 'medical', label: 'Due to another medical condition' },
+    ] },
+  ],
+  code: () => 'F06.1',
+  codeNote: 'F06.1 (as in DSM-5-TR). In schizophrenia, ICD-10 instead codes catatonic schizophrenia (F20.2).',
+};
+
+// ---------- Trauma- and stressor-related disorders ----------
+
+const TRAUMA_EXPOSURE = 'Exposure to actual or threatened death, serious injury or sexual violence: directly, as a witness, happening to someone close (violent or accidental), or repeated exposure to details (e.g. at work)';
+
+const radB = list('rad_b', [
+  'Minimal social and emotional responsiveness to others',
+  'Limited positive affect',
+  'Episodes of unexplained irritability, sadness or fearfulness with adult caregivers',
+]);
+const rad = {
+  id: 'rad',
+  category: 'trauma',
+  name: 'Reactive attachment disorder',
+  note: 'Onset must be before age 5. Rarely first diagnosed at 16 or older; consider whether the pattern persists from childhood.',
+  groups: [
+    { title: 'A', items: [one('rad_a', 'Consistent pattern of inhibited, emotionally withdrawn behaviour toward adult caregivers (rarely seeks or responds to comfort)')] },
+    { title: 'B. At least 2 of', items: radB },
+    { title: 'C–G', items: [
+      one('rad_c', 'Experienced extremes of insufficient care (neglect, repeated changes of caregivers, or rearing in unusual settings)'),
+      one('rad_d', 'The insufficient care is presumed to have caused the disturbed behaviour'),
+      one('rad_e', 'Criteria for autism spectrum disorder are not met'),
+      one('rad_f', 'The disturbance was evident before age 5'),
+      one('rad_g', 'Developmental age of at least 9 months'),
+    ] },
+  ],
+  rule: { all: ['rad_a', { count: ids(radB), min: 2 }, 'rad_c', 'rad_d', 'rad_e', 'rad_f', 'rad_g'] },
+  specifiers: [],
+  code: () => 'F94.1',
+};
+
+const dsedA = list('dsed_a', [
+  'Reduced or absent reticence in approaching and interacting with unfamiliar adults',
+  'Overly familiar verbal or physical behaviour',
+  'Diminished or absent checking back with the adult caregiver, even in unfamiliar settings',
+  'Willingness to go off with an unfamiliar adult with little or no hesitation',
+]);
+const dsed = {
+  id: 'dsed',
+  category: 'trauma',
+  name: 'Disinhibited social engagement disorder',
+  note: 'Develops in early childhood after insufficient care. Rarely first diagnosed at 16 or older.',
+  groups: [
+    { title: 'A. Actively approaching and interacting with unfamiliar adults: at least 2 of', items: dsedA },
+    { title: 'B–E', items: [
+      one('dsed_b', 'The behaviour is socially disinhibited, not only impulsivity (as in ADHD)'),
+      one('dsed_c', 'Experienced extremes of insufficient care (neglect, repeated changes of caregivers, or rearing in unusual settings)'),
+      one('dsed_d', 'The insufficient care is presumed to have caused the behaviour'),
+      one('dsed_e', 'Developmental age of at least 9 months'),
+    ] },
+  ],
+  rule: { all: [{ count: ids(dsedA), min: 2 }, 'dsed_b', 'dsed_c', 'dsed_d', 'dsed_e'] },
+  specifiers: [],
+  code: () => 'F94.2',
+};
+
+const ptsdB = list('ptsd_b', [
+  'Recurrent, involuntary, intrusive distressing memories',
+  'Recurrent distressing dreams related to the event',
+  'Dissociative reactions (flashbacks) in which the event feels as if it is recurring',
+  'Intense or prolonged distress at reminders',
+  'Marked physical reactions to reminders',
+]);
+const ptsdC = list('ptsd_c', [
+  'Avoids distressing memories, thoughts or feelings about the event',
+  'Avoids external reminders (people, places, conversations, activities, objects, situations)',
+]);
+const ptsdD = list('ptsd_d', [
+  'Unable to remember an important part of the event (dissociative amnesia)',
+  'Persistent, exaggerated negative beliefs about oneself, others or the world',
+  'Persistent, distorted blame of self or others for the event or its consequences',
+  'Persistent negative emotional state (fear, horror, anger, guilt or shame)',
+  'Markedly diminished interest in significant activities',
+  'Feeling detached or estranged from others',
+  'Persistent inability to experience positive emotions',
+]);
+const ptsdE = list('ptsd_e', [
+  'Irritable behaviour and angry outbursts',
+  'Reckless or self-destructive behaviour',
+  'Hypervigilance',
+  'Exaggerated startle response',
+  'Problems with concentration',
+  'Sleep disturbance',
+]);
+const ptsd = {
+  id: 'ptsd',
+  category: 'trauma',
+  name: 'Posttraumatic stress disorder',
+  groups: [
+    { title: 'A', items: [one('ptsd_a', TRAUMA_EXPOSURE)] },
+    { title: 'B. Intrusion: at least 1 of', items: ptsdB },
+    { title: 'C. Avoidance: at least 1 of', items: ptsdC },
+    { title: 'D. Negative changes in thinking and mood: at least 2 of', items: ptsdD },
+    { title: 'E. Changes in arousal and reactivity: at least 2 of', items: ptsdE },
+    { title: 'F–H', items: [
+      one('ptsd_f', 'Duration of B–E more than 1 month'),
+      one('ptsd_g', DISTRESS),
+      one('ptsd_h', NOT_SUBSTANCE),
+    ] },
+  ],
+  rule: { all: ['ptsd_a', { count: ids(ptsdB), min: 1 }, { count: ids(ptsdC), min: 1 }, { count: ids(ptsdD), min: 2 }, { count: ids(ptsdE), min: 2 }, 'ptsd_f', 'ptsd_g', 'ptsd_h'] },
+  specifiers: [
+    { id: 'dissociative', label: 'With dissociative symptoms', options: [
+      { value: 'no', label: 'No' },
+      { value: 'depersonalisation', label: 'Depersonalisation' },
+      { value: 'derealisation', label: 'Derealisation' },
+    ] },
+    { id: 'delayed', label: 'With delayed expression (full criteria 6+ months after the event)', options: [
+      { value: 'no', label: 'No' },
+      { value: 'yes', label: 'Yes' },
+    ] },
+  ],
+  code: () => 'F43.1',
+};
+
+const asdB = list('asd_b', [
+  'Recurrent, involuntary, intrusive distressing memories',
+  'Recurrent distressing dreams related to the event',
+  'Dissociative reactions (flashbacks)',
+  'Intense or prolonged distress or marked physical reactions to reminders',
+  'Persistent inability to experience positive emotions',
+  'Altered sense of reality (e.g. seeing oneself from outside, being in a daze)',
+  'Unable to remember an important part of the event',
+  'Avoids distressing memories, thoughts or feelings about the event',
+  'Avoids external reminders',
+  'Sleep disturbance',
+  'Irritable behaviour and angry outbursts',
+  'Hypervigilance',
+  'Problems with concentration',
+  'Exaggerated startle response',
+]);
+const acuteStress = {
+  id: 'acute_stress',
+  category: 'trauma',
+  name: 'Acute stress disorder',
+  groups: [
+    { title: 'A', items: [one('asd_a', TRAUMA_EXPOSURE)] },
+    { title: 'B. At least 9 of these 14, starting or worsening after the event', items: asdB },
+    { title: 'C–E', items: [
+      one('asd_c', 'Duration from 3 days to 1 month after the trauma'),
+      one('asd_d', DISTRESS),
+      one('asd_e', 'Not attributable to a substance or medical condition (e.g. head injury), and not better explained by brief psychotic disorder'),
+    ] },
+  ],
+  rule: { all: ['asd_a', { count: ids(asdB), min: 9 }, 'asd_c', 'asd_d', 'asd_e'] },
+  specifiers: [],
+  code: () => 'F43.0',
+};
+
+const adjustment = {
+  id: 'adjustment',
+  category: 'trauma',
+  name: 'Adjustment disorder',
+  groups: [
+    { title: 'A–E', items: [
+      one('adj_a', 'Emotional or behavioural symptoms starting within 3 months of an identifiable stressor'),
+      one('adj_b', 'Marked distress out of proportion to the stressor, and/or significant impairment in functioning'),
+      one('adj_c', 'Criteria for another mental disorder are not met, and it is not only a worsening of an existing disorder'),
+      one('adj_d', 'Not normal bereavement, and not better explained by prolonged grief disorder'),
+      one('adj_e', 'Symptoms do not last more than 6 months after the stressor or its consequences have ended'),
+    ] },
+  ],
+  rule: { all: ['adj_a', 'adj_b', 'adj_c', 'adj_d', 'adj_e'] },
+  specifiers: [
+    { id: 'subtype', label: 'Subtype', options: [
+      { value: 'depressed_brief', label: 'With depressed mood, brief (1 month or less)' },
+      { value: 'depressed_long', label: 'With depressed mood, prolonged' },
+      { value: 'mixed_anx_dep', label: 'With mixed anxiety and depressed mood' },
+      { value: 'anxiety', label: 'With anxiety (or other emotions)' },
+      { value: 'conduct', label: 'With disturbance of conduct' },
+      { value: 'emotions_conduct', label: 'With mixed disturbance of emotions and conduct' },
+    ] },
+  ],
+  code(s) {
+    const map = { depressed_brief: 'F43.20', depressed_long: 'F43.21', mixed_anx_dep: 'F43.22', anxiety: 'F43.23', conduct: 'F43.24', emotions_conduct: 'F43.25' };
+    return map[s.subtype] ?? 'F43.2';
+  },
+  codeNote: 'ICD-10 subdivides F43.2 with a 5th character; check that your system uses the same subdivision.',
+};
+
+const pgdB = list('pgd_b', [
+  'Intense yearning or longing for the person who died',
+  'Preoccupation with thoughts or memories of the person who died',
+]);
+const pgdC = list('pgd_c', [
+  'Identity disruption (e.g. feeling as if part of oneself has died)',
+  'Marked sense of disbelief about the death',
+  'Avoidance of reminders that the person is dead',
+  'Intense emotional pain (e.g. anger, bitterness, sorrow) related to the death',
+  'Difficulty reintegrating into relationships and activities',
+  'Emotional numbness',
+  'Feeling that life is meaningless',
+  'Intense loneliness',
+]);
+const pgd = {
+  id: 'pgd',
+  category: 'trauma',
+  name: 'Prolonged grief disorder',
+  groups: [
+    { title: 'A', items: [one('pgd_a', 'Death of someone close at least 12 months ago (at least 6 months if under 18)')] },
+    { title: 'B. Nearly every day for at least the last month: at least 1 of', items: pgdB },
+    { title: 'C. Nearly every day for at least the last month: at least 3 of', items: pgdC },
+    { title: 'D–F', items: [
+      one('pgd_d', DISTRESS),
+      one('pgd_e', 'Duration and severity clearly exceed social, cultural or religious norms'),
+      one('pgd_f', 'Not better explained by another mental disorder (e.g. MDD, PTSD) and not attributable to a substance or medical condition'),
+    ] },
+  ],
+  rule: { all: ['pgd_a', { count: ids(pgdB), min: 1 }, { count: ids(pgdC), min: 3 }, 'pgd_d', 'pgd_e', 'pgd_f'] },
+  specifiers: [],
+  code: () => 'F43.8',
+  codeNote: 'WHO ICD-10 has no prolonged grief code; F43.8 (other reactions to severe stress) is commonly used. ICD-11: 6B42.',
+};
+
+// ---------- Obsessive-compulsive and related disorders ----------
+
+const ocd = {
+  id: 'ocd',
+  category: 'ocd',
+  name: 'Obsessive-compulsive disorder',
+  groups: [
+    { title: 'A. Obsessions', items: [
+      one('ocd_a1', 'Recurrent, persistent, intrusive and unwanted thoughts, urges or images that cause marked anxiety or distress'),
+      one('ocd_a2', 'Tries to ignore or suppress them, or neutralise them with another thought or action'),
+    ] },
+    { title: 'A. Compulsions', items: [
+      one('ocd_a3', 'Repetitive behaviours (e.g. washing, checking) or mental acts (e.g. counting) the person feels driven to perform'),
+      one('ocd_a4', 'Aimed at reducing anxiety or preventing a dreaded event, but not realistically connected to it or clearly excessive'),
+    ] },
+    { title: 'B–D', items: [
+      one('ocd_b', 'Time-consuming (more than 1 hour a day) or causes clinically significant distress or impairment'),
+      one('ocd_c', NOT_SUBSTANCE),
+      one('ocd_d', 'Not better explained by another mental disorder (e.g. worries in GAD, appearance in BDD, rumination in MDD)'),
+    ] },
+  ],
+  // Obsessions (A1 and A2) OR compulsions (A3 and A4), or both.
+  rule: { all: [{ any: [{ all: ['ocd_a1', 'ocd_a2'] }, { all: ['ocd_a3', 'ocd_a4'] }] }, 'ocd_b', 'ocd_c', 'ocd_d'] },
+  specifiers: [
+    { id: 'predominant', label: 'Predominant (for the ICD-10 code)', options: [
+      { value: 'obsessions', label: 'Mainly obsessions' },
+      { value: 'compulsions', label: 'Mainly compulsions' },
+      { value: 'mixed', label: 'Mixed obsessions and compulsions' },
+    ] },
+    { id: 'insight', label: 'Insight', options: [
+      { value: 'good', label: 'Good or fair' },
+      { value: 'poor', label: 'Poor' },
+      { value: 'absent', label: 'Absent insight / delusional beliefs' },
+    ] },
+    { id: 'tic', label: 'Tic-related', options: [
+      { value: 'no', label: 'No' },
+      { value: 'yes', label: 'Yes (current or past tic disorder)' },
+    ] },
+  ],
+  code(s) {
+    return { obsessions: 'F42.0', compulsions: 'F42.1', mixed: 'F42.2' }[s.predominant] ?? 'F42.9';
+  },
+};
+
+const bdd = {
+  id: 'bdd',
+  category: 'ocd',
+  name: 'Body dysmorphic disorder',
+  groups: [
+    { title: 'A–D', items: [
+      one('bdd_a', 'Preoccupation with one or more perceived flaws in appearance that are not observable or appear slight to others'),
+      one('bdd_b', 'Repetitive behaviours (mirror checking, excessive grooming, skin picking, reassurance seeking) or mental acts (comparing) in response'),
+      one('bdd_c', DISTRESS),
+      one('bdd_d', 'Not better explained by concerns about body fat or weight in someone who meets criteria for an eating disorder'),
+    ] },
+  ],
+  rule: { all: ['bdd_a', 'bdd_b', 'bdd_c', 'bdd_d'] },
+  specifiers: [
+    { id: 'muscle', label: 'With muscle dysmorphia', options: [
+      { value: 'no', label: 'No' },
+      { value: 'yes', label: 'Yes' },
+    ] },
+    { id: 'insight', label: 'Insight', options: [
+      { value: 'good', label: 'Good or fair' },
+      { value: 'poor', label: 'Poor' },
+      { value: 'absent', label: 'Absent insight / delusional beliefs' },
+    ] },
+  ],
+  code: () => 'F45.2',
+  codeNote: 'WHO ICD-10 includes body dysmorphic disorder in F45.2 (hypochondriacal disorder). ICD-11: 6B21.',
+};
+
+const hoarding = {
+  id: 'hoarding',
+  category: 'ocd',
+  name: 'Hoarding disorder',
+  groups: [
+    { title: 'A–F', items: [
+      one('hoa_a', 'Persistent difficulty discarding or parting with possessions, regardless of their actual value'),
+      one('hoa_b', 'Due to a perceived need to save the items and distress associated with discarding them'),
+      one('hoa_c', 'Possessions congest and clutter active living areas so they cannot be used as intended (unless others have cleared them)'),
+      one('hoa_d', 'Causes clinically significant distress or impairment, including keeping a safe environment'),
+      one('hoa_e', 'Not attributable to another medical condition (e.g. brain injury, cerebrovascular disease)'),
+      one('hoa_f', 'Not better explained by another mental disorder (e.g. obsessions in OCD, low energy in MDD, delusions, cognitive decline, autism)'),
+    ] },
+  ],
+  rule: { all: ['hoa_a', 'hoa_b', 'hoa_c', 'hoa_d', 'hoa_e', 'hoa_f'] },
+  specifiers: [
+    { id: 'acquisition', label: 'With excessive acquisition', options: [
+      { value: 'no', label: 'No' },
+      { value: 'yes', label: 'Yes' },
+    ] },
+  ],
+  code: () => 'F42.8',
+  codeNote: 'WHO ICD-10 has no hoarding code; F42.8 (other obsessive-compulsive disorders) is commonly used. ICD-10-CM: F42.3. ICD-11: 6B24.',
+};
+
+const trich = {
+  id: 'trich',
+  category: 'ocd',
+  name: 'Trichotillomania (hair-pulling disorder)',
+  groups: [
+    { title: 'A–E', items: [
+      one('tri_a', 'Recurrent pulling out of one’s hair, resulting in hair loss'),
+      one('tri_b', 'Repeated attempts to decrease or stop the hair pulling'),
+      one('tri_c', DISTRESS),
+      one('tri_d', 'Not attributable to another medical condition (e.g. a skin condition)'),
+      one('tri_e', 'Not better explained by another mental disorder (e.g. trying to improve a perceived flaw in BDD)'),
+    ] },
+  ],
+  rule: { all: ['tri_a', 'tri_b', 'tri_c', 'tri_d', 'tri_e'] },
+  specifiers: [],
+  code: () => 'F63.3',
+};
+
+const skinPicking = {
+  id: 'skin_picking',
+  category: 'ocd',
+  name: 'Excoriation (skin-picking) disorder',
+  groups: [
+    { title: 'A–E', items: [
+      one('skp_a', 'Recurrent skin picking resulting in skin lesions'),
+      one('skp_b', 'Repeated attempts to decrease or stop the skin picking'),
+      one('skp_c', DISTRESS),
+      one('skp_d', 'Not attributable to a substance (e.g. cocaine) or a medical condition (e.g. scabies)'),
+      one('skp_e', 'Not better explained by another mental disorder (e.g. delusions, BDD, stereotypic movements, intention to self-harm)'),
+    ] },
+  ],
+  rule: { all: ['skp_a', 'skp_b', 'skp_c', 'skp_d', 'skp_e'] },
+  specifiers: [],
+  code: () => 'L98.1',
+  codeNote: 'WHO ICD-10 has no specific code; L98.1 (factitial dermatitis) is used in ICD-10-CM. ICD-11: 6B25.1. Check your local coding rules.',
+};
+
+const OCRD_SYMPTOMS = 'Obsessions, compulsions, skin picking, hair pulling, other body-focused repetitive behaviours, or other obsessive-compulsive related symptoms predominate';
+
+const substanceOcrd = {
+  id: 'substance_ocrd',
+  category: 'ocd',
+  name: 'Substance/medication-induced obsessive-compulsive and related disorder',
+  groups: [
+    { title: 'A–E', items: [
+      one('socd_a', OCRD_SYMPTOMS),
+      one('socd_b1', 'Symptoms developed during or soon after intoxication, withdrawal or exposure to a medicine'),
+      one('socd_b2', 'The substance or medicine can cause these symptoms (e.g. stimulants)'),
+      one('socd_c', 'Not better explained by an independent obsessive-compulsive or related disorder'),
+      one('socd_d', 'Not occurring only during a delirium'),
+      one('socd_e', DISTRESS),
+    ] },
+  ],
+  rule: { all: ['socd_a', 'socd_b1', 'socd_b2', 'socd_c', 'socd_d', 'socd_e'] },
+  specifiers: [],
+  code: () => 'F1x.8 (by substance)',
+  codeNote: SUBSTANCE_CODE_NOTE,
+};
+
+const medicalOcrd = {
+  id: 'medical_ocrd',
+  category: 'ocd',
+  name: 'Obsessive-compulsive and related disorder due to another medical condition',
+  groups: [
+    { title: 'A–E', items: [
+      one('mocd_a', OCRD_SYMPTOMS),
+      one('mocd_b', 'Evidence (history, examination or tests) that it is a direct physiological consequence of another medical condition'),
+      one('mocd_c', 'Not better explained by another mental disorder'),
+      one('mocd_d', 'Not occurring only during a delirium'),
+      one('mocd_e', DISTRESS),
+    ] },
+  ],
+  rule: { all: ['mocd_a', 'mocd_b', 'mocd_c', 'mocd_d', 'mocd_e'] },
+  specifiers: [],
+  code: () => 'F06.8',
+  codeNote: 'Also code the medical condition itself.',
+};
+
 export const DISORDERS = [
   mdd, pdd, pmdd, dmdd, bipolar1, bipolar2, cyclothymic, substanceMood, medicalMood,
   separation, mutism, phobia, social, panic, agoraphobia, gad, substanceAnxiety, medicalAnxiety,
   paranoid, schizoid, schizotypal, antisocial, borderline, histrionic, narcissistic, avoidant, dependent, ocpd,
   delirium, majorNcd, mildNcd,
+  delusional, briefPsychotic, schizophreniform, schizophrenia, schizoaffective, substancePsychotic, medicalPsychotic, catatonia,
+  rad, dsed, ptsd, acuteStress, adjustment, pgd,
+  ocd, bdd, hoarding, trich, skinPicking, substanceOcrd, medicalOcrd,
 ];
 
 export function findDisorder(id) {
