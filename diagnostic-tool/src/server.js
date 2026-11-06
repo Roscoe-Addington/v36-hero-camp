@@ -143,6 +143,35 @@ const clinician = express.Router();
 clinician.use(requireClinician);
 app.use('/clinician', clinician);
 
+// ---------- Colleagues with access may only read ----------
+// One guard in front of every route that changes something about an existing
+// patient (anything sent with POST under /patients/<id>/, /assessments/<id>/
+// or /followups/<id>), so no route can forget the check. A supervisor or
+// colleague gets "read-only"; someone without access falls through to the
+// route, which answers "not found".
+
+function patientIdForPath(path) {
+  let m = path.match(/^\/patients\/(\d+)\//);
+  if (m) return Number(m[1]);
+  m = path.match(/^\/assessments\/(\d+)\//);
+  if (m) return db.prepare('SELECT patient_id FROM assessments WHERE id = ?').get(Number(m[1]))?.patient_id ?? null;
+  m = path.match(/^\/followups\/(\d+)$/);
+  if (m) return db.prepare('SELECT patient_id FROM followups WHERE id = ?').get(Number(m[1]))?.patient_id ?? null;
+  return null;
+}
+
+clinician.use((req, res, next) => {
+  if (req.method !== 'POST') return next();
+  const patientId = patientIdForPath(req.path);
+  if (patientId === null) return next();
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
+  const access = accessOf(req.clinician.id, patient);
+  if (access && !access.owner) {
+    return send(res, views.messagePage({ title: 'Read-only access', message: 'You have read-only access to this patient. Only the treating clinician can make changes.', clinician: req.clinician }), 403);
+  }
+  next();
+});
+
 // Loads a patient only if the logged-in clinician may see it: as the
 // treating clinician, or with access granted by them (access.js). Anyone
 // else gets null, which every route answers with "not found".
@@ -348,6 +377,8 @@ function loadCase(req) {
   return {
     assessment,
     patient,
+    // Supervisors and colleagues see the assessment but cannot change it.
+    readOnly: !accessOf(req.clinician.id, patient)?.owner,
     answers: parseJson(assessment.answers_json, null),
     results: parseJson(assessment.results_json, null),
     intake: parseJson(assessment.intake_json, null),
@@ -703,17 +734,17 @@ function completeScreening(assessment, patient, answers, meta = emptyMeta()) {
   return { answers, results, completedAt };
 }
 
-async function emailResults(assessment, patient, { answers, results, completedAt }) {
+// Tells the treating clinician that results are ready: no health data in
+// the email, only the assessment number and a link (email.js).
+async function emailResults(assessment, patient, { results }) {
   const clinicianRow = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id);
   let emailStatus;
   try {
     emailStatus = await sendResultsEmail({
       to: clinicianRow.email,
-      patient,
+      assessmentId: assessment.id,
       results,
-      suggestions: buildSuggestions({ answers, results, patient, intake: null }),
-      completedAt,
-      reportUrl: `${BASE_URL}/clinician/assessments/${assessment.id}`,
+      url: `${BASE_URL}/clinician/assessments/${assessment.id}`,
     });
   } catch (err) {
     console.error('[email] failed:', err.message);
@@ -759,7 +790,7 @@ function completeFollowup(followup, answers) {
   if (saved.changes === 0) return null;
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(followup.patient_id);
   const to = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id).email;
-  sendFollowupEmail({ to, patient, result, completedAt, patientUrl: `${BASE_URL}/clinician/patients/${patient.id}` })
+  sendFollowupEmail({ to, followupId: followup.id, result, url: `${BASE_URL}/clinician/patients/${patient.id}` })
     .catch((err) => console.error('[email] follow-up failed:', err.message));
   return result;
 }

@@ -195,11 +195,11 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
     body: html`
       <h1>${patient.first_name} ${patient.last_name}</h1>
       ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}
-      <p class="record-links"><a href="/clinician/patients/${patient.id}/edit">Edit details</a> · <a href="/clinician/patients/${patient.id}/audit">Audit log</a>
+      <p class="record-links">${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">Edit details</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">Audit log</a>
         ${keptUntil ? html`<br /><span class="hint">Record kept until at least ${keptUntil.toISOString().slice(0, 10)} (${retentionYears} years after the last entry).</span>` : ''}</p>
       ${access.owner
         ? ''
-        : html`<p class="note">You have access as <strong>${ROLE_NAMES[access.role] ?? access.role}</strong>, granted by ${access.grant.granted_by_name} (treating clinician${owner ? `: ${owner.name}` : ''}) for: ${access.grant.reason}.${access.grant.expires_at ? ` Access ends ${access.grant.expires_at.slice(0, 10)}.` : ''}</p>`}
+        : html`<p class="note">You have <strong>read-only</strong> access as <strong>${ROLE_NAMES[access.role] ?? access.role}</strong>, granted by ${access.grant.granted_by_name} (treating clinician${owner ? `: ${owner.name}` : ''}) for: ${access.grant.reason}.${access.grant.expires_at ? ` Access ends ${access.grant.expires_at.slice(0, 10)}.` : ''}</p>`}
       <dl class="card details">
         <dt>Personal number</dt><dd>${patient.personal_number}</dd>
         <dt>Gender</dt><dd>${patient.gender}</dd>
@@ -216,6 +216,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
           </div>`
         : ''}
 
+      ${access.owner ? html`
       <section class="card">
         <h2>Start a new assessment</h2>
         <p>The assessment starts with the intake screening. Choose how the patient answers it:</p>
@@ -234,7 +235,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
           </form>
         </div>
         <p class="hint">Starting a new assessment cancels any earlier one for this patient that has not started yet.</p>
-      </section>
+      </section>` : ''}
 
       <h2>Assessments</h2>
       ${assessments.length === 0
@@ -263,7 +264,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
             </tbody>
           </table>`}
 
-      ${followupSection(patient, assessments, followups, followupLink)}
+      ${followupSection(patient, assessments, followups, followupLink, access.owner)}
 
       ${access.owner ? accessSection(patient, grants) : ''}
 
@@ -718,7 +719,7 @@ function progressChart(points) {
   </figure>`;
 }
 
-function followupSection(patient, assessments, followups, followupLink) {
+function followupSection(patient, assessments, followups, followupLink, canStart = true) {
   const points = measurementSeries(assessments, followups);
   const progress = progressSummary(points);
   const pending = followups.filter((f) => !f.completed_at && !f.revoked && new Date(f.expires_at) > new Date());
@@ -739,7 +740,7 @@ function followupSection(patient, assessments, followups, followupLink) {
         </table></div>`
       : html`<p class="hint">No completed measurements yet.</p>`}
     ${pending.length ? html`<p class="hint">${pending.length} follow-up ${pending.length === 1 ? 'link is' : 'links are'} waiting for the patient.</p>` : ''}
-    <div class="start-options">
+    ${canStart ? html`<div class="start-options">
       <form method="post" action="/clinician/patients/${patient.id}/followups">
         <input type="hidden" name="mode" value="link" />
         <label>Language ${languageSelect()}</label>
@@ -750,7 +751,7 @@ function followupSection(patient, assessments, followups, followupLink) {
         <label>Language ${languageSelect()}</label>
         <button>Follow-up on site</button>
       </form>
-    </div>
+    </div>` : ''}
   </section>`;
 }
 

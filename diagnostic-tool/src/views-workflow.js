@@ -69,7 +69,9 @@ function progress(c) {
 export function casePage({ clinician, c, suggestions, errors = [] }) {
   const { assessment, patient } = c;
   const base = `/clinician/assessments/${assessment.id}`;
-  const locked = Boolean(assessment.finalized_at);
+  const finalized = Boolean(assessment.finalized_at);
+  // Locked: finalized, or opened by a colleague with read-only access.
+  const locked = finalized || c.readOnly;
 
   const header = html`
     <p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>
@@ -102,15 +104,16 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
     title: `Assessment — ${patient.last_name}`,
     clinician,
     body: html`${header}
-      ${locked
+      ${c.readOnly ? html`<p class="note"><strong>Read-only access.</strong> Only the treating clinician can make changes.</p>` : ''}
+      ${finalized
         ? html`<div class="note">
             <p>This assessment was finalized ${assessment.finalized_at} and is locked. <a href="${base}/final">Open the final report</a>.</p>
-            <details><summary>Reopen to make a correction</summary>
+            ${c.readOnly ? '' : html`<details><summary>Reopen to make a correction</summary>
               <form method="post" action="${base}/reopen">
                 <label>Why is it reopened? (kept in the change history) <input name="reason" required maxlength="1000" /></label>
                 <button class="small">Reopen assessment</button>
               </form>
-            </details>
+            </details>`}
           </div>`
         : ''}
       ${amendmentHistory(c.amendments)}
@@ -391,7 +394,7 @@ function interviewHighlights(iv) {
 // ---------- Interview, informant and risk pages (one generic page) ----------
 
 export function formPage({ clinician, c, title, intro, schema, values, action, errors = [], extra }) {
-  const locked = Boolean(c.assessment.finalized_at);
+  const locked = Boolean(c.assessment.finalized_at) || c.readOnly;
   return layout({
     title,
     clinician,
@@ -480,7 +483,7 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
   const base = `/clinician/assessments/${assessment.id}`;
   const checklist = c.checklists[disorder.id] ?? { ratings: {}, specifiers: {} };
   const ev = evaluateDisorder(disorder, checklist, patient);
-  const locked = Boolean(assessment.finalized_at);
+  const locked = Boolean(assessment.finalized_at) || c.readOnly;
   const disabled = locked ? html`disabled` : '';
 
   return layout({

@@ -124,17 +124,12 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.equal(files.length, 1);
   const email = readFileSync(`outbox/${files[0]}`, 'utf8');
   assert.ok(email.startsWith('To: dr@example.com'));
-  assert.ok(email.includes('URGENT'));
-  assert.ok(email.includes('SAFETY ALERT'));
-  assert.ok(email.includes('*********1234'), 'personal number is masked');
-  assert.ok(!email.includes('19900101-1234'));
-  assert.ok(email.includes('Likelihood:      High'));
-  assert.ok(email.includes('PRIORITY DIFFERENTIAL'));
-  assert.ok(email.includes('DIFFERENTIAL DIAGNOSIS SCREENING'));
-  assert.ok(email.includes('Bipolar I or II disorder  [PRIORITY]'));
-  // AUDIT-C 3+1+1 = 5, recorded gender Female -> cut-off 3 -> positive
-  assert.ok(email.includes('AUDIT-C = 5/12 (cut-off 3 for recorded gender "Female")'));
-  assert.ok(email.includes('PC-PTSD-5 score 3/5'));
+  // Item 9 answered and bipolar screen positive: urgent, but no health data or identity in the email
+  assert.match(email, /Subject: URGENT: Intake screening results need review today \(#\d+\)/);
+  assert.match(email, /Log in to see the results: http:\/\/localhost:3000\/clinician\/assessments\/\d+/);
+  for (const secret of ['Lovelace', 'Ada', '1234', 'PHQ', 'Bipolar', 'suicid', 'depress']) {
+    assert.ok(!email.toLowerCase().includes(secret.toLowerCase()), `email must not contain "${secret}"`);
+  }
 
   // 7. Clinician sees the report
   const patientAfter = await (await fetch(base + patientPath, { headers: { cookie } })).text();
@@ -148,8 +143,9 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.ok(report.includes('6. In-depth assessment'));
   assert.ok(report.includes('Required before finalizing'), 'item 9 answered: risk assessment required');
   assert.ok(report.includes('checklist?disorder=bipolar1'));
-  assert.ok(email.includes('SUGGESTED IN-DEPTH ASSESSMENTS'));
-  assert.ok(email.includes('Bipolar I disorder [Suggested]'));
+  // AUDIT-C 3+1+1 = 5, recorded gender Female -> cut-off 3 -> positive (in the app, not the email)
+  assert.ok(report.includes('AUDIT-C = 5/12 (cut-off 3 for recorded gender &quot;Female&quot;)'));
+  assert.ok(report.includes('PC-PTSD-5 score 3/5'));
 });
 
 test('a clinician cannot see another clinician\'s patient', async () => {
@@ -435,7 +431,8 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
   // Email for the follow-up with item 9 answered is urgent
   await new Promise((r) => setTimeout(r, 100));
   const followupEmails = readdirSync('outbox').filter((f) => f.endsWith('-followup.txt')).map((f) => readFileSync(`outbox/${f}`, 'utf8'));
-  assert.ok(followupEmails.some((e) => e.includes('URGENT: safety alert in follow-up (Ström)')));
+  assert.ok(followupEmails.some((e) => e.includes('URGENT: Follow-up results need review today')));
+  assert.ok(!followupEmails.some((e) => e.includes('Ström') || e.includes('PHQ')), 'no name or scores in the email');
 });
 
 test('patient link page by page: skip logic, tiredness break, response-quality box', async () => {
@@ -506,7 +503,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
   // The supervisor can now see the patient and its assessments; the outsider still cannot
   assert.equal(await status(supervisor), 200);
   const page = await (await fetch(base + patientPath, { headers: { cookie: supervisor } })).text();
-  assert.ok(page.includes('You have access as <strong>Supervisor</strong>'));
+  assert.ok(page.includes('You have <strong>read-only</strong> access as <strong>Supervisor</strong>'));
   assert.ok(!page.includes('Delete patient record'), 'only the treating clinician can delete');
   assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie: supervisor } })).text()).includes('Shared by Dr Test'));
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, owner);
@@ -517,7 +514,20 @@ test('access: only the treating clinician and named supervisors or colleagues', 
 
   // The supervisor cannot pass access on or delete the record
   assert.equal((await post(`${patientPath}/access`, { action: 'grant', email: 'other@example.com', role: 'colleague', reason: 'x' }, supervisor)).status, 403);
-  assert.equal((await post(`${patientPath}/delete`, { confirm_last_name: 'Sand' }, supervisor)).status, 404);
+  assert.equal((await post(`${patientPath}/delete`, { confirm_last_name: 'Sand' }, supervisor)).status, 403);
+
+  // Read-only: the supervisor cannot change anything, and sees no forms for changing
+  assert.equal((await post(`${patientPath}/edit`, { first_name: 'X' }, supervisor)).status, 403);
+  assert.equal((await post(`${patientPath}/assessments`, { mode: 'link' }, supervisor)).status, 403);
+  assert.equal((await post(`${casePath}/interview`, { reason: 'x' }, supervisor)).status, 403);
+  assert.equal((await post(`${casePath}/checklist?disorder=mdd`, { mdd_a1: 'present' }, supervisor)).status, 403);
+  const readOnlyCase = await (await fetch(base + casePath, { headers: { cookie: supervisor } })).text();
+  assert.ok(readOnlyCase.includes('Read-only access'));
+  const readOnlyPatient = await (await fetch(base + patientPath, { headers: { cookie: supervisor } })).text();
+  assert.ok(!readOnlyPatient.includes('Start a new assessment'));
+  assert.ok(!readOnlyPatient.includes('Edit details'));
+  // The treating clinician can still change things
+  assert.equal((await post(`${patientPath}/edit`, { first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female', age: '31', education: 'Upper secondary school', employed: '1' }, owner)).status, 302);
 
   // Views by the supervisor are logged under their name
   const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie: owner } })).text();
