@@ -518,3 +518,59 @@ button.danger {
 }
 .key-phq { background: var(--accent); }
 .key-gad { background: var(--warn); }
+
+/* Questionnaire pages */
+.progress-bar p {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.progress-bar progress {
+  width: 100%;
+  height: 0.6rem;
+  accent-color: var(--accent);
+}
+.page-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0.5rem;
+}
+.page-buttons button,
+.page-buttons .button {
+  min-width: 8rem;
+  text-align: center;
+}
+.save-later {
+  text-align: center;
+}
+.question.missing {
+  box-shadow: inset 4px 0 0 var(--danger), inset 0 1px 0 var(--border);
+  padding-left: 0.75rem;
+}
+.tired .options {
+  gap: 0.3rem;
+}
+.tired .choice {
+  padding: 0.4rem 0.6rem;
+  min-width: 2.4rem;
+  justify-content: center;
+}
+
+.card.quality-warn {
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+[hidden] {
+  display: none !important;
+}
+
+.question.follow-up {
+  margin-left: 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+  box-shadow: none;
+}
+.save-later button.link {
+  color: var(--accent);
+}

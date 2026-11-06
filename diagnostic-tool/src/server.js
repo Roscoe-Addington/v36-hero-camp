@@ -20,7 +20,8 @@ import {
   recordFailure,
   clearFailures,
 } from './auth.js';
-import { parseAnswers, parsePartialAnswers } from './questionnaire.js';
+import { parseAnswers, parsePartialAnswers, PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT } from './questionnaire.js';
+import { responseQuality } from './response-quality.js';
 import { lang, STRINGS } from './i18n.js';
 import { scoreAll } from './scoring.js';
 import { runDifferential } from './differential.js';
@@ -363,13 +364,83 @@ clinician.get('/assessments/:id', (req, res) => {
 
 // ---------- On-site screening ----------
 
+// ---------- The questionnaire, one part per page ----------
+// Used for both the patient link (/q/...) and on-site screening. Each page
+// saves its answers into the draft and records timing for the
+// response-quality check (response-quality.js).
+
+const emptyMeta = () => ({ pages: {}, tiredness: [], contradictions: [] });
+
+function pageIndexFrom(req, draft) {
+  const n = Number(req.query.page);
+  return Number.isInteger(n) && n >= 0 && n < PAGES.length ? n : firstOpenPage(draft);
+}
+
+function saveProgress(assessmentId, draft, meta) {
+  db.prepare('UPDATE assessments SET draft_json = ?, meta_json = ? WHERE id = ? AND completed_at IS NULL').run(
+    JSON.stringify(draft), JSON.stringify(meta), assessmentId
+  );
+}
+
+// Records that a page was shown (the start time for the speed check).
+function markShown(assessment, pageIndex) {
+  const meta = parseJson(assessment.meta_json, emptyMeta());
+  meta.pages[PAGES[pageIndex].part] = { ...meta.pages[PAGES[pageIndex].part], shown: Date.now() };
+  db.prepare('UPDATE assessments SET meta_json = ? WHERE id = ? AND completed_at IS NULL').run(JSON.stringify(meta), assessment.id);
+}
+
+// Handles one submitted page. Returns what to do next:
+//   { saved } | { back } | { redisplay: { missing, error } } | { breakAfter: nextIndex } | { next: index } | { done }
+function handlePage(assessment, patient, pageIndex, body, language) {
+  const draft = parseJson(assessment.draft_json, {});
+  const meta = parseJson(assessment.meta_json, emptyMeta());
+  const page = PAGES[pageIndex];
+  const { answers, missing, contradictions } = parsePage(pageIndex, body, draft);
+
+  // Keep every contradiction seen (a later page cannot "undo" it).
+  for (const c of contradictions) {
+    if (!meta.contradictions.some((x) => x.child === c.child)) meta.contradictions.push(c);
+  }
+  const tired = Number(body.tired);
+  if (page.tiredness && body.tired !== undefined && body.tired !== '' && Number.isInteger(tired) && tired >= 0 && tired <= 10) {
+    meta.tiredness = meta.tiredness.filter((t) => t.part !== page.part).concat({ part: page.part, value: tired, at: Date.now() });
+  }
+  saveProgress(assessment.id, answers, meta);
+
+  if (body.intent === 'save' || body.intent === 'stop') return { saved: true };
+  if (body.intent === 'back') return { back: Math.max(0, pageIndex - 1) };
+  if (missing.length) return { redisplay: { missing, error: STRINGS[language].pageMissing(missing.length), answers } };
+
+  const shownOnPage = page.items.filter((item) => isShown(item, answers)).length;
+  meta.pages[page.part] = { ...meta.pages[page.part], submitted: Date.now(), answered: shownOnPage };
+  saveProgress(assessment.id, answers, meta);
+
+  if (pageIndex < PAGES.length - 1) {
+    const last = meta.tiredness.find((t) => t.part === page.part);
+    if (page.tiredness && last && last.value >= TIREDNESS_BREAK_AT && body.intent !== 'continue') return { breakAfter: pageIndex + 1 };
+    return { next: pageIndex + 1 };
+  }
+
+  // Last page: everything must be answered (skipped questions are filled in).
+  const full = applySkips(answers).answers;
+  const { answers: complete, errors } = parseAnswers(full);
+  if (errors.length) {
+    const first = firstOpenPage(full);
+    return { redisplay: { pageIndex: first, missing: errors, error: STRINGS[language].pageMissing(errors.length), answers: full } };
+  }
+  const done = completeScreening(assessment, patient, complete, meta);
+  return done ? { done } : { saved: true };
+}
+
 function onsitePage(req, c, extra = {}) {
+  const draft = parseJson(c.assessment.draft_json, {});
   return views.questionnairePage({
     action: `/clinician/assessments/${c.assessment.id}/screening`,
     clinician: req.clinician,
     patient: c.patient,
     language: c.assessment.language,
-    answers: parseJson(c.assessment.draft_json, {}),
+    answers: draft,
+    pageIndex: pageIndexFrom(req, draft),
     consentDone: Boolean(c.assessment.consent_at),
     ...extra,
   });
@@ -379,6 +450,7 @@ clinician.get('/assessments/:id/screening', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  markShown(c.assessment, pageIndexFrom(req, parseJson(c.assessment.draft_json, {})));
   send(res, onsitePage(req, c));
 });
 
@@ -386,24 +458,31 @@ clinician.post('/assessments/:id/screening', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
   if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
-  const draft = parsePartialAnswers(req.body);
-  saveDraft(c.assessment.id, draft);
-  if (req.body.intent === 'save') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  const url = `/clinician/assessments/${c.assessment.id}/screening`;
+  const pageIndex = pageIndexFrom(req, parseJson(c.assessment.draft_json, {}));
 
-  if (!c.assessment.consent_at) {
+  // The clinician confirms on the first page that the patient was informed.
+  const moving = !['save', 'back'].includes(req.body.intent);
+  if (!c.assessment.consent_at && pageIndex === 0 && moving) {
     if (req.body.consent_given !== 'yes') {
-      return send(res, onsitePage(req, c, { answers: draft, error: 'Confirm that the patient has been given the information.' }), 400);
+      return send(res, onsitePage(req, c, { answers: parsePartialAnswers(req.body), error: 'Confirm that the patient has been given the information.' }), 400);
     }
     db.prepare('UPDATE assessments SET consent_at = ? WHERE id = ?').run(now(), c.assessment.id);
+    c.assessment.consent_at = now();
   }
-  const { answers, errors } = parseAnswers(req.body);
-  if (errors.length) {
-    return send(res, onsitePage(req, c, { answers: draft, consentDone: true, error: `${errors.length} questions are not answered yet. The answers so far are saved.` }), 400);
+  if (!c.assessment.consent_at && moving) return res.redirect(`${url}?page=0`);
+
+  const step = handlePage(c.assessment, c.patient, pageIndex, req.body, lang(c.assessment.language));
+  if (step.saved) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  if (step.back !== undefined) return res.redirect(`${url}?page=${step.back}`);
+  if (step.redisplay) {
+    const { pageIndex: at = pageIndex, ...rest } = step.redisplay;
+    return send(res, onsitePage(req, c, { ...rest, pageIndex: at, consentDone: true }), 400);
   }
-  const done = completeScreening(c.assessment, c.patient, answers);
+  if (step.next !== undefined || step.breakAfter !== undefined) return res.redirect(`${url}?page=${step.next ?? step.breakAfter}`);
   auditCase(req, c, 'save_screening');
   res.redirect(`/clinician/assessments/${c.assessment.id}`);
-  if (done) emailResults(c.assessment, c.patient, done);
+  emailResults(c.assessment, c.patient, step.done);
 });
 
 // ---------- Clinician intake (MoCA, delirium signs, notes) ----------
@@ -568,17 +647,19 @@ clinician.get('/assessments/:id/final', (req, res) => {
 
 // Scores the answers and saves them. Returns null if it was already saved
 // (e.g. a double-click), so it is never saved or emailed twice.
-function completeScreening(assessment, patient, answers) {
+function completeScreening(assessment, patient, answers, meta = emptyMeta()) {
   const results = scoreAll(answers);
   // The differential uses the patient's recorded gender and age as well.
   results.differential = runDifferential(answers, patient, results);
+  // Signs of tired or careless answering (never changes the scores).
+  results.quality = responseQuality(answers, meta, assessment.mode);
   const completedAt = now();
   const saved = db
     .prepare(
-      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?, draft_json = NULL
+      `UPDATE assessments SET completed_at = ?, answers_json = ?, results_json = ?, draft_json = NULL, meta_json = ?
         WHERE id = ? AND completed_at IS NULL`
     )
-    .run(completedAt, JSON.stringify(answers), JSON.stringify(results), assessment.id);
+    .run(completedAt, JSON.stringify(answers), JSON.stringify(results), JSON.stringify(meta), assessment.id);
   if (saved.changes === 0) return null;
   return { answers, results, completedAt };
 }
@@ -711,10 +792,6 @@ function openAssessment(token) {
   return a;
 }
 
-function saveDraft(assessmentId, answers) {
-  db.prepare('UPDATE assessments SET draft_json = ? WHERE id = ? AND completed_at IS NULL').run(JSON.stringify(answers), assessmentId);
-}
-
 // The patient's language: ?lang=sv switches it and remembers the choice.
 function patientLanguage(req, assessment) {
   const wanted = req.query.lang;
@@ -733,7 +810,10 @@ app.get('/q/:token', (req, res) => {
   const language = patientLanguage(req, assessment);
   const url = `/q/${req.params.token}`;
   if (!assessment.consent_at) return send(res, views.consentPage({ action: `${url}/consent`, language, switchUrl: url }));
-  send(res, views.questionnairePage({ action: url, language, switchUrl: url, answers: parseJson(assessment.draft_json, {}) }));
+  const draft = parseJson(assessment.draft_json, {});
+  const pageIndex = pageIndexFrom(req, draft);
+  markShown(assessment, pageIndex);
+  send(res, views.questionnairePage({ action: url, pageIndex, language, switchUrl: url, answers: draft }));
 });
 
 app.post('/q/:token/consent', (req, res) => {
@@ -754,26 +834,24 @@ app.post('/q/:token', (req, res) => {
   const url = `/q/${req.params.token}`;
   if (!assessment.consent_at) return res.redirect(url);
   const language = lang(assessment.language);
-
-  // Every submit keeps what has been answered so far.
-  const draft = parsePartialAnswers(req.body);
-  saveDraft(assessment.id, draft);
-  if (req.body.intent === 'save') {
-    return send(res, views.savedPage({ language, expires: assessment.expires_at.slice(0, 10) }));
-  }
-
-  const { answers, errors } = parseAnswers(req.body);
-  if (errors.length) {
-    return send(res, views.questionnairePage({ action: url, language, switchUrl: url, answers: draft, error: STRINGS[language].missing(errors.length) }), 400);
-  }
-
+  const pageIndex = pageIndexFrom(req, parseJson(assessment.draft_json, {}));
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
-  const done = completeScreening(assessment, patient, answers);
-  if (!done) return invalidLink(res);
+
+  const step = handlePage(assessment, patient, pageIndex, req.body, language);
+  if (step.saved) return send(res, views.savedPage({ language, expires: assessment.expires_at.slice(0, 10) }));
+  if (step.back !== undefined) return res.redirect(`${url}?page=${step.back}`);
+  if (step.redisplay) {
+    const { pageIndex: at = pageIndex, ...rest } = step.redisplay;
+    return send(res, views.questionnairePage({ action: url, pageIndex: at, language, switchUrl: url, ...rest }), 400);
+  }
+  if (step.breakAfter !== undefined) {
+    return send(res, views.breakPage({ language, continueUrl: `${url}?page=${step.breakAfter}`, stopAction: `${url}?page=${step.breakAfter}` }));
+  }
+  if (step.next !== undefined) return res.redirect(`${url}?page=${step.next}`);
 
   // Show the patient the thank-you page straight away; email in the background.
-  send(res, views.thankYouPage({ safetyFlag: done.results.safetyFlag, language }));
-  emailResults(assessment, patient, done);
+  send(res, views.thankYouPage({ safetyFlag: step.done.results.safetyFlag, language }));
+  emailResults(assessment, patient, step.done);
 });
 
 // ---------- Start ----------

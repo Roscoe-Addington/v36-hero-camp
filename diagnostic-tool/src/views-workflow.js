@@ -119,6 +119,8 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         ? html`<div class="alert" role="alert"><strong>Possible urgent neurological symptoms:</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. Ask when they started; if within the last days, arrange emergency assessment.</div>`
         : ''}
 
+      ${qualityBox(r.quality)}
+
       <section class="card">
         <h2>2. Intake interview</h2>
         <p class="hint">History, family history, medical history, social situation and mental status examination.</p>
@@ -329,6 +331,25 @@ function amendmentHistory(amendments) {
   return html`<section class="card">
     <h2>Change history</h2>
     <ul>${amendments.map((a) => html`<li>Reopened ${a.reopened_at} by ${a.by} (finalized ${a.previously_finalized_at}). Reason: ${a.reason}. Diagnoses before: ${a.diagnoses_before.join('; ') || 'none'}.</li>`)}</ul>
+  </section>`;
+}
+
+// ---------- Response quality (tired or careless answering) ----------
+
+function qualityBox(q) {
+  if (!q) return '';
+  return html`<section class="card ${q.flags.length ? 'quality-warn' : ''}">
+    <h2>Response quality</h2>
+    <p><strong>${q.summary}</strong> ${q.flags.length ? 'The scores are unchanged; check these answers in the interview.' : ''}</p>
+    ${q.flags.length ? html`<ul class="conflicts">${q.flags.map((f) => html`<li><span class="badge ${f.kind === 'Contradiction' ? 'danger' : 'warn'}">${f.kind}</span> ${f.text}</li>`)}</ul>` : ''}
+    <details><summary>Time per part${q.mode === 'onsite' ? ' (on site: speed is not checked)' : ''}</summary>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Part</th><th>Time</th><th>Seconds per question</th></tr></thead>
+        <tbody>${q.pages.map((p) => html`<tr><td>${p.part}</td><td>${p.seconds === null ? '–' : `${Math.floor(p.seconds / 60)} min ${p.seconds % 60} s`}</td><td>${p.perQuestion ?? '–'}</td></tr>`)}</tbody>
+      </table></div>
+      ${q.totalMinutes !== null ? html`<p class="hint">Total answering time: ${q.totalMinutes} minutes (breaks between parts not included).</p>` : ''}
+      ${q.tiredness.length ? html`<p class="hint">Tiredness ratings: ${q.tiredness.map((t) => `${t.value}/10 after part ${t.part}`).join(', ')}.</p>` : ''}
+    </details>
   </section>`;
 }
 
@@ -632,6 +653,7 @@ export function finalReportPage({ clinician, c, suggestions }) {
           <li>MoCA: ${m ? `${m.adjusted}/30 (${m.band})` : 'not given'}</li>
           <li>Personality screen: ${suggestions.personality.score}/8 ${suggestions.personality.positive ? '(positive)' : ''}</li>
           <li>Differential screening, positive: ${r.differential?.summary.flagged.join('; ') || 'none'}</li>
+          <li>Response quality: ${r.quality?.summary ?? 'not recorded'}</li>
         </ul>
         ${suggestions.neuroReferral.length ? html`<h3>Neurological referral</h3><ul>${suggestions.neuroReferral.map((n) => html`<li>${n.finding}. ${n.action}</li>`)}</ul>` : ''}
         ${suggestions.outOfScope.length ? html`<h3>Findings outside this app</h3><ul>${suggestions.outOfScope.map((o) => html`<li>${o.condition}</li>`)}</ul>` : ''}

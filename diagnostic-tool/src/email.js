@@ -127,6 +127,7 @@ export function buildReportText({ patient, results, suggestions, completedAt, re
 
   lines.push(
     'INTAKE SCREENING RESULT — NOT A DIAGNOSIS',
+    ...(results.quality ? [`Response quality: ${results.quality.summary}`, ...results.quality.flags.map((f) => `  - ${f.kind}: ${f.text}`)] : []),
     '',
     'Patient',
     `  Name:            ${patient.first_name} ${patient.last_name}`,

@@ -79,6 +79,7 @@ const NEW_ASSESSMENT_COLUMNS = {
   draft_json: 'TEXT', // answers saved part-way through the questionnaire
   consent_at: 'TEXT', // when the patient confirmed they had read the information
   amendments_json: 'TEXT', // history of reopening a finalized assessment
+  meta_json: 'TEXT', // questionnaire timing, tiredness ratings, contradictions (response quality)
 };
 const existing = new Set(db.prepare('PRAGMA table_info(assessments)').all().map((c) => c.name));
 for (const [name, type] of Object.entries(NEW_ASSESSMENT_COLUMNS)) {

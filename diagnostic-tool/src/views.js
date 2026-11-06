@@ -15,6 +15,9 @@ import {
   PHQ_DIFFICULTY_ID,
   GAD_DIFFICULTY_ID,
   SCREENING_SECTIONS,
+  PAGES,
+  isShown,
+  progress,
 } from './questionnaire.js';
 import { CLINICIAN_CHECKLIST, LIKELIHOOD } from './scoring.js';
 import { STATUS } from './differential.js';
@@ -58,7 +61,7 @@ export function html(strings, ...values) {
 
 // ---------- Shared layout ----------
 
-export function layout({ title, clinician, body, language = 'en' }) {
+export function layout({ title, clinician, body, language = 'en', skipScript = false }) {
   return html`<!doctype html>
 <html lang="${language}">
   <head>
@@ -67,6 +70,7 @@ export function layout({ title, clinician, body, language = 'en' }) {
     <meta name="robots" content="noindex, nofollow" />
     <title>${title}</title>
     <link rel="stylesheet" href="/style.css" />
+    ${skipScript ? html`<script type="module" src="/skip.js"></script>` : ''}
   </head>
   <body>
     <header class="topbar">
@@ -416,12 +420,13 @@ export function screeningSections(results) {
 
 // ---------- Patient: the questionnaire ----------
 
-function radioGroup(id, question, options, number, selected, language) {
-  return html`<fieldset class="question">
+function radioGroup(id, question, options, number, selected, language, { showIf, shown = true, missing = false, required = true } = {}) {
+  const req = required && shown ? html`required` : '';
+  return html`<fieldset class="question${missing ? ' missing' : ''}${showIf ? ' follow-up' : ''}" ${showIf ? html`data-show-if="${showIf.id}:${showIf.values.join(',')}"` : ''} ${shown ? '' : html`hidden`}>
     <legend>${number ? html`<span class="num">${number}.</span> ` : ''}${question}</legend>
     <div class="options">
       ${options.map(
-        (o) => html`<label class="choice"><input type="radio" name="${id}" value="${o.value}" required ${selected === o.value ? html`checked` : ''} /> ${optionText(language, o.label)}</label>`
+        (o) => html`<label class="choice"><input type="radio" name="${id}" value="${o.value}" ${req} ${selected === o.value ? html`checked` : ''} /> ${optionText(language, o.label)}</label>`
       )}
     </div>
   </fieldset>`;
@@ -435,27 +440,39 @@ function languageSwitch(language, switchUrl) {
     .map(([code, name]) => html`<a href="${switchUrl}?lang=${code}" lang="${code}">${name}</a>`)}</p>`;
 }
 
-// action: where the form is sent. clinician: set when the clinician fills it
-// in on site (then the clinician's menu and the consent confirmation show).
-// answers: answers already given (from a saved draft or a failed submit).
-export function questionnairePage({ action, error, clinician, patient, language = 'en', answers = {}, switchUrl, consentDone }) {
+// One part of the questionnaire per page.
+// action: where the form is sent (the page number is added). clinician: set
+// when the clinician fills it in on site (then the clinician's menu and the
+// consent confirmation show). answers: all answers given so far.
+export function questionnairePage({ action, pageIndex = 0, error, missing = [], clinician, patient, language = 'en', answers = {}, switchUrl, consentDone }) {
   const t = STRINGS[language];
-  const pick = (id) => answers[id];
+  const page = PAGES[pageIndex];
+  const last = pageIndex === PAGES.length - 1;
+  const { answered, total } = progress(answers);
+  const [sectionTitle, sectionIntro] = page.section ? sectionText(language, page.section) : [null, t[page.intro]];
+  const tiredOptions = Array.from({ length: 11 }, (_, n) => ({ value: n, label: String(n) }));
   return layout({
     title: t.title,
     clinician,
     language,
+    skipScript: true,
     body: html`
       ${languageSwitch(language, switchUrl)}
       <h1>${clinician ? html`Intake screening: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
-      ${clinician
-        ? html`<p class="note">On-site screening (${LANGUAGES[language]}). Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
-        : html`<p>${t.intro}</p>`}
-      <p class="crisis">${t.crisis}</p>
+      ${pageIndex === 0
+        ? clinician
+          ? html`<p class="note">On-site screening (${LANGUAGES[language]}). Read the questions to the patient and record their answers, or let the patient answer on this device. Answer from the patient's point of view.</p>`
+          : html`<p>${t.intro}</p>`
+        : ''}
+
+      <div class="progress-bar">
+        <p>${t.progress(page.part, PAGES.length, answered, total)}</p>
+        <progress max="${total}" value="${answered}" aria-label="${t.progress(page.part, PAGES.length, answered, total)}"></progress>
+      </div>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
 
-      <form method="post" action="${action}">
-        ${clinician && !consentDone
+      <form method="post" action="${action}?page=${pageIndex}">
+        ${clinician && !consentDone && pageIndex === 0
           ? html`<section class="card">
               <h2>Information to the patient</h2>
               <ul>${STRINGS[language].consent.map((p) => html`<li>${p}</li>`)}</ul>
@@ -464,40 +481,54 @@ export function questionnairePage({ action, error, clinician, patient, language 
           : ''}
 
         <section class="card">
-          <h2>${t.part} 1</h2>
-          <p><strong>${t.twoWeeks}</strong></p>
-          ${PHQ9_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
-          ${radioGroup(PHQ_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(PHQ_DIFFICULTY_ID), language)}
+          <h2>${t.part} ${page.part}${sectionTitle ? html`: ${sectionTitle}` : ''}</h2>
+          ${sectionIntro ? html`<p>${page.section ? sectionIntro : html`<strong>${sectionIntro}</strong>`}</p>` : ''}
+          ${page.items.map((item, i) =>
+            radioGroup(
+              item.id,
+              item.difficulty ? difficultyText(language, item.text) : itemText(language, item),
+              item.options,
+              // Only main questions are numbered; a follow-up belongs to the question above it.
+              item.difficulty || item.showIf ? null : page.items.slice(0, i + 1).filter((x) => !x.showIf && !x.difficulty).length,
+              answers[item.id],
+              language,
+              { showIf: item.showIf, shown: isShown(item, answers), missing: missing.includes(item.id) }
+            )
+          )}
         </section>
 
-        <section class="card">
-          <h2>${t.part} 2</h2>
-          <p><strong>${t.twoWeeks}</strong></p>
-          ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
-          ${radioGroup(GAD_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(GAD_DIFFICULTY_ID), language)}
-        </section>
+        ${page.tiredness && !clinician
+          ? html`<section class="card tired">
+              ${radioGroup('tired', t.tiredQuestion, tiredOptions, null, undefined, language, { required: false })}
+              <p class="hint">${t.tiredScale}</p>
+            </section>`
+          : ''}
 
-        <section class="card">
-          <h2>${t.part} 3</h2>
-          <p>${t.sixMonths}</p>
-          ${GAD_CRITERIA_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), YES_NO_OPTIONS, i + 1, pick(item.id), language))}
-        </section>
-
-        ${SCREENING_SECTIONS.map((section, n) => {
-          const [title, intro] = sectionText(language, section);
-          return html`<section class="card">
-            <h2>${t.part} ${n + 4}: ${title}</h2>
-            ${intro ? html`<p>${intro}</p>` : ''}
-            ${section.items.map((item, i) => radioGroup(item.id, itemText(language, item), item.options, i + 1, pick(item.id), language))}
-          </section>`;
-        })}
-
-        <div class="form-buttons">
-          <button class="big">${clinician ? 'Save answers and score' : t.submit}</button>
-          <button class="secondary" name="intent" value="save" formnovalidate>${clinician ? 'Save draft and continue later' : t.save}</button>
+        <div class="page-buttons">
+          ${pageIndex > 0 ? html`<button class="secondary" name="intent" value="back" formnovalidate>${t.back}</button>` : html`<span></span>`}
+          <button>${last ? (clinician ? 'Save answers and score' : t.submit) : t.next}</button>
         </div>
+        <p class="save-later"><button class="link" name="intent" value="save" formnovalidate>${clinician ? 'Save draft and continue later' : t.save}</button></p>
       </form>
-      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003). ${t.translationNote}</p>`,
+      <p class="crisis">${t.crisis}</p>
+      ${last ? html`<p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003).</p>` : ''}
+      ${t.translationNote ? html`<p class="hint">${t.translationNote}</p>` : ''}`,
+  });
+}
+
+export function breakPage({ language = 'en', continueUrl, stopAction }) {
+  const t = STRINGS[language];
+  return layout({
+    title: t.breakTitle,
+    language,
+    body: html`
+      <h1>${t.breakTitle}</h1>
+      <p>${t.breakText}</p>
+      <div class="page-buttons">
+        <form method="post" action="${stopAction}"><button class="secondary" name="intent" value="stop">${t.stopNow}</button></form>
+        <a class="button" href="${continueUrl}">${t.continueNow}</a>
+      </div>
+      <p class="crisis">${t.crisis}</p>`,
   });
 }
 

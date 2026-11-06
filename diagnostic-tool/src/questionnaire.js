@@ -102,13 +102,13 @@ export const SCREENING_SECTIONS = [
     intro: 'These questions are about your whole life, not only the last few weeks.',
     items: [
       { id: 'bp1', text: 'Have you ever had a period of at least 4 days in a row when you felt unusually happy, "high", full of energy or irritable — clearly different from your normal self?', options: YES_NO_OPTIONS },
-      { id: 'bp2', text: 'During such a period, did you need much less sleep than usual but still not feel tired?', options: YES_NO_NA_OPTIONS },
-      { id: 'bp3', text: 'During such a period, did other people notice the change, or did it cause problems (for example at work, with money or in relationships)?', options: YES_NO_NA_OPTIONS },
+      { id: 'bp2', text: 'During such a period, did you need much less sleep than usual but still not feel tired?', options: YES_NO_NA_OPTIONS, showIf: { id: 'bp1', values: [1] }, skipValue: 2 },
+      { id: 'bp3', text: 'During such a period, did other people notice the change, or did it cause problems (for example at work, with money or in relationships)?', options: YES_NO_NA_OPTIONS, showIf: { id: 'bp1', values: [1] }, skipValue: 2 },
       { id: 'pdd1', text: 'Have you felt down or depressed on most days for at least the past 2 years?', options: YES_NO_OPTIONS },
       { id: 'cyclo1', text: 'For at least the past 2 years, has your mood often swung between periods of feeling unusually up or energetic and periods of feeling down?', options: YES_NO_OPTIONS },
       { id: 'psy1', text: 'Have you heard voices or seen things that other people could not hear or see, or strongly felt that others were watching you or trying to harm you?', options: YES_NO_OPTIONS },
-      { id: 'psy2', text: 'If so: did these experiences happen ONLY at times when your mood was extremely low or extremely high?', options: YES_NO_NA_OPTIONS },
-      { id: 'psy3', text: 'If so: have these experiences gone on for more than a month in total?', options: YES_NO_NA_OPTIONS },
+      { id: 'psy2', text: 'If so: did these experiences happen ONLY at times when your mood was extremely low or extremely high?', options: YES_NO_NA_OPTIONS, showIf: { id: 'psy1', values: [1] }, skipValue: 2 },
+      { id: 'psy3', text: 'If so: have these experiences gone on for more than a month in total?', options: YES_NO_NA_OPTIONS, showIf: { id: 'psy1', values: [1] }, skipValue: 2 },
     ],
   },
   {
@@ -178,7 +178,7 @@ export const SCREENING_SECTIONS = [
           { value: 2, label: 'Yes, more than 12 months ago' },
         ],
       },
-      { id: 'grief2', text: 'If so: on most days, do you still feel intense longing for the person, or are you preoccupied with thoughts of them?', options: YES_NO_NA_OPTIONS },
+      { id: 'grief2', text: 'If so: on most days, do you still feel intense longing for the person, or are you preoccupied with thoughts of them?', options: YES_NO_NA_OPTIONS, showIf: { id: 'grief1', values: [1, 2] }, skipValue: 2 },
       { id: 'pmdd1', text: 'If you have menstrual periods: do these problems mainly come in the week before your period and get better within a few days after it starts?', options: YES_NO_NA_OPTIONS },
     ],
   },
@@ -187,7 +187,7 @@ export const SCREENING_SECTIONS = [
     intro: '',
     items: [
       { id: 'panic1', text: 'In the past 4 weeks, have you had an attack of intense fear or discomfort that came on suddenly and peaked within minutes (for example racing heart, shortness of breath, shaking, or feeling you might die or lose control)?', options: YES_NO_OPTIONS },
-      { id: 'panic2', text: 'Have you worried a lot about having another attack, or changed what you do to avoid attacks?', options: YES_NO_NA_OPTIONS },
+      { id: 'panic2', text: 'Have you worried a lot about having another attack, or changed what you do to avoid attacks?', options: YES_NO_NA_OPTIONS, showIf: { id: 'panic1', values: [1] }, skipValue: 2 },
       { id: 'soc1', text: 'Do you strongly fear or avoid social situations where you might be watched, judged or embarrassed (for example speaking up, meeting new people, eating in front of others)?', options: YES_NO_OPTIONS },
       { id: 'soc2', text: 'Is your worry mostly about what other people think of you?', options: YES_NO_OPTIONS },
       { id: 'ocd1', text: 'Are you bothered by unwanted thoughts, images or urges that keep coming back even though you try to stop them (for example fear of germs or of causing harm)?', options: YES_NO_OPTIONS },
@@ -209,12 +209,12 @@ export const SCREENING_SECTIONS = [
       'Sometimes things happen to people that are unusually or especially frightening, horrible, or traumatic. For example: a serious accident or fire; a physical or sexual assault or abuse; an earthquake or flood; a war; seeing someone be killed or seriously injured; having a loved one die through homicide or suicide. You do not need to describe what happened.',
     items: [
       { id: 'ptsd0', text: 'Have you ever experienced this kind of event?', options: YES_NO_OPTIONS },
-      { id: 'ptsd_recent', text: 'If yes: did the (most recent) event happen within the past month?', options: YES_NO_NA_OPTIONS },
-      { id: 'ptsd1', text: 'If yes, in the past month, have you had nightmares about the event(s) or thought about the event(s) when you did not want to?', options: YES_NO_NA_OPTIONS },
-      { id: 'ptsd2', text: 'In the past month, have you tried hard not to think about the event(s) or gone out of your way to avoid situations that reminded you of the event(s)?', options: YES_NO_NA_OPTIONS },
-      { id: 'ptsd3', text: 'In the past month, have you been constantly on guard, watchful, or easily startled?', options: YES_NO_NA_OPTIONS },
-      { id: 'ptsd4', text: 'In the past month, have you felt numb or detached from people, activities, or your surroundings?', options: YES_NO_NA_OPTIONS },
-      { id: 'ptsd5', text: 'In the past month, have you felt guilty or unable to stop blaming yourself or others for the event(s) or any problems the event(s) may have caused?', options: YES_NO_NA_OPTIONS },
+      { id: 'ptsd_recent', text: 'If yes: did the (most recent) event happen within the past month?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
+      { id: 'ptsd1', text: 'If yes, in the past month, have you had nightmares about the event(s) or thought about the event(s) when you did not want to?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
+      { id: 'ptsd2', text: 'In the past month, have you tried hard not to think about the event(s) or gone out of your way to avoid situations that reminded you of the event(s)?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
+      { id: 'ptsd3', text: 'In the past month, have you been constantly on guard, watchful, or easily startled?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
+      { id: 'ptsd4', text: 'In the past month, have you felt numb or detached from people, activities, or your surroundings?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
+      { id: 'ptsd5', text: 'In the past month, have you felt guilty or unable to stop blaming yourself or others for the event(s) or any problems the event(s) may have caused?', options: YES_NO_NA_OPTIONS, showIf: { id: 'ptsd0', values: [1] }, skipValue: 2 },
     ],
   },
   {
@@ -249,7 +249,7 @@ export const SCREENING_SECTIONS = [
     intro: 'If any of the problems below started suddenly in the last few days, call 112 now.',
     items: [
       { id: 'cog1', text: 'Have you, or people close to you, noticed that your memory or thinking has got worse during the past year?', options: YES_NO_OPTIONS },
-      { id: 'cog2', text: 'Do memory or thinking problems make it harder to manage everyday things (for example money, medicines, appointments or cooking)?', options: YES_NO_OPTIONS },
+      { id: 'cog2', text: 'Do memory or thinking problems make it harder to manage everyday things (for example money, medicines, appointments or cooking)?', options: YES_NO_OPTIONS, showIf: { id: 'cog1', values: [1] }, skipValue: 0 },
       { id: 'neuro1', text: 'Have you had seizures (fits) or unexplained blackouts?', options: YES_NO_OPTIONS },
       { id: 'neuro2', text: 'Have you had new weakness, numbness or paralysis in your face, an arm or a leg?', options: YES_NO_OPTIONS },
       { id: 'neuro3', text: 'Have you had new trouble speaking or understanding speech, or sudden loss of vision?', options: YES_NO_OPTIONS },
@@ -314,4 +314,82 @@ export function parsePartialAnswers(body) {
     if (body?.[field.id] !== undefined && body[field.id] !== '' && field.allowed.includes(value)) answers[field.id] = value;
   }
   return answers;
+}
+
+// ---------- Pages, skip logic and progress ----------
+//
+// The questionnaire is shown one part per page. Follow-up questions with a
+// `showIf` rule are only asked when the earlier answer makes them relevant;
+// otherwise the server stores their `skipValue` ("Does not apply" or "No"),
+// so a skipped question never changes a score.
+
+const PHQ_PAGE = [
+  ...PHQ9_ITEMS.map((i) => ({ ...i, options: FREQUENCY_OPTIONS })),
+  { id: PHQ_DIFFICULTY_ID, text: DIFFICULTY_QUESTION, options: DIFFICULTY_OPTIONS, difficulty: true },
+];
+const GAD_PAGE = [
+  ...GAD7_ITEMS.map((i) => ({ ...i, options: FREQUENCY_OPTIONS })),
+  { id: GAD_DIFFICULTY_ID, text: DIFFICULTY_QUESTION, options: DIFFICULTY_OPTIONS, difficulty: true },
+];
+
+// After these parts the patient is asked how tired they feel.
+export const TIREDNESS_AFTER = [3, 6];
+export const TIREDNESS_BREAK_AT = 7; // 7 or more out of 10 suggests a break
+
+export const PAGES = [
+  { part: 1, intro: 'twoWeeks', items: PHQ_PAGE },
+  { part: 2, intro: 'twoWeeks', items: GAD_PAGE },
+  { part: 3, intro: 'sixMonths', items: GAD_CRITERIA_ITEMS.map((i) => ({ ...i, options: YES_NO_OPTIONS })) },
+  ...SCREENING_SECTIONS.map((section, n) => ({ part: n + 4, section, items: section.items })),
+].map((page) => ({ ...page, tiredness: TIREDNESS_AFTER.includes(page.part) }));
+
+const ALL_ITEMS = PAGES.flatMap((p) => p.items);
+
+// Is this question asked, given the answers so far? A follow-up whose
+// earlier question has not been answered yet is shown (to be safe).
+export function isShown(item, answers) {
+  if (!item.showIf) return true;
+  const parent = answers[item.showIf.id];
+  return parent === undefined || item.showIf.values.includes(parent);
+}
+
+// Fills in skipped follow-up questions. Returns the new answers and a list of
+// contradictions: a follow-up answered "Yes" although the earlier answer
+// means it does not apply (possible when the page is used without JavaScript).
+export function applySkips(answers) {
+  const out = { ...answers };
+  const contradictions = [];
+  for (const item of ALL_ITEMS) {
+    if (!item.showIf || isShown(item, out)) continue;
+    if (out[item.id] === 1) contradictions.push({ parent: item.showIf.id, child: item.id });
+    out[item.id] = item.skipValue;
+  }
+  return { answers: out, contradictions };
+}
+
+// Answers for one page only (valid values), and which shown questions are missing.
+export function parsePage(pageIndex, body, answersSoFar) {
+  const page = PAGES[pageIndex];
+  const fields = new Map(ALL_FIELDS.map((f) => [f.id, f]));
+  const pageAnswers = {};
+  for (const item of page.items) {
+    const raw = body?.[item.id];
+    const value = Number(raw);
+    if (raw !== undefined && raw !== '' && fields.get(item.id).allowed.includes(value)) pageAnswers[item.id] = value;
+  }
+  const merged = applySkips({ ...answersSoFar, ...pageAnswers });
+  const missing = page.items.filter((item) => isShown(item, merged.answers) && merged.answers[item.id] === undefined).map((i) => i.id);
+  return { answers: merged.answers, missing, contradictions: merged.contradictions };
+}
+
+// The first page that still has an unanswered question (to resume there).
+export function firstOpenPage(answers) {
+  const index = PAGES.findIndex((p) => p.items.some((item) => isShown(item, answers) && answers[item.id] === undefined));
+  return index === -1 ? PAGES.length - 1 : index;
+}
+
+// How far the patient has come, counting only questions that are asked.
+export function progress(answers) {
+  const shown = ALL_ITEMS.filter((item) => isShown(item, answers));
+  return { answered: shown.filter((i) => answers[i.id] !== undefined).length, total: shown.length };
 }

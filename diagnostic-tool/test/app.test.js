@@ -42,6 +42,14 @@ const post = (path, fields, cookie) =>
     body: new URLSearchParams(Object.entries(fields).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : [[k, v]]))),
   });
 
+// Answers the questionnaire one page at a time (10 pages), like a patient
+// clicking "Next". Each page only takes its own questions from `fields`.
+async function answerPages(path, fields, cookie) {
+  let res;
+  for (let page = 0; page < 10; page++) res = await post(`${path}?page=${page}`, fields, cookie);
+  return res;
+}
+
 test('clinician pages require login', async () => {
   const res = await fetch(`${base}/clinician`, { redirect: 'manual' });
   assert.equal(res.status, 302);
@@ -102,7 +110,7 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
   assert.equal((await post(`${qPath}/consent`, {})).status, 400);
   assert.equal((await post(`${qPath}/consent`, { agree: 'yes' })).status, 302);
 
-  const submit = await post(qPath, answers);
+  const submit = await answerPages(qPath, answers);
   assert.equal(submit.status, 200);
   const thanks = await submit.text();
   assert.ok(thanks.includes('112'), 'safety answer shows crisis info to the patient');
@@ -188,7 +196,7 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
 
   // Clinician records the answers: depression + memory complaint
   assert.equal((await post(screeningPath, makeAnswers({ phq1: 2 }), cookie)).status, 400, 'patient information must be confirmed');
-  const saved = await post(screeningPath, { ...makeAnswers({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 3, phq6: 2, cog1: 1, cog2: 1 }), consent_given: 'yes' }, cookie);
+  const saved = await answerPages(screeningPath, { ...makeAnswers({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 3, phq6: 2, cog1: 1, cog2: 1 }), consent_given: 'yes' }, cookie);
   assert.equal(saved.status, 302);
   assert.equal(saved.headers.get('location'), casePath);
 
@@ -280,7 +288,7 @@ test('a required risk assessment blocks finalizing until it is done, then gives 
   }, cookie);
   const start = await post(`${created.headers.get('location')}/assessments`, { mode: 'onsite' }, cookie);
   const casePath = start.headers.get('location').replace('/screening', '');
-  await post(`${casePath}/screening`, { ...makeAnswers({ phq2: 3, phq9: 2 }), consent_given: 'yes' }, cookie);
+  await answerPages(`${casePath}/screening`, { ...makeAnswers({ phq2: 3, phq9: 2 }), consent_given: 'yes' }, cookie);
   await post(`${casePath}/interview`, { reason: 'Crisis after break-up' }, cookie);
 
   const blocked = await post(`${casePath}/finalize`, {}, cookie);
@@ -335,7 +343,7 @@ test('patient link: Swedish, save part-way, keep answers when some are missing',
   const partial = await post('/q/swedish-token', { phq1: '3', phq2: '2', phq3: '1' });
   assert.equal(partial.status, 400);
   const page = await partial.text();
-  assert.match(page, new RegExp(`${makeAnswersCount() - 3} frågor är inte besvarade`));
+  assert.match(page, /7 saknas/, 'page 1 has 10 questions, 3 answered');
   assert.match(page, /name="phq3" value="1" required checked/);
 });
 
@@ -365,7 +373,7 @@ test('data protection: edit details, audit log, reopen with history, delete with
   // Finalize, then reopen: needs a reason, and the history is kept
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
   const casePath = start.headers.get('location').replace('/screening', '');
-  await post(`${casePath}/screening`, { ...makeAnswers({}), consent_given: 'yes' }, cookie);
+  await answerPages(`${casePath}/screening`, { ...makeAnswers({}), consent_given: 'yes' }, cookie);
   await post(`${casePath}/interview`, { reason: 'Check-up' }, cookie);
   assert.equal((await post(`${casePath}/finalize`, {}, cookie)).status, 302);
   assert.equal((await post(`${casePath}/reopen`, {}, cookie)).status, 400);
@@ -397,7 +405,7 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
 
   // Intake screening on site: PHQ-9 15
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
-  await post(start.headers.get('location'), { ...makeAnswers({ phq1: 3, phq2: 3, phq3: 3, phq4: 3, phq7: 3, gad1: 2, gad2: 2 }), consent_given: 'yes' }, cookie);
+  await answerPages(start.headers.get('location'), { ...makeAnswers({ phq1: 3, phq2: 3, phq3: 3, phq4: 3, phq7: 3, gad1: 2, gad2: 2 }), consent_given: 'yes' }, cookie);
 
   // Follow-up link in Swedish
   const page = await (await post(`${patientPath}/followups`, { mode: 'link', language: 'sv' }, cookie)).text();
@@ -428,4 +436,46 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
   await new Promise((r) => setTimeout(r, 100));
   const followupEmails = readdirSync('outbox').filter((f) => f.endsWith('-followup.txt')).map((f) => readFileSync(`outbox/${f}`, 'utf8'));
   assert.ok(followupEmails.some((e) => e.includes('URGENT: safety alert in follow-up (Ström)')));
+});
+
+test('patient link page by page: skip logic, tiredness break, response-quality box', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Tove', last_name: 'Berg', personal_number: '19900505-0000', gender: 'Female',
+    age: '36', education: 'Upper secondary school', employed: '1',
+  }, cookie);
+  const page = await (await post(`${created.headers.get('location')}/assessments`, { mode: 'link' }, cookie)).text();
+  const qPath = new URL(page.match(/value="(http[^"]+\/q\/[^"]+)"/)[1]).pathname;
+  await post(`${qPath}/consent`, { agree: 'yes' });
+
+  // No JavaScript here: psy1 "No" but psy2 "Yes" is a contradiction; AUDIT-C "never" but drinks reported is another.
+  const fields = makeAnswers({ auditc1: 0, auditc2: 2, psy1: 0, psy2: 1, tired: 8 });
+  let breakSeen = false;
+  let last;
+  for (let i = 0; i < 10; i++) {
+    const form = await (await fetch(`${base}${qPath}?page=${i}`)).text();
+    assert.ok(form.includes(`Part ${i + 1} of 10`), `progress shown on page ${i + 1}`);
+    if (i === 0) assert.ok(form.includes('src="/skip.js"'));
+    last = await post(`${qPath}?page=${i}`, fields);
+    if (i === 2) {
+      assert.equal(last.status, 200);
+      const html = await last.text();
+      assert.ok(html.includes('Time for a break?'), 'tiredness 8/10 after part 3 offers a break');
+      breakSeen = true;
+    }
+  }
+  assert.ok(breakSeen);
+  assert.ok((await last.text()).includes('Thank you'));
+
+  const row = db.prepare("SELECT id, results_json FROM assessments WHERE token_hash IS NOT NULL ORDER BY id DESC LIMIT 1").get();
+  const quality = JSON.parse(row.results_json).quality;
+  const kinds = quality.flags.map((f) => f.kind);
+  assert.ok(kinds.includes('Fast answering'), 'pages answered within milliseconds');
+  assert.equal(kinds.filter((k) => k === 'Contradiction').length, 2);
+  assert.ok(quality.flags.some((f) => f.text.includes('8/10 after part 3 and continued without a break')));
+
+  const caseHtml = await (await fetch(`${base}/clinician/assessments/${row.id}`, { headers: { cookie } })).text();
+  assert.ok(caseHtml.includes('Response quality'));
+  assert.ok(caseHtml.includes('signs to check in the interview'));
 });
