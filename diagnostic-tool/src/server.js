@@ -519,7 +519,8 @@ function onsitePage(req, c, extra = {}) {
 clinician.get('/assessments/:id/screening', (req, res) => {
   const c = loadCase(req);
   if (!c) return notFound(req, res);
-  if (c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+  // Read-only users do not open the form: opening it records a start time.
+  if (c.readOnly || c.assessment.completed_at || c.assessment.mode !== 'onsite') return res.redirect(`/clinician/assessments/${c.assessment.id}`);
   markShown(c.assessment, pageIndexFrom(req, parseJson(c.assessment.draft_json, {})));
   send(res, onsitePage(req, c));
 });

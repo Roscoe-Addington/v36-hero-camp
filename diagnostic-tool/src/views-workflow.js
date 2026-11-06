@@ -78,6 +78,7 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
     <h1>Assessment</h1>
     <p class="hint">${patientLine(patient)} · ${assessment.mode === 'onsite' ? 'On site' : 'Link sent to patient'} · started ${assessment.created_at}</p>
     ${progress(c)}
+    ${c.readOnly ? html`<p class="note"><strong>Read-only access.</strong> Only the treating clinician can make changes.</p>` : ''}
     ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${e}</li>`)}</ul></div>` : ''}`;
 
   // Screening not done yet: nothing else to show.
@@ -89,7 +90,7 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         <section class="card">
           <h2>1. Intake screening</h2>
           ${assessment.mode === 'onsite'
-            ? html`<p>The on-site screening has not been finished.</p><p><a class="button" href="${base}/screening">Continue the screening</a></p>`
+            ? html`<p>The on-site screening has not been finished.</p>${c.readOnly ? '' : html`<p><a class="button" href="${base}/screening">Continue the screening</a></p>`}`
             : html`<p>Waiting for the patient to answer the questionnaire link. You will get an email when it is done.</p>`}
         </section>`,
     });
@@ -104,7 +105,6 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
     title: `Assessment — ${patient.last_name}`,
     clinician,
     body: html`${header}
-      ${c.readOnly ? html`<p class="note"><strong>Read-only access.</strong> Only the treating clinician can make changes.</p>` : ''}
       ${finalized
         ? html`<div class="note">
             <p>This assessment was finalized ${assessment.finalized_at} and is locked. <a href="${base}/final">Open the final report</a>.</p>
