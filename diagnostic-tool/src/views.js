@@ -127,7 +127,7 @@ export function dashboardPage({ clinician, patients }) {
       <p><a class="button" href="/clinician/patients/new">${t('+ Add patient')}</a></p>
       ${patients.length === 0
         ? html`<p>${t('No patients yet.')}</p>`
-        : html`<table>
+        : html`<div class="table-scroll"><table>
             <thead><tr><th>${t('Name')}</th><th>${t('Age')}</th><th>${t('Latest questionnaire')}</th></tr></thead>
             <tbody>
               ${patients.map(
@@ -138,7 +138,7 @@ export function dashboardPage({ clinician, patients }) {
                 </tr>`
               )}
             </tbody>
-          </table>`}`,
+          </table></div>`}`,
   });
 }
 
@@ -266,7 +266,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
       <h2>${t('Assessments')}</h2>
       ${assessments.length === 0
         ? html`<p>${t('None yet.')}</p>`
-        : html`<table>
+        : html`<div class="table-scroll"><table>
             <thead><tr><th>${t('Created')}</th><th>${t('How')}</th><th>${t('Status')}</th><th>${t('Depression')}</th><th>${t('Anxiety')}</th></tr></thead>
             <tbody>
               ${assessments.map((a) => {
@@ -288,7 +288,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
                 </tr>`;
               })}
             </tbody>
-          </table>`}
+          </table></div>`}
 
       ${followupSection(t, patient, assessments, followups, followupLink, access.owner)}
 
@@ -325,10 +325,10 @@ function symptomList(t, list) {
 
 function itemTable(t, items) {
   // Question texts in Swedish come from the patient translations (i18n.js).
-  return html`<table class="items">
+  return html`<div class="table-scroll"><table class="items">
     <thead><tr><th>${t('Question')}</th><th>${t('Answer')}</th><th>${t('Score')}</th></tr></thead>
     <tbody>${items.map((i) => html`<tr><td>${itemText(t.language, findItem(i.id) ?? i)}</td><td>${t(i.answer)}</td><td>${i.score}</td></tr>`)}</tbody>
-  </table>`;
+  </table></div>`;
 }
 
 // ---------- Clinician: differential diagnosis section ----------
@@ -356,7 +356,7 @@ function differentialSection(t, differential) {
       ? html`<div class="alert" role="alert"><strong>${t('Priority:')}</strong> ${t('screen positive for {list}.', { list: summary.priority.join('; ') })}</div>`
       : ''}
 
-    <table class="diff-summary">
+    <div class="table-scroll"><table class="diff-summary">
       <thead><tr><th>${t('Condition')}</th><th>${t('Relevant to')}</th><th>${t('Status')}</th></tr></thead>
       <tbody>
         ${entries.map(
@@ -367,17 +367,17 @@ function differentialSection(t, differential) {
           </tr>`
         )}
       </tbody>
-    </table>
+    </table></div>
 
     <h3>${t('Overlap between depression and anxiety symptoms')}</h3>
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr><th>${t('Shared symptom')}</th><th>${t('Counted for depression')}</th><th>${t('Counted for anxiety')}</th></tr></thead>
       <tbody>
         ${overlap.shared.map(
           (o) => html`<tr><td>${o.symptom}</td><td>${o.onDepressionSide ? t('Yes') : t('No')}</td><td>${o.onAnxietySide ? t('Yes') : t('No')}</td></tr>`
         )}
       </tbody>
-    </table>
+    </table></div>
     ${overlap.notes.map((n) => html`<p class="note">${n}</p>`)}
 
     <h3>${t('Detailed reasoning')}</h3>

@@ -219,6 +219,40 @@ Run the tests:
 npm test
 ```
 
+## Tablets and phones (iPad, Android)
+
+The app is ordinary web pages, so it runs in Safari on iPad and in Chrome on
+Android tablets and phones; nothing needs installing. The pages adapt to the
+screen width, text fields use 16px text (so Safari does not zoom in when you
+tap one), and buttons and answer choices are at least 44px tall on touch
+screens. Wide tables scroll sideways inside their box. On phones the answer
+choices are listed one per row.
+
+To check every page on emulated iPads and Android devices:
+
+```bash
+npm install --no-save playwright && npx playwright install chromium   # once
+npm run check:devices            # all devices
+npm run check:devices -- iPad    # only the iPads
+```
+
+It opens every clinician page, fills in the whole patient questionnaire by
+tapping, downloads the PDF, and reports anything wider than the screen, text
+fields that would make Safari zoom, and controls that are too small to tap.
+Screenshots are saved in `device-check/`.
+
+This uses Chromium with each device's screen size and touch, **not Safari
+itself**. Before use with patients, also try the app on a real iPad and a
+real Android device. Use iPadOS 15.4 or newer and Chrome 105 or newer: older
+versions work, but the chosen answer is not highlighted. Two things to know:
+
+- **`BASE_URL` must be the address the tablet uses.** Form posts from another
+  address are refused (a security check), so set `BASE_URL` to the address
+  people type on the iPad, not `localhost`.
+- **On-site screening on a shared tablet:** the clinician is logged in while
+  the patient answers. Hand over the tablet on the questionnaire page and take
+  it back when the patient is done.
+
 ## Project layout
 
 ```
@@ -409,6 +443,8 @@ Before using it with real patients, at minimum:
       (official PHQ-9 and GAD-7 translations exist, including Swedish).
 - [ ] Check the MDR classification question with your organisation.
 - [ ] Set `CRISIS_TEXT` to the right crisis numbers for your service.
+- [ ] Test on the real iPads and Android devices you will use
+      (`npm run check:devices` covers emulated ones only).
 
 ## Licence of the questionnaires
 
