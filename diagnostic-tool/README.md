@@ -127,6 +127,16 @@ the checklist page explains the code used.
 ### Age rules
 
 - Patients must be 16 or older (the form and the server both check this).
+- **The age comes from the personal number.** The digits before the dash
+  are the date of birth (19480405-XXXX is 5 April 1948). As the clinician
+  types the personal number, the age box is filled in. The server fills it
+  in too when it is left empty, and refuses an age that does not match the
+  date of birth. Also accepted: no dash, the short form YYMMDD-XXXX (with
+  `+` for 100 or older) and coordination numbers (day + 60). A number
+  without a date, such as a reserve number, keeps the typed age
+  (`public/personal-number.js`).
+- The age is saved when the patient is registered or edited. It is not
+  updated by itself on later birthdays.
 - Antisocial personality disorder cannot be met under 18.
 - DMDD cannot be met over 18.
 - Other personality disorders under 18 need features present for 1 year or more.

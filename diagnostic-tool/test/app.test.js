@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
-import { answers as makeAnswers } from './helpers.js';
+import { answers as makeAnswers, pnForAge } from './helpers.js';
 import { findDisorder, criterionIds } from '../src/disorders.js';
 
 process.env.DB_PATH = ':memory:';
@@ -73,7 +73,7 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
     {
       first_name: 'Ada<script>',
       last_name: 'Lovelace',
-      personal_number: '19900101-1234',
+      personal_number: pnForAge(34),
       gender: 'Female',
       age: '34',
       education: 'Upper secondary school',
@@ -173,7 +173,7 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Bo', last_name: 'Berg', personal_number: '19500101-0000', gender: 'Male',
+    first_name: 'Bo', last_name: 'Berg', personal_number: pnForAge(75), gender: 'Male',
     age: '75', education: 'Primary / compulsory school', employed: '0', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
@@ -289,7 +289,7 @@ test('a required risk assessment blocks finalizing until it is done, then gives 
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Sam', last_name: 'Ek', personal_number: '19990101-0000', gender: 'Non-binary / other',
+    first_name: 'Sam', last_name: 'Ek', personal_number: pnForAge(26), gender: 'Non-binary / other',
     age: '26', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const start = await post(`${created.headers.get('location')}/assessments`, { mode: 'onsite' }, cookie);
@@ -362,19 +362,20 @@ test('data protection: edit details, audit log, reopen with history, delete with
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female',
+    first_name: 'Lea', last_name: 'Holm', personal_number: pnForAge(25), gender: 'Female',
     age: '25', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
   const patientId = Number(patientPath.split('/').pop());
 
   // Edit: invalid age refused, valid change saved and logged by field name only
-  const edit = { first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female', age: '15', education: 'Upper secondary school', employed: '1', preferred_language: 'en' };
+  const edit = { first_name: 'Lea', last_name: 'Holm', personal_number: pnForAge(26), gender: 'Female', age: '15', education: 'Upper secondary school', employed: '1', preferred_language: 'en' };
   assert.equal((await post(`${patientPath}/edit`, edit, cookie)).status, 400);
   assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26' }, cookie)).status, 302);
   const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie } })).text();
   assert.ok(auditHtml.includes('Edited patient details'));
-  assert.ok(auditHtml.includes('Changed: age'));
+  assert.ok(auditHtml.includes('Changed: Personal number, Age'), 'stored as field names, shown as labels');
+  assert.equal(db.prepare("SELECT detail FROM audit_log WHERE patient_id = ? AND action = 'edit_patient'").get(patientId).detail, 'Changed: personal_number, age');
   assert.ok(!auditHtml.includes('>26<'), 'the new value itself is not written to the log');
 
   // Employment: "Student" is a third option; anything else is refused
@@ -414,7 +415,7 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Nils', last_name: 'Ström', personal_number: '19800101-0000', gender: 'Male',
+    first_name: 'Nils', last_name: 'Ström', personal_number: pnForAge(46), gender: 'Male',
     age: '46', education: 'University — master level or higher', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
@@ -459,7 +460,7 @@ test('patient link page by page: skip logic, tiredness break, response-quality b
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Tove', last_name: 'Berg', personal_number: '19900505-0000', gender: 'Female',
+    first_name: 'Tove', last_name: 'Berg', personal_number: pnForAge(36), gender: 'Female',
     age: '36', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const page = await (await post(`${created.headers.get('location')}/assessments`, { mode: 'link' }, cookie)).text();
@@ -506,7 +507,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
   const outsider = await loginAs('other@example.com', 'another long password');
 
   const created = await post('/clinician/patients', {
-    first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female',
+    first_name: 'Ida', last_name: 'Sand', personal_number: pnForAge(31), gender: 'Female',
     age: '31', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, owner);
   const patientPath = created.headers.get('location');
@@ -547,7 +548,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
   assert.ok(!readOnlyPatient.includes('Start a new assessment'));
   assert.ok(!readOnlyPatient.includes('Edit details'));
   // The treating clinician can still change things
-  assert.equal((await post(`${patientPath}/edit`, { first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female', age: '31', education: 'Upper secondary school', employed: '1', preferred_language: 'en' }, owner)).status, 302);
+  assert.equal((await post(`${patientPath}/edit`, { first_name: 'Ida', last_name: 'Sand', personal_number: pnForAge(31), gender: 'Female', age: '31', education: 'Upper secondary school', employed: '1', preferred_language: 'en' }, owner)).status, 302);
 
   // Views by the supervisor are logged under their name
   const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie: owner } })).text();
@@ -585,7 +586,7 @@ test('final report as PDF: only when finalized, names the treating clinician, lo
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
-    first_name: 'Åsa', last_name: 'Öberg', personal_number: '19700101-0000', gender: 'Female',
+    first_name: 'Åsa', last_name: 'Öberg', personal_number: pnForAge(56), gender: 'Female',
     age: '56', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
@@ -629,6 +630,9 @@ test('clinician pages in Swedish: login link, language switch saved on the accou
   const id = db.prepare('SELECT id FROM patients WHERE clinician_id = 1 LIMIT 1').get().id;
   const patient = await (await fetch(`${base}/clinician/patients/${id}`, { headers: { cookie } })).text();
   assert.ok(patient.includes('Starta en ny bedömning'));
+  const auditSv = await (await fetch(`${base}/clinician/patients/${id}/audit`, { headers: { cookie } })).text();
+  assert.ok(auditSv.includes('<h1>Logg</h1>'));
+  assert.ok(!/Changed: |<td>(link|onsite), (en|sv)<\/td>/.test(auditSv), 'log details shown in Swedish');
   const form = await (await fetch(`${base}/clinician/patients/new`, { headers: { cookie } })).text();
   assert.ok(form.includes('Studerar'), 'Student option in Swedish');
   // Switch back so other tests are unaffected
@@ -639,7 +643,7 @@ test('clinician pages in Swedish: login link, language switch saved on the accou
 test('patient’s preferred language: chosen at registration, preselected when sending, everything after in that language', async () => {
   const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
-  const details = { first_name: 'Sara', last_name: 'Lind', personal_number: '19880808-0000', gender: 'Female', age: '38', education: 'Upper secondary school', employed: '1' };
+  const details = { first_name: 'Sara', last_name: 'Lind', personal_number: pnForAge(38), gender: 'Female', age: '38', education: 'Upper secondary school', employed: '1' };
 
   // Registration: the choice is required, and a new patient starts with the clinician's language
   const form = await (await fetch(`${base}/clinician/patients/new`, { headers: { cookie } })).text();
@@ -683,4 +687,33 @@ test('patient’s preferred language: chosen at registration, preselected when s
   // ...and back on the clinician pages, the clinician's own language
   const casePage = await (await fetch(base + patientPath, { headers: { cookie } })).text();
   assert.ok(casePage.includes('<html lang="en">'));
+});
+
+test('age from the personal number: filled in when empty, checked when typed', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const details = { first_name: 'Gun', last_name: 'Ek', gender: 'Female', education: 'Upper secondary school', employed: '0', preferred_language: 'sv' };
+
+  // Age left empty: worked out from the date of birth
+  const created = await post('/clinician/patients', { ...details, personal_number: pnForAge(78), age: '' }, cookie);
+  assert.equal(created.status, 302);
+  const id = Number(created.headers.get('location').split('/').pop());
+  assert.equal(db.prepare('SELECT age FROM patients WHERE id = ?').get(id).age, 78);
+
+  // A typed age that does not fit the personal number is refused
+  const wrong = await post('/clinician/patients', { ...details, personal_number: pnForAge(78), age: '70' }, cookie);
+  assert.equal(wrong.status, 400);
+  assert.ok((await wrong.text()).includes('The age does not match the date of birth in the personal number.'));
+
+  // Under 16 by the personal number: refused
+  assert.equal((await post('/clinician/patients', { ...details, personal_number: pnForAge(15), age: '' }, cookie)).status, 400);
+
+  // No date in the personal number (e.g. a reserve number): the typed age is used
+  assert.equal((await post('/clinician/patients', { ...details, personal_number: 'R-12345', age: '50' }, cookie)).status, 302);
+
+  // The form fills in the age in the browser and says where it comes from
+  const form = await (await fetch(`${base}/clinician/patients/new`, { headers: { cookie } })).text();
+  assert.ok(form.includes('<script type="module" src="/personal-number.js"></script>'));
+  assert.ok(form.includes('data-personal-number') && form.includes('data-age ') && form.includes('data-age-hint hidden'));
+  assert.equal((await fetch(`${base}/personal-number.js`)).status, 200);
 });

@@ -47,6 +47,16 @@ export const SV = {
   Student: 'Studerar',
   Language: 'Språk', // MoCA domain
   'Patient’s preferred language': 'Patientens önskade språk',
+  // ----- Audit log details -----
+  'No changes': 'Inga ändringar',
+  'Changed: {fields}': 'Ändrat: {fields}',
+  'Access #{n}': 'Behörighet #{n}',
+  '{name} as {role}: {reason}': '{name} som {role}: {reason}',
+  '{name} as {role} until {date}: {reason}': '{name} som {role} till {date}: {reason}',
+  'Confirmed: {name}': 'Bekräftad: {name}',
+  'Removed: {name}': 'Borttagen: {name}',
+  'Calculated from the date of birth in the personal number.': 'Uträknad från födelsedatumet i personnumret.',
+  'The age does not match the date of birth in the personal number.': 'Åldern stämmer inte med födelsedatumet i personnumret.',
   'Preferred language': 'Önskat språk',
   'Everything the patient sees (questionnaire links, on-site questionnaires and follow-ups) is in this language. You can change it when you send a link.': 'Allt patienten ser (länkar till formulär, formulär på mottagningen och uppföljningar) är på det här språket. Du kan ändra det när du skickar en länk.',
   'Choose the patient’s preferred language.': 'Välj patientens önskade språk.',

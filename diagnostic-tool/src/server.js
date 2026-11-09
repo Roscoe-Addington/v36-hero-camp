@@ -38,6 +38,7 @@ import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
 import { clinicianLanguage, translator } from './i18n-clinician.js';
+import { ageFromPersonalNumber } from '../public/personal-number.js';
 import { cleanup, recordsDue, keptUntil, policy as retentionPolicy } from './retention.js';
 import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
@@ -243,8 +244,13 @@ function validatePatient(body) {
   if (!values.last_name) errors.push('Last name is required.');
   if (!values.personal_number) errors.push('Personal number is required.');
   if (!views.GENDER_OPTIONS.includes(values.gender)) errors.push('Choose a gender option.');
+  // The age follows from the date of birth in the personal number: filled in
+  // when left empty, and checked when typed (public/personal-number.js).
+  const ageFromNumber = ageFromPersonalNumber(values.personal_number);
+  if (!values.age && ageFromNumber !== null) values.age = String(ageFromNumber);
   const age = Number(values.age);
   if (!Number.isInteger(age) || age < 16 || age > 120) errors.push('Age must be a whole number between 16 and 120.');
+  else if (ageFromNumber !== null && ageFromNumber !== age) errors.push('The age does not match the date of birth in the personal number.');
   if (!views.EDUCATION_OPTIONS.includes(values.education)) errors.push('Choose a level of education.');
   if (!views.EMPLOYMENT_OPTIONS.some((o) => o.value === values.employed)) errors.push('Choose whether the patient is employed or a student.');
   if (lang(values.preferred_language) !== values.preferred_language) errors.push('Choose the patient’s preferred language.');

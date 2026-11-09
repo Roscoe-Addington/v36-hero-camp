@@ -25,6 +25,7 @@ import { STATUS } from './differential.js';
 import { STRINGS, LANGUAGES, itemText, optionText, sectionText, difficultyText } from './i18n.js';
 import { measurementSeries, progressSummary } from './followup.js';
 import { translator, CLINICIAN_LANGUAGES } from './i18n-clinician.js';
+import { findDisorder } from './disorders.js';
 
 // ---------- The escaping helper ----------
 
@@ -69,7 +70,7 @@ export const APP_NAME = 'Continuum';
 // The page language: the clinician's own language on clinician pages; the
 // patient's language on patient pages and on questionnaires the clinician
 // fills in on site (patientLanguage), so that page is in one language only.
-export function layout({ title, clinician, body, language = 'en', patientLanguage, skipScript = false }) {
+export function layout({ title, clinician, body, language = 'en', patientLanguage, skipScript = false, ageScript = false }) {
   const pageLanguage = patientLanguage ?? (clinician ? clinician.language ?? 'en' : language);
   const t = translator(pageLanguage);
   return html`<!doctype html>
@@ -81,6 +82,7 @@ export function layout({ title, clinician, body, language = 'en', patientLanguag
     <title>${title} · ${APP_NAME}</title>
     <link rel="stylesheet" href="/style.css" />
     ${skipScript ? html`<script type="module" src="/skip.js"></script>` : ''}
+    ${ageScript ? html`<script type="module" src="/personal-number.js"></script>` : ''}
   </head>
   <body>
     <header class="topbar">
@@ -200,6 +202,7 @@ export function newPatientPage({ clinician, patient, errors = [], values = {} })
   return layout({
     title,
     clinician,
+    ageScript: true,
     body: html`
       ${patient ? html`<p><a href="/clinician/patients/${patient.id}">← ${patient.first_name} ${patient.last_name}</a></p>` : ''}
       <h1>${title}</h1>
@@ -210,10 +213,11 @@ export function newPatientPage({ clinician, patient, errors = [], values = {} })
           <label>${t('First name')} <input name="first_name" required maxlength="100" value="${values.first_name}" /></label>
           <label>${t('Last name')} <input name="last_name" required maxlength="100" value="${values.last_name}" /></label>
         </div>
-        <label>${t('Personal number')} <input name="personal_number" required maxlength="20" value="${values.personal_number}" placeholder="${t('e.g. YYYYMMDD-XXXX')}" /></label>
+        <label>${t('Personal number')} <input name="personal_number" required maxlength="20" value="${values.personal_number}" placeholder="${t('e.g. YYYYMMDD-XXXX')}" data-personal-number autocomplete="off" /></label>
         <div class="grid2">
           <label>${t('Gender')} ${select(t, 'gender', GENDER_OPTIONS, values.gender)}</label>
-          <label>${t('Age')} <input name="age" type="number" min="16" max="120" required value="${values.age}" /></label>
+          <label>${t('Age')} <input name="age" type="number" min="16" max="120" required value="${values.age}" data-age />
+            <span class="hint" data-age-hint hidden>${t('Calculated from the date of birth in the personal number.')}</span></label>
         </div>
         <label>${t('Level of education')} ${select(t, 'education', EDUCATION_OPTIONS, values.education)}</label>
         <fieldset>
@@ -643,6 +647,34 @@ export function linkInvalidPage({ language = 'en' }) {
   return layout({ title: t.invalidTitle, language, body: html`<h1>${t.invalidTitle}</h1><p>${t.invalidText}</p>` });
 }
 
+// The audit log stores its details in a fixed English form (so the log is
+// the same whoever reads it); they are shown in the reader's language.
+// Free text (reasons) is shown as it was written.
+const FIELD_LABELS = {
+  first_name: 'First name', last_name: 'Last name', personal_number: 'Personal number', gender: 'Gender', age: 'Age',
+  education: 'Education', employed: 'Employment', preferred_language: 'Preferred language',
+};
+export function auditDetail(t, detail) {
+  if (!detail) return '';
+  if (detail === 'No changes') return t('No changes');
+  let m = detail.match(/^Changed: (.+)$/);
+  if (m) return t('Changed: {fields}', { fields: m[1].split(', ').map((f) => t(FIELD_LABELS[f] ?? f)).join(', ') });
+  m = detail.match(/^(link|onsite), (en|sv)$/);
+  if (m) return `${t(m[1] === 'onsite' ? 'On site' : 'Link')}, ${LANGUAGES[m[2]]}`;
+  m = detail.match(/^Access #(\d+)$/);
+  if (m) return t('Access #{n}', { n: m[1] });
+  m = detail.match(/^(.+?) as (Supervisor|Close colleague)(?: until (\d{4}-\d{2}-\d{2}))?: ([\s\S]*)$/);
+  if (m) {
+    const [, name, role, until, reason] = m;
+    return until
+      ? t('{name} as {role} until {date}: {reason}', { name, role: t(role).toLowerCase(), date: until, reason })
+      : t('{name} as {role}: {reason}', { name, role: t(role).toLowerCase(), reason });
+  }
+  m = detail.match(/^(confirm|remove) (\S+)$/);
+  if (m) return t(m[1] === 'confirm' ? 'Confirmed: {name}' : 'Removed: {name}', { name: findDisorder(m[2])?.name ?? m[2] });
+  return detail;
+}
+
 // ---------- Who has access (treating clinician only) ----------
 
 const ROLE_NAMES = { supervisor: 'Supervisor', colleague: 'Close colleague', owner: 'Treating clinician' };
@@ -739,7 +771,7 @@ export function auditPage({ clinician, patient, entries, actions }) {
         <thead><tr><th>${t('When (UTC)')}</th><th>${t('Who')}</th><th>${t('What')}</th><th>${t('Assessment')}</th><th>${t('Detail')}</th></tr></thead>
         <tbody>${entries.map((e) => html`<tr>
           <td class="code">${e.at}</td><td>${e.clinician_name ?? `#${e.clinician_id}`}</td><td>${t(actions[e.action] ?? e.action)}</td>
-          <td>${e.assessment_id ? html`<a href="/clinician/assessments/${e.assessment_id}">#${e.assessment_id}</a>` : ''}</td><td>${e.detail ?? ''}</td>
+          <td>${e.assessment_id ? html`<a href="/clinician/assessments/${e.assessment_id}">#${e.assessment_id}</a>` : ''}</td><td>${auditDetail(t, e.detail)}</td>
         </tr>`)}</tbody>
       </table></div>`,
   });

@@ -197,6 +197,7 @@
       deleted: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.',
       emailStatus: 'shown in the Email step of this demo (not sent)',
       noAccount: 'No clinician account with that email address. In this demo, try supervisor@clinic.example or colleague@clinic.example.',
+      supervisionReason: 'Weekly clinical supervision',
       context: {
         login: 'Clinicians log in with their email and password. The demo login is filled in: press Log in. After logging in, choose English or Svenska in the top bar.',
         patients: 'The clinician sees only their own patients.',
@@ -242,6 +243,7 @@
       deleted: 'Patientjournalen och alla bedömningar är raderade. Raderingen finns kvar i loggen.',
       emailStatus: 'visas i steget Mejl i den här demon (skickas inte)',
       noAccount: 'Det finns inget behandlarkonto med den e-postadressen. I demon kan du prova supervisor@clinic.example eller colleague@clinic.example.',
+      supervisionReason: 'Handledning varje vecka',
       context: {
         login: 'Behandlare loggar in med e-post och lösenord. Inloggningen i demon är ifylld: tryck på Logga in. Välj sedan English eller Svenska i det översta fältet.',
         patients: 'Behandlaren ser bara sina egna patienter.',
@@ -283,7 +285,7 @@
   const viewer = () => (asSupervisor ? { ...SUPERVISOR, language: CLINICIAN.language } : CLINICIAN);
   const SAMPLE_PATIENT = {
     id: 1, clinician_id: 1, first_name: 'Karin', last_name: 'Lund', personal_number: '19580704-XXXX',
-    gender: 'Female', age: 67, education: 'Upper secondary school', employed: 0, preferred_language: 'en',
+    gender: 'Female', age: D.ageFromPersonalNumber('19580704-XXXX'), education: 'Upper secondary school', employed: 0, preferred_language: 'en',
   };
   const SAMPLE_ANSWERS = {
     phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq6: 1, phq7: 3, phqDifficulty: 2,
@@ -323,6 +325,41 @@
       updated_at: '2026-10-02 11:10',
     },
   };
+
+  // The sample notes in both languages: [part of the state, field, English, Swedish].
+  // When the language changes, notes still as in the sample switch with it.
+  const SAMPLE_TEXTS = [
+    ['intake', 'notes', 'Tremor of the right hand noted; refer to neurology.', 'Tremor i höger hand noterad; remiss till neurolog.'],
+    ['interview', 'reason', 'Low mood since her husband died 8 months ago. Her daughter is worried about her memory.', 'Nedstämd sedan maken dog för 8 månader sedan. Dottern är orolig för hennes minne.'],
+    ['interview', 'onset', 'Gradual over the past 8 months.', 'Gradvis under de senaste 8 månaderna.'],
+    ['interview', 'family_notes', 'Mother had dementia from about 75.', 'Modern hade demens från omkring 75 års ålder.'],
+    ['interview', 'medical', 'Hypertension.', 'Högt blodtryck.'],
+    ['interview', 'medicines', 'Amlodipine 5 mg.', 'Amlodipin 5 mg.'],
+    ['interview', 'substance_notes', 'Two glasses of wine a week.', 'Två glas vin i veckan.'],
+    ['interview', 'living', 'Lives alone; daughter visits weekly.', 'Bor ensam; dottern hälsar på varje vecka.'],
+    ['interview', 'occupation', 'Retired teacher.', 'Pensionerad lärare.'],
+    ['interview', 'mse_appearance', 'Neatly dressed, good eye contact.', 'Välvårdad, god ögonkontakt.'],
+    ['interview', 'mse_mood', '"Empty"', '”Tom”'],
+    ['interview', 'mse_thought_notes', 'Thoughts about her husband; no suicidal thoughts reported.', 'Tankar kring maken; inga självmordstankar.'],
+    ['informant', 'inf_relationship', 'Daughter', 'Dotter'],
+    ['informant', 'inf_memory_course', 'Forgetting appointments for about a year, slowly worse.', 'Glömmer tider sedan ungefär ett år, långsamt sämre.'],
+    ['mddChecklist', 'notes', 'Ask the daughter about any past periods of elevated mood before rating E.', 'Fråga dottern om tidigare perioder med förhöjt stämningsläge innan E skattas.'],
+  ];
+
+  // The language chosen in the app's top bar applies to the whole demo: the
+  // demo page, the clinician pages, and the example patient's language (so
+  // the patient pages and the screening are in it too), and the sample notes.
+  function setDemoLanguage(lang) {
+    CLINICIAN.language = lang;
+    state.patient.preferred_language = lang;
+    state.language = lang;
+    state.followupLanguage = lang;
+    const parts = { intake: state.intake, interview: state.interview, informant: state.informant, mddChecklist: state.checklists.mdd };
+    for (const [part, field, en, sv] of SAMPLE_TEXTS) {
+      const obj = parts[part];
+      if (obj && obj[field] === (lang === 'sv' ? en : sv)) obj[field] = lang === 'sv' ? sv : en;
+    }
+  }
 
   const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -471,7 +508,7 @@
         followups: state.followups,
         followupLink: state.followupLink,
         access: asSupervisor
-          ? { owner: false, role: 'supervisor', grant: { granted_by_name: CLINICIAN.name, reason: 'Weekly clinical supervision', expires_at: null } }
+          ? { owner: false, role: 'supervisor', grant: { granted_by_name: CLINICIAN.name, reason: L('supervisionReason'), expires_at: null } }
           : { owner: true },
         owner: CLINICIAN, grants: state.grants, keptUntil: keptUntil(), retentionYears: 10,
       }));
@@ -534,6 +571,7 @@
       const part = D.PAGES[state.page].part;
       state.meta.pages[part] = { ...state.meta.pages[part], shown: Date.now() };
     }
+    if (view === 'new-patient' || view === 'edit-patient') D.enableAgeFromPersonalNumber(shadow.querySelector('.app-body'));
     if (view === 'login') {
       shadow.querySelector('input[name=email]').value = CLINICIAN.email;
       shadow.querySelector('input[name=password]').value = 'demo-password';
@@ -644,7 +682,7 @@
     const stay = { scroll: false };
 
     if (path === '/clinician/language') {
-      CLINICIAN.language = data.language === 'sv' ? 'sv' : 'en';
+      setDemoLanguage(data.language === 'sv' ? 'sv' : 'en');
       return go(current, stay);
     }
     // Colleagues with access can only read (the app's guard in server.js).
@@ -663,9 +701,15 @@
         gender: data.gender, age: Number(data.age), education: data.education, employed: Number(data.employed),
         preferred_language: D.lang(data.preferred_language),
       };
-      if (state.patient.age < 16 || state.patient.age > 120) {
+      // The same age rules as validatePatient() in src/server.js.
+      const fromNumber = D.ageFromPersonalNumber(state.patient.personal_number);
+      if (data.age === '' && fromNumber !== null) state.patient.age = fromNumber;
+      const ageError = !Number.isInteger(state.patient.age) || state.patient.age < 16 || state.patient.age > 120
+        ? 'Age must be a whole number between 16 and 120.'
+        : fromNumber !== null && fromNumber !== state.patient.age ? 'The age does not match the date of birth in the personal number.' : null;
+      if (ageError) {
         state.patient = before;
-        state.errors = ['Age must be a whole number between 16 and 120.'];
+        state.errors = [ageError];
         return go(path.endsWith('/edit') ? 'edit-patient' : 'new-patient', stay);
       }
       const changed = Object.keys(state.patient).filter((k) => String(before[k]) !== String(state.patient[k]));
@@ -894,7 +938,7 @@
     roleBtn.setAttribute('aria-pressed', String(asSupervisor));
     go(current, { scroll: false });
   });
-  document.getElementById('reset-btn').addEventListener('click', () => { reset(); go('login', { scroll: false }); });
+  document.getElementById('reset-btn').addEventListener('click', () => { reset(); setDemoLanguage(uiLanguage()); go('login', { scroll: false }); });
 
   const VIEWS = new Set([...STEPS.map((s) => s.id), ...Object.keys(EXTRA)]);
   function fromHash() {

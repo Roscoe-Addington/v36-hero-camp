@@ -6,6 +6,7 @@ import { runDifferential } from '../src/differential.js';
 import { parseAnswers, parsePartialAnswers, PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT } from '../src/questionnaire.js';
 import { responseQuality } from '../src/response-quality.js';
 import { enableSkipLogic } from '../public/skip.js';
+import { ageFromPersonalNumber, enableAgeFromPersonalNumber } from '../public/personal-number.js';
 import { buildSuggestions } from '../src/suggestions.js';
 import { defaultLowEducation } from '../src/moca.js';
 import { findDisorder, criterionIds } from '../src/disorders.js';
@@ -23,5 +24,5 @@ window.Demo = {
   views, workflow, scoreAll, runDifferential, parseAnswers, parsePartialAnswers, buildSuggestions, defaultLowEducation,
   findDisorder, criterionIds, RATINGS, readyEmail, isUrgent, applyDiagnosis, parseIntake,
   parseInterview, parseRisk, parseInformant, finalizeBlocker, parseFollowupAnswers, scoreFollowup, ACTIONS, lang, STRINGS, appCss,
-  PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT, responseQuality, enableSkipLogic, translator,
+  PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT, responseQuality, enableSkipLogic, translator, ageFromPersonalNumber, enableAgeFromPersonalNumber,
 };
