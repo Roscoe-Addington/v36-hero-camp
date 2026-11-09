@@ -143,3 +143,9 @@ db.exec(`
 if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'language')) {
   db.exec("ALTER TABLE clinicians ADD COLUMN language TEXT NOT NULL DEFAULT 'en'");
 }
+
+// The patient's preferred language ('en' or 'sv'): questionnaire links and
+// on-site questionnaires use it, so everything the patient sees is in it.
+if (!db.prepare('PRAGMA table_info(patients)').all().some((c) => c.name === 'preferred_language')) {
+  db.exec("ALTER TABLE patients ADD COLUMN preferred_language TEXT NOT NULL DEFAULT 'en'");
+}

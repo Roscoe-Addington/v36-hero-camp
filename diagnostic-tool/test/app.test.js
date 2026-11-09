@@ -77,7 +77,7 @@ test('full flow: add patient, send link, patient answers, clinician gets email a
       gender: 'Female',
       age: '34',
       education: 'Upper secondary school',
-      employed: '1',
+      employed: '1', preferred_language: 'en',
     },
     cookie
   );
@@ -174,7 +174,7 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Bo', last_name: 'Berg', personal_number: '19500101-0000', gender: 'Male',
-    age: '75', education: 'Primary / compulsory school', employed: '0',
+    age: '75', education: 'Primary / compulsory school', employed: '0', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
 
@@ -280,7 +280,7 @@ test('a required risk assessment blocks finalizing until it is done, then gives 
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Sam', last_name: 'Ek', personal_number: '19990101-0000', gender: 'Non-binary / other',
-    age: '26', education: 'Upper secondary school', employed: '1',
+    age: '26', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const start = await post(`${created.headers.get('location')}/assessments`, { mode: 'onsite' }, cookie);
   const casePath = start.headers.get('location').replace('/screening', '');
@@ -325,9 +325,10 @@ test('patient link: Swedish, save part-way, keep answers when some are missing',
   assert.ok(form.includes('Nästan varje dag'));
   assert.ok(form.includes('inte den officiella'), 'unofficial translation note');
 
-  // Switch to English and back
-  assert.ok((await (await fetch(`${q}?lang=en`)).text()).includes('Questionnaire about your health'));
-  await fetch(`${q}?lang=sv`);
+  // The patient cannot switch language: the clinician chose Swedish
+  const tried = await (await fetch(`${q}?lang=en`)).text();
+  assert.ok(tried.includes('Frågeformulär om din hälsa') && !tried.includes('Questionnaire about your health'));
+  assert.ok(!tried.includes('>English<'), 'no language switch on patient pages');
 
   // Save part-way: answers come back when the link is opened again
   const saved = await post('/q/swedish-token', { phq1: '3', phq2: '2', intent: 'save' });
@@ -352,13 +353,13 @@ test('data protection: edit details, audit log, reopen with history, delete with
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female',
-    age: '25', education: 'Upper secondary school', employed: '1',
+    age: '25', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
   const patientId = Number(patientPath.split('/').pop());
 
   // Edit: invalid age refused, valid change saved and logged by field name only
-  const edit = { first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female', age: '15', education: 'Upper secondary school', employed: '1' };
+  const edit = { first_name: 'Lea', last_name: 'Holm', personal_number: '20000101-0000', gender: 'Female', age: '15', education: 'Upper secondary school', employed: '1', preferred_language: 'en' };
   assert.equal((await post(`${patientPath}/edit`, edit, cookie)).status, 400);
   assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26' }, cookie)).status, 302);
   const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie } })).text();
@@ -367,10 +368,10 @@ test('data protection: edit details, audit log, reopen with history, delete with
   assert.ok(!auditHtml.includes('>26<'), 'the new value itself is not written to the log');
 
   // Employment: "Student" is a third option; anything else is refused
-  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '3' }, cookie)).status, 400);
+  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '3', preferred_language: 'en' }, cookie)).status, 400);
   const editForm = await (await fetch(`${base}${patientPath}/edit`, { headers: { cookie } })).text();
   assert.ok(editForm.includes('name="employed" value="2"'), 'the form offers Student');
-  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '2' }, cookie)).status, 302);
+  assert.equal((await post(`${patientPath}/edit`, { ...edit, age: '26', employed: '2', preferred_language: 'en' }, cookie)).status, 302);
   assert.equal(db.prepare('SELECT employed FROM patients WHERE id = ?').get(patientId).employed, 2);
   const studentPage = await (await fetch(base + patientPath, { headers: { cookie } })).text();
   assert.match(studentPage, /<dt>Employment<\/dt><dd>Student<\/dd>/);
@@ -404,7 +405,7 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Nils', last_name: 'Ström', personal_number: '19800101-0000', gender: 'Male',
-    age: '46', education: 'University — master level or higher', employed: '1',
+    age: '46', education: 'University — master level or higher', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
 
@@ -449,7 +450,7 @@ test('patient link page by page: skip logic, tiredness break, response-quality b
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Tove', last_name: 'Berg', personal_number: '19900505-0000', gender: 'Female',
-    age: '36', education: 'Upper secondary school', employed: '1',
+    age: '36', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const page = await (await post(`${created.headers.get('location')}/assessments`, { mode: 'link' }, cookie)).text();
   const qPath = new URL(page.match(/value="(http[^"]+\/q\/[^"]+)"/)[1]).pathname;
@@ -496,7 +497,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
 
   const created = await post('/clinician/patients', {
     first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female',
-    age: '31', education: 'Upper secondary school', employed: '1',
+    age: '31', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, owner);
   const patientPath = created.headers.get('location');
   const status = async (cookie, path = patientPath) => (await fetch(base + path, { headers: { cookie }, redirect: 'manual' })).status;
@@ -536,7 +537,7 @@ test('access: only the treating clinician and named supervisors or colleagues', 
   assert.ok(!readOnlyPatient.includes('Start a new assessment'));
   assert.ok(!readOnlyPatient.includes('Edit details'));
   // The treating clinician can still change things
-  assert.equal((await post(`${patientPath}/edit`, { first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female', age: '31', education: 'Upper secondary school', employed: '1' }, owner)).status, 302);
+  assert.equal((await post(`${patientPath}/edit`, { first_name: 'Ida', last_name: 'Sand', personal_number: '19950101-0000', gender: 'Female', age: '31', education: 'Upper secondary school', employed: '1', preferred_language: 'en' }, owner)).status, 302);
 
   // Views by the supervisor are logged under their name
   const auditHtml = await (await fetch(`${base}${patientPath}/audit`, { headers: { cookie: owner } })).text();
@@ -575,7 +576,7 @@ test('final report as PDF: only when finalized, names the treating clinician, lo
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const created = await post('/clinician/patients', {
     first_name: 'Åsa', last_name: 'Öberg', personal_number: '19700101-0000', gender: 'Female',
-    age: '56', education: 'Upper secondary school', employed: '1',
+    age: '56', education: 'Upper secondary school', employed: '1', preferred_language: 'en',
   }, cookie);
   const patientPath = created.headers.get('location');
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
@@ -623,4 +624,53 @@ test('clinician pages in Swedish: login link, language switch saved on the accou
   // Switch back so other tests are unaffected
   await fetch(`${base}/clinician/language`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie }, body: 'language=en' });
   assert.ok((await (await fetch(`${base}/clinician`, { headers: { cookie } })).text()).includes('<h1>Patients</h1>'));
+});
+
+test('patient’s preferred language: chosen at registration, preselected when sending, everything after in that language', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const details = { first_name: 'Sara', last_name: 'Lind', personal_number: '19880808-0000', gender: 'Female', age: '38', education: 'Upper secondary school', employed: '1' };
+
+  // Registration: the choice is required, and a new patient starts with the clinician's language
+  const form = await (await fetch(`${base}/clinician/patients/new`, { headers: { cookie } })).text();
+  assert.match(form, /name="preferred_language" value="en" required\s+checked/);
+  assert.equal((await post('/clinician/patients', { ...details, preferred_language: 'fr' }, cookie)).status, 400);
+  const created = await post('/clinician/patients', { ...details, preferred_language: 'sv' }, cookie);
+  const patientPath = created.headers.get('location');
+  const patientId = Number(patientPath.split('/').pop());
+
+  // Patient page: shown, and preselected in every "send" form
+  const page = await (await fetch(base + patientPath, { headers: { cookie } })).text();
+  assert.ok(page.includes('<dt>Preferred language</dt><dd>Svenska</dd>'));
+  assert.equal(page.match(/<option value="sv" lang="sv" selected>/g)?.length, 4, 'link, on site, follow-up link, follow-up on site');
+
+  // Sending a link: the patient sees Swedish only, from the consent page to "link not valid"
+  const sent = await (await post(`${patientPath}/assessments`, { mode: 'link', language: 'sv' }, cookie)).text();
+  const qPath = new URL(sent.match(/value="(http[^"]+\/q\/[^"]+)"/)[1]).pathname;
+  const consent = await (await fetch(base + qPath)).text();
+  assert.ok(consent.includes('<html lang="sv">'));
+  assert.ok(consent.includes('<span class="brand">Psykiatrisk bedömning</span>'), 'top bar in Swedish');
+  assert.ok(!consent.includes('?lang='), 'no language switch for the patient');
+  db.prepare('UPDATE assessments SET revoked = 1 WHERE patient_id = ?').run(patientId);
+  const invalid = await (await fetch(base + qPath)).text();
+  assert.ok(invalid.includes('Länken fungerar inte'), 'cancelled link page in Swedish');
+
+  // Choosing another language when sending becomes the new preference
+  await post(`${patientPath}/assessments`, { mode: 'link', language: 'en' }, cookie);
+  assert.equal(db.prepare('SELECT preferred_language FROM patients WHERE id = ?').get(patientId).preferred_language, 'en');
+  const audit = db.prepare("SELECT detail FROM audit_log WHERE patient_id = ? AND action = 'start_assessment' ORDER BY id DESC").get(patientId);
+  assert.equal(audit.detail, 'link, en');
+
+  // On site, with an English-speaking clinician: the questionnaire is in Swedish
+  const onsite = await post(`${patientPath}/assessments`, { mode: 'onsite', language: 'sv' }, cookie);
+  const screening = await (await fetch(base + onsite.headers.get('location'), { headers: { cookie } })).text();
+  assert.ok(screening.includes('<html lang="sv">'));
+  assert.ok(screening.includes('<a href="/clinician">Patienter</a>'), 'menu in Swedish');
+  assert.ok(screening.includes('Spara utkast och fortsätt senare'), 'clinician buttons in Swedish');
+  assert.ok(!screening.includes('Save answers and score') && !screening.includes('Log out'));
+  const refused = await (await post(onsite.headers.get('location').split('?')[0], { phq1: '0' }, cookie)).text();
+  assert.ok(refused.includes('Bekräfta att patienten har fått informationen.'));
+  // ...and back on the clinician pages, the clinician's own language
+  const casePage = await (await fetch(base + patientPath, { headers: { cookie } })).text();
+  assert.ok(casePage.includes('<html lang="en">'));
 });

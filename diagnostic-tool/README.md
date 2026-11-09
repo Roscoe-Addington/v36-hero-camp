@@ -249,9 +249,8 @@ versions work, but the chosen answer is not highlighted. Two things to know:
 - **`BASE_URL` must be the address the tablet uses.** Form posts from another
   address are refused (a security check), so set `BASE_URL` to the address
   people type on the iPad, not `localhost`.
-- **On-site screening on a shared tablet:** the clinician is logged in while
-  the patient answers. Hand over the tablet on the questionnaire page and take
-  it back when the patient is done.
+- **On site, the clinician holds the tablet** and goes through the
+  questions with the patient, so the clinician's menu stays on the page.
 
 ## Project layout
 
@@ -342,13 +341,30 @@ the app: delete them according to the same rules.
 
 ## Languages
 
-Patient pages (information page, questionnaire, follow-up, thank-you
-page) are in **English or Swedish** (`src/i18n.js`). The clinician picks
-the language when starting; the patient can switch.
+Two languages are set separately: the clinician's own, and the patient's.
 
-Clinician pages are in **English or Swedish** too: each clinician switches
-in the menu, and the choice is saved on their account. The PDF report
-follows the language of the clinician who downloads it. The interface
+**The clinician's language.** After logging in, each clinician chooses
+**English or Svenska** in the top bar (the current one is marked). The
+choice is saved on their account and used for all clinician pages and for
+the "results ready" emails they get. The login page has the same choice.
+
+**The patient's language.** The clinician records the patient's
+**preferred language** when registering the patient (it starts as the
+clinician's own language). It is preselected whenever the clinician sends
+a questionnaire link, starts an on-site questionnaire or a follow-up; if
+the clinician picks the other language there, that becomes the patient's
+new preference. From then on **everything the patient sees is in that
+language only**: the information page, every questionnaire page with its
+top bar, buttons and footer, the break, saved and thank-you pages, and the
+"link not valid" page. The patient cannot switch language; if the language
+is wrong, the clinician sends a new link. On site, the questionnaire pages
+(including the clinician's menu and buttons on them) are in the patient's
+language too; the clinician's own language returns on the next clinician
+page. A test renders every patient page in both languages and fails if any
+text from the other language appears (`test/patient-language.test.js`).
+
+Patient texts are in `src/i18n.js`. The PDF report follows the language
+of the clinician who downloads it. The interface
 text, the forms (interview, MSE, risk, informant) and the server messages
 are translated (`src/i18n-clinician.js`, `src/i18n-clinician-sv.js`); a
 test fails if a text on the clinician pages has no Swedish translation.

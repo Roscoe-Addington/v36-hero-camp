@@ -58,6 +58,27 @@ main {
 .brand {
   font-weight: 600;
 }
+/* The clinician's language: "English | Svenska", the current one marked. */
+.lang-choice {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.lang-choice > * {
+  padding: 0.15rem 0.7rem;
+  margin: 0 !important;
+}
+.lang-choice .current {
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+}
+.lang-choice button.link {
+  text-decoration: none;
+}
 
 a {
   color: var(--accent);
@@ -619,6 +640,13 @@ button.danger {
   }
   summary {
     padding: 0.65rem 0;
+  }
+  .lang-choice > .current,
+  .lang-choice > button.link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 0.9rem;
   }
 }
 

@@ -11,6 +11,7 @@
 
 import nodemailer from 'nodemailer';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { translator } from './i18n-clinician.js';
 
 function createTransport() {
   if (!process.env.SMTP_HOST) return null;
@@ -32,18 +33,22 @@ export function isUrgent(results) {
   return Boolean(results.safetyFlag) || (results.differential?.summary.priority.length ?? 0) > 0;
 }
 
-// The subject and text of a "results are ready" email. `kind` is
-// 'screening' or 'followup'; `ref` is the assessment or follow-up number.
-export function readyEmail({ kind, ref, urgent, url }) {
-  const what = kind === 'followup' ? 'Follow-up' : 'Intake screening';
-  const subject = urgent ? `URGENT: ${what} results need review today (#${ref})` : `${what} results ready (#${ref})`;
+// The subject and text of a "results are ready" email, in the clinician's
+// language. `kind` is 'screening' or 'followup'; `ref` is the assessment or
+// follow-up number.
+export function readyEmail({ kind, ref, urgent, url, language = 'en' }) {
+  const t = translator(language);
+  const followup = kind === 'followup';
+  const subject = urgent
+    ? t(followup ? 'URGENT: Follow-up results need review today (#{ref})' : 'URGENT: Intake screening results need review today (#{ref})', { ref })
+    : t(followup ? 'Follow-up results ready (#{ref})' : 'Intake screening results ready (#{ref})', { ref });
   const text = [
-    `${what} results for one of your patients are ready (reference #${ref}).`,
-    ...(urgent ? ['', 'The answers need prompt review. Please log in and read them today.'] : []),
+    t(followup ? 'Follow-up results for one of your patients are ready (reference #{ref}).' : 'Intake screening results for one of your patients are ready (reference #{ref}).', { ref }),
+    ...(urgent ? ['', t('The answers need prompt review. Please log in and read them today.')] : []),
     '',
-    `Log in to see the results: ${url}`,
+    t('Log in to see the results: {url}', { url }),
     '',
-    'For privacy, this email contains no names or health information.',
+    t('For privacy, this email contains no names or health information.'),
   ].join('\n');
   return { subject, text };
 }
@@ -59,12 +64,12 @@ async function deliver(to, { subject, text }, urgent, tag) {
   return 'sent';
 }
 
-export function sendResultsEmail({ to, assessmentId, results, url }) {
+export function sendResultsEmail({ to, assessmentId, results, url, language }) {
   const urgent = isUrgent(results);
-  return deliver(to, readyEmail({ kind: 'screening', ref: assessmentId, urgent, url }), urgent, 'screening');
+  return deliver(to, readyEmail({ kind: 'screening', ref: assessmentId, urgent, url, language }), urgent, 'screening');
 }
 
-export function sendFollowupEmail({ to, followupId, result, url }) {
+export function sendFollowupEmail({ to, followupId, result, url, language }) {
   const urgent = Boolean(result.safetyFlag);
-  return deliver(to, readyEmail({ kind: 'followup', ref: followupId, urgent, url }), urgent, 'followup');
+  return deliver(to, readyEmail({ kind: 'followup', ref: followupId, urgent, url, language }), urgent, 'followup');
 }

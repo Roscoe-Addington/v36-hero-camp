@@ -37,7 +37,7 @@ import { applyDiagnosis } from './diagnosis.js';
 import { defaultLowEducation } from './moca.js';
 import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
-import { clinicianLanguage } from './i18n-clinician.js';
+import { clinicianLanguage, translator } from './i18n-clinician.js';
 import { cleanup, recordsDue, keptUntil, policy as retentionPolicy } from './retention.js';
 import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
@@ -236,6 +236,7 @@ function validatePatient(body) {
     age: clean(body.age, 3),
     education: clean(body.education),
     employed: clean(body.employed, 1),
+    preferred_language: clean(body.preferred_language, 2),
   };
   const errors = [];
   if (!values.first_name) errors.push('First name is required.');
@@ -246,7 +247,8 @@ function validatePatient(body) {
   if (!Number.isInteger(age) || age < 16 || age > 120) errors.push('Age must be a whole number between 16 and 120.');
   if (!views.EDUCATION_OPTIONS.includes(values.education)) errors.push('Choose a level of education.');
   if (!views.EMPLOYMENT_OPTIONS.some((o) => o.value === values.employed)) errors.push('Choose whether the patient is employed or a student.');
-  const record = [values.first_name, values.last_name, values.personal_number, values.gender, age, values.education, Number(values.employed)];
+  if (lang(values.preferred_language) !== values.preferred_language) errors.push('Choose the patient’s preferred language.');
+  const record = [values.first_name, values.last_name, values.personal_number, values.gender, age, values.education, Number(values.employed), values.preferred_language];
   return { values, errors, record };
 }
 
@@ -255,8 +257,8 @@ clinician.post('/patients', (req, res) => {
   if (errors.length) return send(res, views.newPatientPage({ clinician: req.clinician, errors, values }), 400);
   const result = db
     .prepare(
-      `INSERT INTO patients (clinician_id, first_name, last_name, personal_number, gender, age, education, employed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO patients (clinician_id, first_name, last_name, personal_number, gender, age, education, employed, preferred_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(req.clinician.id, ...record);
   audit(req.clinician.id, 'create_patient', { patientId: Number(result.lastInsertRowid) });
@@ -275,11 +277,11 @@ clinician.post('/patients/:id/edit', (req, res) => {
   const { values, errors, record } = validatePatient(req.body);
   if (errors.length) return send(res, views.newPatientPage({ clinician: req.clinician, patient, errors, values }), 400);
   db.prepare(
-    `UPDATE patients SET first_name = ?, last_name = ?, personal_number = ?, gender = ?, age = ?, education = ?, employed = ?
+    `UPDATE patients SET first_name = ?, last_name = ?, personal_number = ?, gender = ?, age = ?, education = ?, employed = ?, preferred_language = ?
       WHERE id = ?`
   ).run(...record, patient.id);
   // Record which fields changed (names only, not the values themselves).
-  const fields = ['first_name', 'last_name', 'personal_number', 'gender', 'age', 'education', 'employed'];
+  const fields = ['first_name', 'last_name', 'personal_number', 'gender', 'age', 'education', 'employed', 'preferred_language'];
   const changed = fields.filter((f, i) => String(patient[f]) !== String(record[i]));
   audit(req.clinician.id, 'edit_patient', { patientId: patient.id, detail: changed.length ? `Changed: ${changed.join(', ')}` : 'No changes' });
   res.redirect(`/clinician/patients/${patient.id}`);
@@ -353,11 +355,23 @@ clinician.get('/patients/:id', (req, res) => showPatient(req, res));
 
 // ---------- Starting an assessment: link or on site ----------
 
+// The language the clinician picks for the patient when starting a
+// questionnaire. It is also saved as the patient's preferred language, so
+// the next link is in the same language unless the clinician changes it.
+function choosePatientLanguage(patient, chosen) {
+  const language = chosen ? lang(chosen) : lang(patient.preferred_language);
+  if (language !== patient.preferred_language) {
+    db.prepare('UPDATE patients SET preferred_language = ? WHERE id = ?').run(language, patient.id);
+    patient.preferred_language = language;
+  }
+  return language;
+}
+
 clinician.post('/patients/:id/assessments', (req, res) => {
   const patient = accessiblePatient(req);
   if (!patient) return res.status(404).send('Not found');
   const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
-  const language = lang(req.body.language);
+  const language = choosePatientLanguage(patient, req.body.language);
 
   // Only one open assessment per patient: cancel any not yet started.
   db.prepare('UPDATE assessments SET revoked = 1 WHERE patient_id = ? AND completed_at IS NULL').run(patient.id);
@@ -553,7 +567,7 @@ clinician.post('/assessments/:id/screening', (req, res) => {
   const moving = !['save', 'back'].includes(req.body.intent);
   if (!c.assessment.consent_at && pageIndex === 0 && moving) {
     if (req.body.consent_given !== 'yes') {
-      return send(res, onsitePage(req, c, { answers: parsePartialAnswers(req.body), error: 'Confirm that the patient has been given the information.' }), 400);
+      return send(res, onsitePage(req, c, { answers: parsePartialAnswers(req.body), error: translator(lang(c.assessment.language))('Confirm that the patient has been given the information.') }), 400);
     }
     db.prepare('UPDATE assessments SET consent_at = ? WHERE id = ?').run(now(), c.assessment.id);
     c.assessment.consent_at = now();
@@ -769,10 +783,11 @@ function completeScreening(assessment, patient, answers, meta = emptyMeta()) {
 // Tells the treating clinician that results are ready: no health data in
 // the email, only the assessment number and a link (email.js).
 async function emailResults(assessment, patient, { results }) {
-  const clinicianRow = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id);
+  const clinicianRow = db.prepare('SELECT email, language FROM clinicians WHERE id = ?').get(patient.clinician_id);
   let emailStatus;
   try {
     emailStatus = await sendResultsEmail({
+      language: clinicianRow.language,
       to: clinicianRow.email,
       assessmentId: assessment.id,
       results,
@@ -791,7 +806,7 @@ clinician.post('/patients/:id/followups', (req, res) => {
   const patient = accessiblePatient(req);
   if (!patient) return res.status(404).send('Not found');
   const mode = req.body.mode === 'onsite' ? 'onsite' : 'link';
-  const language = lang(req.body.language);
+  const language = choosePatientLanguage(patient, req.body.language);
   const token = newToken();
   const expires = new Date(Date.now() + LINK_VALID_DAYS * 24 * 3600 * 1000);
   const result = db
@@ -821,8 +836,8 @@ function completeFollowup(followup, answers) {
     .run(completedAt, JSON.stringify(answers), JSON.stringify(result), followup.id);
   if (saved.changes === 0) return null;
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(followup.patient_id);
-  const to = db.prepare('SELECT email FROM clinicians WHERE id = ?').get(patient.clinician_id).email;
-  sendFollowupEmail({ to, followupId: followup.id, result, url: `${BASE_URL}/clinician/patients/${patient.id}` })
+  const owner = db.prepare('SELECT email, language FROM clinicians WHERE id = ?').get(patient.clinician_id);
+  sendFollowupEmail({ to: owner.email, language: owner.language, followupId: followup.id, result, url: `${BASE_URL}/clinician/patients/${patient.id}` })
     .catch((err) => console.error('[email] follow-up failed:', err.message));
   return result;
 }
@@ -856,26 +871,27 @@ function openFollowup(token) {
   return f;
 }
 
+// The language the clinician chose for a link, also for a link that no
+// longer works, so the "link not valid" page is in the patient's language.
+function linkLanguage(table, token) {
+  return lang(db.prepare(`SELECT language FROM ${table} WHERE token_hash = ?`).get(hashToken(token))?.language);
+}
+
 app.get('/f/:token', (req, res) => {
   const f = openFollowup(req.params.token);
-  if (!f) return send(res, views.linkInvalidPage({}), 404);
-  const wanted = req.query.lang;
-  if (wanted && lang(wanted) === wanted) {
-    db.prepare('UPDATE followups SET language = ? WHERE id = ?').run(wanted, f.id);
-    f.language = wanted;
-  }
+  if (!f) return send(res, views.linkInvalidPage({ language: linkLanguage('followups', req.params.token) }), 404);
   const url = `/f/${req.params.token}`;
-  send(res, views.followupPage({ action: url, language: lang(f.language), switchUrl: url }));
+  send(res, views.followupPage({ action: url, language: lang(f.language) }));
 });
 
 app.post('/f/:token', (req, res) => {
   const f = openFollowup(req.params.token);
-  if (!f) return send(res, views.linkInvalidPage({}), 404);
+  if (!f) return send(res, views.linkInvalidPage({ language: linkLanguage('followups', req.params.token) }), 404);
   const language = lang(f.language);
   const url = `/f/${req.params.token}`;
   const { answers, errors } = parseFollowupAnswers(req.body);
   if (errors.length) {
-    return send(res, views.followupPage({ action: url, language, switchUrl: url, answers: parsePartialAnswers(req.body), error: STRINGS[language].missing(errors.length) }), 400);
+    return send(res, views.followupPage({ action: url, language, answers: parsePartialAnswers(req.body), error: STRINGS[language].missing(errors.length) }), 400);
   }
   const result = completeFollowup(f, answers);
   if (!result) return send(res, views.linkInvalidPage({ language }), 409);
@@ -890,37 +906,29 @@ function openAssessment(token) {
   return a;
 }
 
-// The patient's language: ?lang=sv switches it and remembers the choice.
-function patientLanguage(req, assessment) {
-  const wanted = req.query.lang;
-  if (wanted && lang(wanted) === wanted && wanted !== assessment.language) {
-    db.prepare('UPDATE assessments SET language = ? WHERE id = ?').run(wanted, assessment.id);
-    assessment.language = wanted;
-  }
-  return lang(assessment.language);
-}
-
-const invalidLink = (res) => send(res, views.linkInvalidPage({}), 404);
+// The patient pages are in the language the clinician chose when sending the
+// link; the patient cannot switch it (the clinician sends a new link instead).
+const invalidLink = (req, res) => send(res, views.linkInvalidPage({ language: linkLanguage('assessments', req.params.token) }), 404);
 
 app.get('/q/:token', (req, res) => {
   const assessment = openAssessment(req.params.token);
-  if (!assessment) return invalidLink(res);
-  const language = patientLanguage(req, assessment);
+  if (!assessment) return invalidLink(req, res);
+  const language = lang(assessment.language);
   const url = `/q/${req.params.token}`;
-  if (!assessment.consent_at) return send(res, views.consentPage({ action: `${url}/consent`, language, switchUrl: url }));
+  if (!assessment.consent_at) return send(res, views.consentPage({ action: `${url}/consent`, language }));
   const draft = parseJson(assessment.draft_json, {});
   const pageIndex = pageIndexFrom(req, draft);
   markShown(assessment, pageIndex);
-  send(res, views.questionnairePage({ action: url, pageIndex, language, switchUrl: url, answers: draft }));
+  send(res, views.questionnairePage({ action: url, pageIndex, language, answers: draft }));
 });
 
 app.post('/q/:token/consent', (req, res) => {
   const assessment = openAssessment(req.params.token);
-  if (!assessment) return invalidLink(res);
+  if (!assessment) return invalidLink(req, res);
   const url = `/q/${req.params.token}`;
   if (req.body.agree !== 'yes') {
     const language = lang(assessment.language);
-    return send(res, views.consentPage({ action: `${url}/consent`, language, switchUrl: url, error: STRINGS[language].consentNeeded }), 400);
+    return send(res, views.consentPage({ action: `${url}/consent`, language, error: STRINGS[language].consentNeeded }), 400);
   }
   db.prepare('UPDATE assessments SET consent_at = ? WHERE id = ? AND consent_at IS NULL').run(now(), assessment.id);
   res.redirect(url);
@@ -928,7 +936,7 @@ app.post('/q/:token/consent', (req, res) => {
 
 app.post('/q/:token', (req, res) => {
   const assessment = openAssessment(req.params.token);
-  if (!assessment) return invalidLink(res);
+  if (!assessment) return invalidLink(req, res);
   const url = `/q/${req.params.token}`;
   if (!assessment.consent_at) return res.redirect(url);
   const language = lang(assessment.language);
@@ -940,7 +948,7 @@ app.post('/q/:token', (req, res) => {
   if (step.back !== undefined) return res.redirect(`${url}?page=${step.back}`);
   if (step.redisplay) {
     const { pageIndex: at = pageIndex, ...rest } = step.redisplay;
-    return send(res, views.questionnairePage({ action: url, pageIndex: at, language, switchUrl: url, ...rest }), 400);
+    return send(res, views.questionnairePage({ action: url, pageIndex: at, language, ...rest }), 400);
   }
   if (step.breakAfter !== undefined) {
     return send(res, views.breakPage({ language, continueUrl: `${url}?page=${step.breakAfter}`, stopAction: `${url}?page=${step.breakAfter}` }));

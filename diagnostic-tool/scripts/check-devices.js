@@ -85,7 +85,7 @@ const cookie = login.headers.get('set-cookie').split(';')[0];
 // A long name and personal number, to find layouts that break on narrow screens.
 const created = await post('/clinician/patients', {
   first_name: 'Annika-Charlotte', last_name: 'Johansson-Wennerström', personal_number: '19800101-1234',
-  gender: 'Non-binary / other', age: '45', education: 'University — master level or higher', employed: '2',
+  gender: 'Non-binary / other', age: '45', education: 'University — master level or higher', employed: '2', preferred_language: 'en',
 }, cookie);
 const patientPath = created.headers.get('location');
 

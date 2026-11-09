@@ -63,11 +63,14 @@ export function html(strings, ...values) {
 
 // ---------- Shared layout ----------
 
-export function layout({ title, clinician, body, language = 'en', skipScript = false }) {
-  const t = translator(clinician?.language);
-  const other = clinician?.language === 'sv' ? 'en' : 'sv';
+// The page language: the clinician's own language on clinician pages; the
+// patient's language on patient pages and on questionnaires the clinician
+// fills in on site (patientLanguage), so that page is in one language only.
+export function layout({ title, clinician, body, language = 'en', patientLanguage, skipScript = false }) {
+  const pageLanguage = patientLanguage ?? (clinician ? clinician.language ?? 'en' : language);
+  const t = translator(pageLanguage);
   return html`<!doctype html>
-<html lang="${clinician ? clinician.language ?? 'en' : language}">
+<html lang="${pageLanguage}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -84,7 +87,7 @@ export function layout({ title, clinician, body, language = 'en', skipScript = f
             <a href="/clinician">${t('Patients')}</a>
             <a href="/clinician/patients/new">${t('New patient')}</a>
             <a href="/clinician/retention">${t('Retention')}</a>
-            <form method="post" action="/clinician/language" class="inline"><button class="link" name="language" value="${other}" lang="${other}">${CLINICIAN_LANGUAGES[other]}</button></form>
+            ${patientLanguage ? '' : clinicianLanguageSwitch(t, clinician)}
             <form method="post" action="/logout" class="inline"><button class="link">${t('Log out ({name})', { name: clinician.name })}</button></form>
           </nav>`
         : ''}
@@ -92,6 +95,18 @@ export function layout({ title, clinician, body, language = 'en', skipScript = f
     <main>${body}</main>
   </body>
 </html>`;
+}
+
+// The clinician's own language, shown after login on every clinician page:
+// both choices visible, the current one marked.
+function clinicianLanguageSwitch(t, clinician) {
+  const current = clinician.language === 'sv' ? 'sv' : 'en';
+  return html`<form method="post" action="/clinician/language" class="lang-choice" aria-label="${t('Language of the clinician pages')}">
+    ${Object.entries(CLINICIAN_LANGUAGES).map(([code, name]) =>
+      code === current
+        ? html`<span class="current" lang="${code}" aria-current="true">${name}</span>`
+        : html`<button class="link" name="language" value="${code}" lang="${code}">${name}</button>`)}
+  </form>`;
 }
 
 // ---------- Login ----------
@@ -176,6 +191,8 @@ function select(t, name, options, selected) {
 // New patient, or editing an existing one (when `patient` is given).
 export function newPatientPage({ clinician, patient, errors = [], values = {} }) {
   const t = translator(clinician?.language);
+  // A new patient's language starts as the clinician's own; the clinician changes it if needed.
+  const preferred = values.preferred_language ?? (patient ? undefined : clinician?.language ?? 'en');
   const title = patient ? t('Edit patient details') : t('New patient');
   return layout({
     title,
@@ -198,7 +215,12 @@ export function newPatientPage({ clinician, patient, errors = [], values = {} })
         <label>${t('Level of education')} ${select(t, 'education', EDUCATION_OPTIONS, values.education)}</label>
         <fieldset>
           <legend>${t('Currently employed?')}</legend>
-          ${EMPLOYMENT_OPTIONS.map((o, i) => html`<label class="choice"><input type="radio" name="employed" value="${o.value}" ${i === 0 ? html`required` : ''} ${values.employed === o.value ? html`checked` : ''} /> ${t(o.label)}</label>`)}
+          <div class="options">${EMPLOYMENT_OPTIONS.map((o, i) => html`<label class="choice"><input type="radio" name="employed" value="${o.value}" ${i === 0 ? html`required` : ''} ${values.employed === o.value ? html`checked` : ''} /> ${t(o.label)}</label>`)}</div>
+        </fieldset>
+        <fieldset>
+          <legend>${t('Patient’s preferred language')}</legend>
+          <div class="options">${Object.entries(LANGUAGES).map(([code, name], i) => html`<label class="choice"><input type="radio" name="preferred_language" value="${code}" ${i === 0 ? html`required` : ''} ${preferred === code ? html`checked` : ''} /> <span lang="${code}">${name}</span></label>`)}</div>
+          <p class="hint">${t('Everything the patient sees (questionnaire links, on-site questionnaires and follow-ups) is in this language. You can change it when you send a link.')}</p>
         </fieldset>
         <button>${patient ? t('Save changes') : t('Save patient')}</button>
       </form>`,
@@ -207,8 +229,9 @@ export function newPatientPage({ clinician, patient, errors = [], values = {} })
 
 // ---------- Clinician: one patient ----------
 
-function languageSelect() {
-  return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}">${name}</option>`)}</select>`;
+// Which language the patient gets, preselected to their preferred language.
+function languageSelect(selected) {
+  return html`<select name="language">${Object.entries(LANGUAGES).map(([code, name]) => html`<option value="${code}" lang="${code}" ${code === selected ? html`selected` : ''}>${name}</option>`)}</select>`;
 }
 
 export function patientPage({ clinician, patient, assessments, newLink, followups = [], followupLink, errors = [], access = { owner: true }, grants = [], owner, keptUntil, retentionYears = 10 }) {
@@ -232,6 +255,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
         <dt>${t('Age')}</dt><dd>${patient.age}</dd>
         <dt>${t('Education')}</dt><dd>${t(patient.education)}</dd>
         <dt>${t('Employment')}</dt><dd>${employmentLabel(patient.employed, t)}</dd>
+        <dt>${t('Preferred language')}</dt><dd>${LANGUAGES[patient.preferred_language] ?? LANGUAGES.en}</dd>
       </dl>
 
       ${newLink
@@ -249,13 +273,13 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
         <div class="start-options">
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="link" />
-            <label>${t('Questionnaire language')} ${languageSelect()}</label>
+            <label>${t('Patient’s language')} ${languageSelect(patient.preferred_language)}</label>
             <button>${t('Send link to patient')}</button>
             <p class="hint">${t('The patient answers at home. You get an email when it is done.')}</p>
           </form>
           <form method="post" action="/clinician/patients/${patient.id}/assessments">
             <input type="hidden" name="mode" value="onsite" />
-            <label>${t('Questionnaire language')} ${languageSelect()}</label>
+            <label>${t('Patient’s language')} ${languageSelect(patient.preferred_language)}</label>
             <button>${t('Conduct on site')}</button>
             <p class="hint">${t('You go through the questions with the patient now, on this device.')}</p>
           </form>
@@ -469,32 +493,28 @@ function radioGroup(id, question, options, number, selected, language, { showIf,
 }
 
 // Links to switch the patient's questionnaire language.
-function languageSwitch(language, switchUrl) {
-  if (!switchUrl) return '';
-  return html`<p class="lang-switch">${Object.entries(LANGUAGES)
-    .filter(([code]) => code !== language)
-    .map(([code, name]) => html`<a href="${switchUrl}?lang=${code}" lang="${code}">${name}</a>`)}</p>`;
-}
 
 // One part of the questionnaire per page.
 // action: where the form is sent (the page number is added). clinician: set
 // when the clinician fills it in on site (then the clinician's menu and the
 // consent confirmation show). answers: all answers given so far.
-export function questionnairePage({ action, pageIndex = 0, error, missing = [], clinician, patient, language = 'en', answers = {}, switchUrl, consentDone }) {
+export function questionnairePage({ action, pageIndex = 0, error, missing = [], clinician, patient, language = 'en', answers = {}, consentDone }) {
   const t = STRINGS[language];
   const page = PAGES[pageIndex];
   const last = pageIndex === PAGES.length - 1;
   const { answered, total } = progress(answers);
   const [sectionTitle, sectionIntro] = page.section ? sectionText(language, page.section) : [null, t[page.intro]];
   const tiredOptions = Array.from({ length: 11 }, (_, n) => ({ value: n, label: String(n) }));
-  const ct = translator(clinician?.language); // the clinician's language, for on-site texts
+  // On site, the clinician's texts are in the patient's language too: once a
+  // language is chosen for the patient, the whole page is in that language.
+  const ct = translator(language);
   return layout({
     title: t.title,
     clinician,
     language,
+    patientLanguage: clinician ? language : undefined,
     skipScript: true,
     body: html`
-      ${languageSwitch(language, switchUrl)}
       <h1>${clinician ? html`${ct('Intake screening')}: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
       ${pageIndex === 0
         ? clinician
@@ -548,7 +568,7 @@ export function questionnairePage({ action, pageIndex = 0, error, missing = [], 
         <p class="save-later"><button class="link" name="intent" value="save" formnovalidate>${clinician ? ct('Save draft and continue later') : t.save}</button></p>
       </form>
       <p class="crisis">${t.crisis}</p>
-      ${last ? html`<p class="hint">PHQ-9 and GAD-7 © Pfizer Inc., developed by Drs. Spitzer, Williams, Kroenke and colleagues; no permission required to reproduce. AUDIT-C: Bush et al., 1998. PC-PTSD-5: Prins et al., 2016, US National Center for PTSD. Personality items reworded from the SAPAS areas (Moran et al., 2003).</p>` : ''}
+      ${last ? html`<p class="hint">${t.copyright}</p>` : ''}
       ${t.translationNote ? html`<p class="hint">${t.translationNote}</p>` : ''}`,
   });
 }
@@ -569,13 +589,12 @@ export function breakPage({ language = 'en', continueUrl, stopAction }) {
   });
 }
 
-export function consentPage({ action, language = 'en', switchUrl, error }) {
+export function consentPage({ action, language = 'en', error }) {
   const t = STRINGS[language];
   return layout({
     title: t.consentTitle,
     language,
     body: html`
-      ${languageSwitch(language, switchUrl)}
       <h1>${t.consentTitle}</h1>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
       <section class="card">
@@ -774,12 +793,12 @@ function followupSection(t, patient, assessments, followups, followupLink, canSt
     ${canStart ? html`<div class="start-options">
       <form method="post" action="/clinician/patients/${patient.id}/followups">
         <input type="hidden" name="mode" value="link" />
-        <label>${t('Language')} ${languageSelect()}</label>
+        <label>${t('Patient’s language')} ${languageSelect(patient.preferred_language)}</label>
         <button>${t('Send follow-up link')}</button>
       </form>
       <form method="post" action="/clinician/patients/${patient.id}/followups">
         <input type="hidden" name="mode" value="onsite" />
-        <label>${t('Language')} ${languageSelect()}</label>
+        <label>${t('Patient’s language')} ${languageSelect(patient.preferred_language)}</label>
         <button>${t('Follow-up on site')}</button>
       </form>
     </div>` : ''}
@@ -787,16 +806,17 @@ function followupSection(t, patient, assessments, followups, followupLink, canSt
 }
 
 // The follow-up questionnaire: PHQ-9 and GAD-7 only.
-export function followupPage({ action, error, clinician, patient, language = 'en', answers = {}, switchUrl }) {
+export function followupPage({ action, error, clinician, patient, language = 'en', answers = {} }) {
   const t = STRINGS[language];
   const pick = (id) => answers[id];
+  const ct = translator(language); // on site: the clinician's texts in the patient's language
   return layout({
     title: t.title,
     clinician,
     language,
+    patientLanguage: clinician ? language : undefined,
     body: html`
-      ${languageSwitch(language, switchUrl)}
-      <h1>${clinician ? html`${translator(clinician.language)('Follow-up')}: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
+      <h1>${clinician ? html`${ct('Follow-up')}: ${patient.first_name} ${patient.last_name}` : t.title}</h1>
       <p class="crisis">${t.crisis}</p>
       ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
       <form method="post" action="${action}">
@@ -812,9 +832,9 @@ export function followupPage({ action, error, clinician, patient, language = 'en
           ${GAD7_ITEMS.map((item, i) => radioGroup(item.id, itemText(language, item), FREQUENCY_OPTIONS, i + 1, pick(item.id), language))}
           ${radioGroup(GAD_DIFFICULTY_ID, difficultyText(language, DIFFICULTY_QUESTION), DIFFICULTY_OPTIONS, null, pick(GAD_DIFFICULTY_ID), language)}
         </section>
-        <button class="big">${clinician ? translator(clinician.language)('Save follow-up') : t.submit}</button>
+        <button class="big">${clinician ? ct('Save follow-up') : t.submit}</button>
       </form>
-      <p class="hint">PHQ-9 and GAD-7 © Pfizer Inc.; no permission required to reproduce. ${t.translationNote}</p>`,
+      <p class="hint">${t.copyrightShort} ${t.translationNote}</p>`,
   });
 }
 
