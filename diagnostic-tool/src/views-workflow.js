@@ -61,8 +61,8 @@ function progress(t, c) {
   const assessed = Object.keys(c.checklists).length;
   const riskNeeded = riskIndicators(c).length > 0;
   const steps = [
-    { label: t('Intake screening'), done: Boolean(c.assessment.completed_at) },
     { label: t('Intake interview'), done: Boolean(c.interview?.updated_at) },
+    { label: t('Intake screening'), done: Boolean(c.assessment.completed_at) },
     { label: t('MoCA & observations'), done: Boolean(c.intake?.updated_at) },
     { label: t('Informant'), done: Boolean(c.informant?.updated_at) },
     { label: riskNeeded ? t('Risk assessment (required)') : t('Risk assessment'), done: Boolean(c.risk?.updated_at) },
@@ -76,6 +76,16 @@ function progress(t, c) {
 }
 
 // ---------- The assessment hub ----------
+
+// Step 1: the intake interview, done first (also before the screening).
+function interviewCard(t, base, c, locked) {
+  return html`<section class="card">
+    <h2>${t('1. Intake interview')}</h2>
+    <p class="hint">${t('History, family history, medical history, social situation and mental status examination.')}</p>
+    ${c.interview?.updated_at ? interviewHighlights(t, c.interview) : html`<p class="hint">${t('Not done yet.')}</p>`}
+    <p><a class="button" href="${base}/interview">${c.interview?.updated_at ? (locked ? t('View intake interview') : t('Open intake interview')) : t('Start intake interview')}</a></p>
+  </section>`;
+}
 
 export function casePage({ clinician, c, suggestions, errors = [] }) {
   const t = translator(clinician?.language);
@@ -93,16 +103,18 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
     ${c.readOnly ? html`<p class="note"><strong>${t('Read-only access.')}</strong> ${t('Only the treating clinician can make changes.')}</p>` : ''}
     ${errorList(t, errors)}`;
 
-  // Screening not done yet: nothing else to show.
+  // Screening not done yet: the interview (step 1) and the screening (step 2).
   if (!assessment.completed_at) {
+    const started = Boolean(assessment.consent_at || assessment.draft_json);
     return layout({
       title: t('Assessment'),
       clinician,
       body: html`${header}
+        ${interviewCard(t, base, c, c.readOnly)}
         <section class="card">
-          <h2>${t('1. Intake screening')}</h2>
+          <h2>${t('2. Intake screening')}</h2>
           ${assessment.mode === 'onsite'
-            ? html`<p>${t('The on-site screening has not been finished.')}</p>${c.readOnly ? '' : html`<p><a class="button" href="${base}/screening">${t('Continue the screening')}</a></p>`}`
+            ? html`<p>${started ? t('The on-site screening has not been finished.') : t('Not done yet.')}</p>${c.readOnly ? '' : html`<p><a class="button" href="${base}/screening">${started ? t('Continue the screening') : t('Start the screening')}</a></p>`}`
             : html`<p>${t('Waiting for the patient to answer the questionnaire link. You will get an email when it is done.')}</p>`}
         </section>`,
     });
@@ -136,14 +148,13 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         ? html`<div class="alert" role="alert"><strong>${t('Possible urgent neurological symptoms:')}</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. ${t('Ask when they started; if within the last days, arrange emergency assessment.')}</div>`
         : ''}
 
-      ${qualityBox(t, r.quality)}
+      ${interviewCard(t, base, c, locked)}
 
       <section class="card">
-        <h2>${t('2. Intake interview')}</h2>
-        <p class="hint">${t('History, family history, medical history, social situation and mental status examination.')}</p>
-        ${c.interview?.updated_at ? interviewHighlights(t, c.interview) : html`<p class="hint">${t('Not done yet.')}</p>`}
-        <p><a class="button" href="${base}/interview">${c.interview?.updated_at ? (locked ? t('View intake interview') : t('Open intake interview')) : t('Start intake interview')}</a></p>
+        <h2>${t('2. Intake screening')}</h2>
+        <p>${t('Completed {date} (UTC).', { date: assessment.completed_at })} <a href="#screening-results">${t('See the screening results')}</a></p>
       </section>
+      ${qualityBox(t, r.quality)}
 
       <section class="card">
         <h2>${t('3. MoCA and observed signs')}</h2>
@@ -209,7 +220,7 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         ${diagnosisSection(t, base, c, evaluations, locked)}
       </section>
 
-      <h2 class="section-title">${t('Intake screening results')}</h2>
+      <h2 class="section-title" id="screening-results">${t('Intake screening results')}</h2>
       <p class="hint">${t('Completed {date} (UTC). Email: {status}.', { date: assessment.completed_at, status: assessment.email_status || t('unknown') })}</p>
       ${screeningSections(r, t)}`,
   });

@@ -1,6 +1,6 @@
 # Validation plan
 
-What in the Mental Health Assessment app has not been validated, and how
+What in Continuum (the assessment app) has not been validated, and how
 to validate it. This is a **living document**: update it whenever the app
 changes (see [How to keep this plan up to date](#how-to-keep-this-plan-up-to-date)).
 

@@ -49,6 +49,8 @@ export function readyEmail({ kind, ref, urgent, url, language = 'en' }) {
     t('Log in to see the results: {url}', { url }),
     '',
     t('For privacy, this email contains no names or health information.'),
+    '',
+    '— Continuum',
   ].join('\n');
   return { subject, text };
 }
@@ -60,7 +62,7 @@ async function deliver(to, { subject, text }, urgent, tag) {
     writeFileSync(file, `To: ${to}\nSubject: ${subject}\n\n${text}\n`);
     return 'saved to outbox (SMTP not configured)';
   }
-  await transport.sendMail({ from: process.env.MAIL_FROM || 'screening@localhost', to, subject, text, priority: urgent ? 'high' : 'normal' });
+  await transport.sendMail({ from: process.env.MAIL_FROM || 'Continuum <continuum@localhost>', to, subject, text, priority: urgent ? 'high' : 'normal' });
   return 'sent';
 }
 

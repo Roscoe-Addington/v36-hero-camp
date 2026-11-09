@@ -63,6 +63,9 @@ export function html(strings, ...values) {
 
 // ---------- Shared layout ----------
 
+// The app's name. A name, so the same in every language.
+export const APP_NAME = 'Continuum';
+
 // The page language: the clinician's own language on clinician pages; the
 // patient's language on patient pages and on questionnaires the clinician
 // fills in on site (patientLanguage), so that page is in one language only.
@@ -75,13 +78,13 @@ export function layout({ title, clinician, body, language = 'en', patientLanguag
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>${title}</title>
+    <title>${title} · ${APP_NAME}</title>
     <link rel="stylesheet" href="/style.css" />
     ${skipScript ? html`<script type="module" src="/skip.js"></script>` : ''}
   </head>
   <body>
     <header class="topbar">
-      <span class="brand">${t('Mental Health Assessment')}</span>
+      <span class="brand">${APP_NAME}</span>
       ${clinician
         ? html`<nav>
             <a href="/clinician">${t('Patients')}</a>
@@ -302,7 +305,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
                 else if (a.revoked) status = t('Cancelled');
                 else if (a.mode === 'onsite') status = link(t('On-site screening not finished: continue'));
                 else if (new Date(a.expires_at) < new Date()) status = t('Link expired');
-                else status = t('Waiting for patient');
+                else status = link(t('Waiting for patient'));
                 return html`<tr>
                   <td>${a.created_at}</td>
                   <td>${a.mode === 'onsite' ? t('On site') : t('Link')}</td>

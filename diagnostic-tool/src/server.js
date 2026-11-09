@@ -385,7 +385,9 @@ clinician.post('/patients/:id/assessments', (req, res) => {
     .run(patient.id, hashToken(token), expires.toISOString(), mode, language);
 
   audit(req.clinician.id, 'start_assessment', { patientId: patient.id, assessmentId: Number(result.lastInsertRowid), detail: `${mode}, ${language}` });
-  if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}/screening`);
+  // On site, the assessment opens with the intake interview first; the
+  // screening is started from there.
+  if (mode === 'onsite') return res.redirect(`/clinician/assessments/${result.lastInsertRowid}`);
   showPatient(req, res, { newLink: { url: `${BASE_URL}/q/${token}`, expires: expires.toISOString().slice(0, 10) } });
 });
 
@@ -431,7 +433,9 @@ const notFound = (req, res) =>
   send(res, views.messagePage({ title: 'Not found', message: 'No such assessment.', clinician: req.clinician }), 404);
 
 // Pages after the screening need a completed, not finalized assessment.
-function editableCase(req, res) {
+// beforeScreening: the step may be done before the intake screening is
+// finished (the intake interview comes first in the assessment).
+function editableCase(req, res, { beforeScreening = false } = {}) {
   // Always return null after sending a response, so callers can do
   // `if (!c) return;` (res.send() returns the response object, which is truthy).
   const c = loadCase(req);
@@ -439,7 +443,7 @@ function editableCase(req, res) {
     notFound(req, res);
     return null;
   }
-  if (!c.assessment.completed_at) {
+  if (!c.assessment.completed_at && !beforeScreening) {
     res.redirect(`/clinician/assessments/${c.assessment.id}`);
     return null;
   }
@@ -603,10 +607,12 @@ clinician.post('/assessments/:id/intake', (req, res) => {
 
 // ---------- Intake interview, informant, risk assessment ----------
 // One pattern for all three forms: a page, a parser (clinical-forms.js) and
-// the database column the result is saved in.
+// the database column the result is saved in. The intake interview is the
+// first step of the assessment, so it can be done before the screening;
+// the informant and risk forms build on the screening answers.
 
 const FORMS = {
-  interview: { page: workflow.interviewPage, parse: parseInterview, column: 'interview_json' },
+  interview: { page: workflow.interviewPage, parse: parseInterview, column: 'interview_json', beforeScreening: true },
   informant: { page: workflow.informantPage, parse: parseInformant, column: 'informant_json' },
   risk: { page: workflow.riskPage, parse: parseRisk, column: 'risk_json' },
 };
@@ -615,13 +621,13 @@ for (const [name, form] of Object.entries(FORMS)) {
   clinician.get(`/assessments/:id/${name}`, (req, res) => {
     const c = loadCase(req);
     if (!c) return notFound(req, res);
-    if (!c.assessment.completed_at) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
+    if (!c.assessment.completed_at && !form.beforeScreening) return res.redirect(`/clinician/assessments/${c.assessment.id}`);
     auditCase(req, c, `view_${name}`);
     send(res, form.page({ clinician: req.clinician, c }));
   });
 
   clinician.post(`/assessments/:id/${name}`, (req, res) => {
-    const c = editableCase(req, res);
+    const c = editableCase(req, res, { beforeScreening: form.beforeScreening });
     if (!c) return;
     const result = form.parse(req.body);
     if (result.errors) {

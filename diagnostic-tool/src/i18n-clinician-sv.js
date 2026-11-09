@@ -3,7 +3,6 @@
 
 export const SV = {
   // ----- Menu, login, patient list -----
-  'Mental Health Assessment': 'Psykiatrisk bedömning',
   Patients: 'Patienter',
   'New patient': 'Ny patient',
   Retention: 'Gallring',
@@ -285,7 +284,10 @@ export const SV = {
   'started {date}': 'startad {date}',
   'Read-only access.': 'Läsbehörighet.',
   'Only the treating clinician can make changes.': 'Bara den behandlande behandlaren kan göra ändringar.',
-  '1. Intake screening': '1. Screening',
+  '2. Intake screening': '2. Screening',
+  'Start the screening': 'Starta screeningen',
+  'Completed {date} (UTC).': 'Besvarad {date} (UTC).',
+  'See the screening results': 'Se resultaten från screeningen',
   'The on-site screening has not been finished.': 'Screeningen på mottagningen är inte klar.',
   'Continue the screening': 'Fortsätt screeningen',
   'Waiting for the patient to answer the questionnaire link. You will get an email when it is done.': 'Väntar på att patienten besvarar formuläret via länken. Du får ett mejl när det är klart.',
@@ -300,7 +302,7 @@ export const SV = {
   'Start the suicide risk assessment': 'Starta suicidriskbedömningen',
   'Possible urgent neurological symptoms:': 'Möjliga brådskande neurologiska symtom:',
   'Ask when they started; if within the last days, arrange emergency assessment.': 'Fråga när de började; om det var de senaste dagarna, ordna akut bedömning.',
-  '2. Intake interview': '2. Intagningsintervju',
+  '1. Intake interview': '1. Intagningsintervju',
   'History, family history, medical history, social situation and mental status examination.': 'Anamnes, hereditet, somatisk anamnes, social situation och psykiskt status.',
   'Not done yet.': 'Inte gjort ännu.',
   'View intake interview': 'Visa intagningsintervjun',

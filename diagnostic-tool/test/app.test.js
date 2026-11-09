@@ -178,12 +178,22 @@ test('on-site flow: screening, MoCA, checklist, diagnosis, final report', async 
   }, cookie);
   const patientPath = created.headers.get('location');
 
-  // Start on site: goes straight to the screening form, no link shown
+  // Start on site: opens the assessment, intake interview first, no link shown
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
   assert.equal(start.status, 302);
-  const screeningPath = start.headers.get('location');
-  assert.match(screeningPath, /^\/clinician\/assessments\/\d+\/screening$/);
-  const casePath = screeningPath.replace('/screening', '');
+  const casePath = start.headers.get('location');
+  assert.match(casePath, /^\/clinician\/assessments\/\d+$/);
+  const screeningPath = `${casePath}/screening`;
+  const hub = await (await fetch(base + casePath, { headers: { cookie } })).text();
+  assert.ok(hub.indexOf('1. Intake interview') < hub.indexOf('2. Intake screening'), 'interview is step 1, screening step 2');
+  assert.ok(hub.includes(`href="${screeningPath}">Start the screening`));
+
+  // The intake interview can be done before the screening
+  assert.ok((await (await fetch(`${base}${casePath}/interview`, { headers: { cookie } })).text()).includes('Structured psychiatric history'));
+  assert.equal((await post(`${casePath}/interview`, {}, cookie)).status, 400, 'checked, not sent back to wait for the screening');
+  // ...but the risk assessment and informant forms need the screening answers
+  assert.equal((await fetch(`${base}${casePath}/risk`, { headers: { cookie }, redirect: 'manual' })).headers.get('location'), casePath);
+
   const form = await (await fetch(base + screeningPath, { headers: { cookie } })).text();
   assert.ok(form.includes('On-site screening'));
 
@@ -411,7 +421,7 @@ test('follow-up by link (Swedish) and on site, with chart and change on the pati
 
   // Intake screening on site: PHQ-9 15
   const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
-  await answerPages(start.headers.get('location'), { ...makeAnswers({ phq1: 3, phq2: 3, phq3: 3, phq4: 3, phq7: 3, gad1: 2, gad2: 2 }), consent_given: 'yes' }, cookie);
+  await answerPages(`${start.headers.get('location')}/screening`, { ...makeAnswers({ phq1: 3, phq2: 3, phq3: 3, phq4: 3, phq7: 3, gad1: 2, gad2: 2 }), consent_given: 'yes' }, cookie);
 
   // Follow-up link in Swedish
   const page = await (await post(`${patientPath}/followups`, { mode: 'link', language: 'sv' }, cookie)).text();
@@ -649,7 +659,7 @@ test('patient’s preferred language: chosen at registration, preselected when s
   const qPath = new URL(sent.match(/value="(http[^"]+\/q\/[^"]+)"/)[1]).pathname;
   const consent = await (await fetch(base + qPath)).text();
   assert.ok(consent.includes('<html lang="sv">'));
-  assert.ok(consent.includes('<span class="brand">Psykiatrisk bedömning</span>'), 'top bar in Swedish');
+  assert.ok(consent.includes('<span class="brand">Continuum</span>'), 'the app name in the top bar');
   assert.ok(!consent.includes('?lang='), 'no language switch for the patient');
   db.prepare('UPDATE assessments SET revoked = 1 WHERE patient_id = ?').run(patientId);
   const invalid = await (await fetch(base + qPath)).text();
@@ -663,12 +673,12 @@ test('patient’s preferred language: chosen at registration, preselected when s
 
   // On site, with an English-speaking clinician: the questionnaire is in Swedish
   const onsite = await post(`${patientPath}/assessments`, { mode: 'onsite', language: 'sv' }, cookie);
-  const screening = await (await fetch(base + onsite.headers.get('location'), { headers: { cookie } })).text();
+  const screening = await (await fetch(`${base}${onsite.headers.get('location')}/screening`, { headers: { cookie } })).text();
   assert.ok(screening.includes('<html lang="sv">'));
   assert.ok(screening.includes('<a href="/clinician">Patienter</a>'), 'menu in Swedish');
   assert.ok(screening.includes('Spara utkast och fortsätt senare'), 'clinician buttons in Swedish');
   assert.ok(!screening.includes('Save answers and score') && !screening.includes('Log out'));
-  const refused = await (await post(onsite.headers.get('location').split('?')[0], { phq1: '0' }, cookie)).text();
+  const refused = await (await post(`${onsite.headers.get('location')}/screening`, { phq1: '0' }, cookie)).text();
   assert.ok(refused.includes('Bekräfta att patienten har fått informationen.'));
   // ...and back on the clinician pages, the clinician's own language
   const casePage = await (await fetch(base + patientPath, { headers: { cookie } })).text();

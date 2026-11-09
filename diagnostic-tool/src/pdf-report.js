@@ -37,7 +37,7 @@ const COLOR = { text: '#1d2430', muted: '#5b6575', accent: '#1f5f8b', line: '#d9
 // language: the language of the clinician who downloads it ('en' or 'sv').
 export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' }) {
   const t = translator(language);
-  const doc = new PDFDocument({ size: 'A4', margin: MARGIN, bufferPages: true, info: { Title: `${t('Final assessment report')} #${c.assessment.id}`, Author: clinicianName } });
+  const doc = new PDFDocument({ size: 'A4', margin: MARGIN, bufferPages: true, info: { Title: `Continuum · ${t('Final assessment report')} #${c.assessment.id}`, Author: clinicianName, Creator: 'Continuum' } });
   const chunks = [];
   doc.on('data', (chunk) => chunks.push(chunk));
   const done = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
@@ -82,6 +82,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
   const { assessment, patient } = c;
   const r = c.results;
 
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR.muted).text('Continuum');
   doc.font('Helvetica-Bold').fontSize(18).fillColor(COLOR.text).text(winAnsi(t('Final assessment report')));
   doc.font('Helvetica').fontSize(9).fillColor(COLOR.muted).text(winAnsi(t('Assessment #{id} · finalized {date}', { id: assessment.id, date: assessment.finalized_at })));
   doc.moveDown(0.8);

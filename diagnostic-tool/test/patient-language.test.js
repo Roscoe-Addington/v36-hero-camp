@@ -24,7 +24,7 @@ function visibleText(page) {
 const strings = (language) =>
   Object.values(STRINGS[language]).flatMap((v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v : []))
     .filter((s) => s.length >= 12);
-const ENGLISH = [...strings('en'), ...Object.keys(SV).filter((k) => k.length >= 12 && k.includes(' ')), 'Mental Health Assessment', 'English'];
+const ENGLISH = [...strings('en'), ...Object.keys(SV).filter((k) => k.length >= 12 && k.includes(' ')), 'English'];
 const SWEDISH = [...strings('sv'), ...Object.values(SV).filter((v) => v.length >= 12 && v.includes(' ')), 'Svenska'];
 
 function assertOnly(language, name, page) {

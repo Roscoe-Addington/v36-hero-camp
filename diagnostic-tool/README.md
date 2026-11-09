@@ -1,6 +1,6 @@
-# Mental Health Assessment
+# Continuum
 
-A web app that supports a clinician through the whole assessment of a
+**Continuum** is a web app that supports a clinician through the whole assessment of a
 patient aged **16 or older**, from the intake screening to a confirmed
 diagnosis with an ICD-10 code.
 
@@ -30,8 +30,15 @@ use disorder) are listed as "outside this app" so they are not lost.
 
 1. **Start.** On the patient's page the clinician chooses **Send link to
    patient** (the patient answers at home and the clinician is emailed) or
-   **Conduct on site**, and the questionnaire language (English or Swedish).
-2. **Intake screening.** The patient first confirms an information page
+   **Conduct on site**, and the patient's language (English or Swedish).
+   On site, the assessment opens with the intake interview first.
+2. **Intake interview.** A structured psychiatric history: reason and
+   onset, previous diagnoses and treatment, previous suicide attempts and
+   self-harm, family history, medical history and medicines, pregnancy,
+   substance use, social situation and development, and a **mental status
+   examination**. It can be done before the screening (for example while
+   the patient's link is still open).
+3. **Intake screening.** The patient first confirms an information page
    (on site, the clinician confirms the patient was informed). Then 95
    questions (about 25 minutes): PHQ-9, GAD-7, GAD criteria items, mood
    history, psychotic experiences, AUDIT-C, drugs, medicines, health, life
@@ -43,11 +50,6 @@ use disorder) are listed as "outside this app" so they are not lost.
    parts 3 and 6 the patient rates **how tired they feel** (0–10); 7 or
    more offers a **break**. Answers are saved page by page and can be
    continued later from the same link.
-3. **Intake interview.** A structured psychiatric history: reason and
-   onset, previous diagnoses and treatment, previous suicide attempts and
-   self-harm, family history, medical history and medicines, pregnancy,
-   substance use, social situation and development, and a **mental status
-   examination**.
 4. **MoCA and observed signs.** On site, the clinician enters the **MoCA**
    domain scores (the app adds them up and adds 1 point for 12 years of
    education or fewer), and signs of **delirium** and **catatonia**.
@@ -217,6 +219,19 @@ Run the tests:
 
 ```bash
 npm test
+```
+
+## Browser demo
+
+`demo/` holds a one-file browser demo that runs the app's real page code
+with made-up data (nothing is saved or sent). It walks through the
+assessment in order: log in, add patient, start assessment, intake
+interview, intake screening, risk assessment, criteria checklist, final
+report, email, follow-up, audit log and retention. The demo's own texts
+follow the language chosen in the app's top bar (English or Svenska).
+
+```bash
+npm run build:demo     # writes demo/dist/continuum-demo.html
 ```
 
 ## Tablets and phones (iPad, Android)

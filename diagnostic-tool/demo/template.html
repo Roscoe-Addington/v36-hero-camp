@@ -1,0 +1,909 @@
+<title>Continuum – demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a narrow guide column (steps + explanation) above a mock browser
+     window that shows the app's real pages, rendered by the app's own code. */
+  :root {
+    --bg: #eceff3;
+    --surface: #ffffff;
+    --fg: #16202b;
+    --muted: #556272;
+    --line: #d3dae3;
+    --accent: #1f5f8b;
+    --accent-soft: #e3eef7;
+    --chrome: #dfe4ea;
+    --font-ui: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151b; --surface: #19212a; --fg: #e5eaf0; --muted: #9aa7b6;
+      --line: #2c3743; --accent: #74b3df; --accent-soft: #1d3346; --chrome: #232c36;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151b; --surface: #19212a; --fg: #e5eaf0; --muted: #9aa7b6;
+    --line: #2c3743; --accent: #74b3df; --accent-soft: #1d3346; --chrome: #232c36;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding-block: 24px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    gap: 16px;
+  }
+
+  .head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+  .head h1 { margin: 0; font-size: 1.6rem; line-height: 1.2; text-wrap: balance; }
+  .head p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  button.ui {
+    font: inherit; font-size: 0.9rem; font-weight: 700;
+    padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  }
+  button.ui:hover { border-color: var(--accent); }
+  button.ui[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  button.ui.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+  button.ui:focus-visible, .steps a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* The real flow is a sequence, so the steps are numbered. */
+  .steps { overflow-x: auto; }
+  .steps ol {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; gap: 6px; min-width: max-content;
+  }
+  .steps a {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 8px 12px; border-radius: 6px; text-decoration: none;
+    color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  }
+  .steps a .n { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+  .steps a .who { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .steps a[aria-current="page"] { border-color: var(--accent); background: var(--accent-soft); }
+  .steps a[aria-current="page"] .n, .steps a[aria-current="page"] .who { color: var(--accent); }
+
+  .context {
+    display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .context p { margin: 0; flex: 1 1 320px; min-width: 0; max-width: 70ch; }
+  .context .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .window {
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    background: var(--surface); width: 100%; margin: 0 auto;
+    transition: max-width 200ms ease;
+  }
+  .window.phone { max-width: 400px; }
+  .bar {
+    display: flex; gap: 10px; align-items: center;
+    padding: 8px 12px; background: var(--chrome); border-bottom: 1px solid var(--line);
+  }
+  .dots { display: flex; gap: 6px; flex: none; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .addr {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted);
+    background: var(--surface); border-radius: 5px; padding: 4px 10px;
+  }
+  .lock { color: var(--muted); font-size: 0.8rem; flex: none; }
+  /* The app's own pages keep their own (light) look, like a real website would. */
+  #screen { min-height: 480px; background: #f6f7f9; }
+
+  .foot { color: var(--muted); font-size: 0.85rem; max-width: 80ch; }
+
+  @media (prefers-reduced-motion: reduce) { .window { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1 id="demo-title">Continuum</h1>
+      <p id="demo-intro"></p>
+    </div>
+    <div class="tools">
+      <button class="ui" id="desktop-btn" aria-pressed="true" type="button">Desktop</button>
+      <button class="ui" id="phone-btn" aria-pressed="false" type="button">Phone</button>
+      <button class="ui" id="role-btn" type="button" aria-pressed="false">View as supervisor</button>
+      <button class="ui" id="reset-btn" type="button">Reset demo</button>
+    </div>
+  </header>
+
+  <nav class="steps" id="steps-nav">
+    <ol id="steps"></ol>
+  </nav>
+
+  <div class="context" id="context"></div>
+
+  <div class="window" id="window">
+    <div class="bar">
+      <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <span class="lock" aria-hidden="true">https</span>
+      <div class="addr" id="addr"></div>
+    </div>
+    <div id="screen"></div>
+  </div>
+
+  <p class="foot" id="demo-foot"></p>
+</div>
+
+<script>/*BUNDLE*/</script>
+<script>
+(function () {
+  const D = window.Demo;
+  const HOST = 'https://assessment.example';
+  const TOKEN = 'k7Qp2vXw9LmA4rTz0bYc8NdE5sGh1uJf3iWo6yKe';
+  const FTOKEN = 'Fq81mZp0LwX3cVt7RbN5yKs2HdJ9gUe4aTo6iPr';
+  const BASE = '/clinician/assessments/1';
+  const PATIENT = '/clinician/patients/1';
+
+  // The steps of the assessment, in the order the clinician works.
+  const STEPS = [
+    { id: 'login', who: 'clinician' },
+    { id: 'new-patient', who: 'clinician' },
+    { id: 'patient', who: 'clinician' },
+    { id: 'interview', who: 'clinician' },
+    { id: 'screening', who: 'patientClinician' },
+    { id: 'risk', who: 'clinician' },
+    { id: 'checklist', who: 'clinician' },
+    { id: 'final', who: 'clinician' },
+    { id: 'email', who: 'clinician' },
+    { id: 'followup', who: 'clinician' },
+    { id: 'audit', who: 'clinician' },
+    { id: 'retention', who: 'clinician' },
+  ];
+  // Views reached from inside the app, and the step they belong to. The
+  // assessment overview ("case") opens from the patient page and from
+  // "Back to the assessment"; it starts with the intake interview.
+  const EXTRA = {
+    patients: 'patient', thanks: 'screening', consent: 'screening', saved: 'screening', informant: 'interview', case: 'interview',
+    plan: 'risk', break: 'screening', 'edit-patient': 'patient', deleted: 'patient', 'followup-form': 'followup', 'followup-thanks': 'followup',
+  };
+
+  // Every text of the demo page itself, in English and Swedish. The demo
+  // follows the language the clinician chooses in the app's top bar.
+  const UI = {
+    en: {
+      title: 'Continuum – demo',
+      intro: "The real pages of Continuum, from the intake interview and screening to diagnosis and follow-up, running on the app's own code. Choose English or Svenska in the app's top bar: the whole demo follows. All data is fictional. Nothing is saved or emailed.",
+      desktop: 'Desktop', phone: 'Phone', supervisor: 'View as supervisor', supervisorOn: 'Viewing as supervisor (read-only)', reset: 'Reset demo',
+      stepsLabel: 'Steps in the assessment',
+      foot: "Continuum supports, but does not replace, clinical judgement. In the real app the clinician pages need a login, each patient link works once, everything is saved in a database, and the email goes to the clinician's address instead of being shown here.",
+      clinician: 'Clinician', patientClinician: 'Patient / clinician',
+      steps: { login: 'Log in', 'new-patient': 'Add patient', patient: 'Start assessment', interview: 'Intake interview', screening: 'Intake screening', risk: 'Risk assessment', checklist: 'Criteria checklist', final: 'Final report', email: 'Email', followup: 'Follow-up', audit: 'Audit log', retention: 'Retention' },
+      continueClinician: 'Continue as the clinician', seeEmail: 'See the email', openAgain: 'Open the link again', seeChart: 'See the chart',
+      pdf: 'In the real app, "Download PDF" downloads the final report as a PDF file, in the clinician’s language. This demo page is not allowed to download files.',
+      inboxAddress: 'Email inbox', inbox: 'Inbox', noEmail: 'No email yet: the intake screening has not been completed.', from: 'From', to: 'To', subject: 'Subject',
+      notStartedTitle: 'Not available yet', notStarted: 'Complete the intake screening first (step 5).',
+      deletedTitle: 'Patient deleted', deletedGone: 'This demo patient was deleted. Press "Reset demo" to start again.',
+      deleted: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.',
+      emailStatus: 'shown in the Email step of this demo (not sent)',
+      noAccount: 'No clinician account with that email address. In this demo, try supervisor@clinic.example or colleague@clinic.example.',
+      context: {
+        login: 'Clinicians log in with their email and password. The demo login is filled in: press Log in. After logging in, choose English or Svenska in the top bar.',
+        patients: 'The clinician sees only their own patients.',
+        'new-patient': 'The clinician enters the patient details (16 years or older), including the patient’s preferred language.',
+        'edit-patient': 'Correcting patient details. The audit log records which fields changed, not the new values.',
+        patient: 'Start an assessment: send a link to the patient or conduct it on site, in the patient’s language. Further down: follow-up chart, "Who has access" (give a supervisor or colleague access, e.g. supervisor@clinic.example), and deleting the record. At the top: how long the record is kept.',
+        case: 'The assessment overview: 1. intake interview, 2. intake screening (with the Response quality box: fast parts, contradictions, tiredness), then MoCA and observations, informant, risk assessment, suggested disorders and diagnosis.',
+        interview: 'The first step of the assessment: structured psychiatric history and mental status examination. It can be done before the screening. Only the reason is required. Findings here change the suggestions (e.g. a family history of bipolar disorder).',
+        informant: 'Information from someone close to the patient, saved only with the patient’s consent.',
+        consent: 'Before answering, the patient confirms an information page about how their answers are used, in the patient’s language.',
+        screening: () => 'One part per page with a progress bar, in the patient’s language (' + LANGUAGE_NAMES[state.language] + '; change it on the patient page in step 3). Follow-up questions appear only when they apply: try answering "Yes", then "No", to the first question in part 4. After parts 3 and 6 the patient rates their tiredness; 7 or more offers a break.' + (state.mode === 'onsite' ? ' (On site the clinician enters the answers; the tiredness question is for patients answering by link.)' : ''),
+        break: 'A tiredness rating of 7 or more offers a break. The answers so far are saved.',
+        saved: 'The answers so far are saved. Opening the same link again continues where the patient left off.',
+        thanks: 'The patient sees this. Everything else goes only to the clinician.',
+        risk: () => 'Suicide risk assessment and safety plan. The app does not calculate a risk score. ' + (D.finalizeBlocker(caseObject())?.includes('risk') ? 'It is required here before finalizing.' : 'Answer "Several days" to PHQ-9 item 9 in the screening to see it become required.'),
+        plan: 'The safety plan as a page to give to the patient.',
+        checklist: 'Rate each criterion present, absent or unclear, pick specifiers and save. The rule-out table lists what to exclude. Then go back to the assessment to confirm the diagnosis.',
+        final: () => state.finalizedAt
+          ? 'The final report. On the assessment overview, "Reopen to make a correction" needs a reason and keeps a change history.'
+          : 'Not finalized yet. Fill in the intake interview, confirm a diagnosis, and press "Finalize assessment" on the assessment overview.',
+        email: 'The email the clinician receives when the intake screening is done, in the clinician’s language: no names or health information, only that results are ready and a link. Answer “Several days” to PHQ-9 item 9 to see the urgent version.',
+        followup: 'Follow-up measurements over time. Press "Follow-up on site" to add one and watch the chart and the change summary update.',
+        'followup-form': 'The follow-up questionnaire: PHQ-9 and GAD-7 only, in the patient’s language.',
+        'followup-thanks': 'The patient sees this after a follow-up by link.',
+        audit: 'Every view and change of this patient’s information, recorded as you click through this demo.',
+        retention: 'How long data is kept, and records past their retention period for the treating clinician to review and delete.',
+        deleted: 'The record is deleted, but the deletion stays in the audit log. Press "Reset demo" to start again.',
+      },
+    },
+    sv: {
+      title: 'Continuum – demo',
+      intro: 'Continuums riktiga sidor, från intagningsintervju och screening till diagnos och uppföljning, med appens egen kod. Välj English eller Svenska i appens översta fält: hela demon följer med. Alla uppgifter är påhittade. Inget sparas eller mejlas.',
+      desktop: 'Dator', phone: 'Mobil', supervisor: 'Visa som handledare', supervisorOn: 'Visar som handledare (läsbehörighet)', reset: 'Börja om',
+      stepsLabel: 'Stegen i bedömningen',
+      foot: 'Continuum är ett stöd för, men ersätter inte, den kliniska bedömningen. I den riktiga appen kräver behandlarsidorna inloggning, varje patientlänk fungerar en gång, allt sparas i en databas och mejlet skickas till behandlarens adress i stället för att visas här.',
+      clinician: 'Behandlare', patientClinician: 'Patient / behandlare',
+      steps: { login: 'Logga in', 'new-patient': 'Lägg till patient', patient: 'Starta bedömning', interview: 'Intagningsintervju', screening: 'Screening', risk: 'Riskbedömning', checklist: 'Kriteriechecklista', final: 'Slutrapport', email: 'Mejl', followup: 'Uppföljning', audit: 'Logg', retention: 'Gallring' },
+      continueClinician: 'Fortsätt som behandlare', seeEmail: 'Se mejlet', openAgain: 'Öppna länken igen', seeChart: 'Se diagrammet',
+      pdf: 'I den riktiga appen laddar "Ladda ner PDF" ner slutrapporten som en PDF-fil, på behandlarens språk. Den här demosidan får inte ladda ner filer.',
+      inboxAddress: 'Inkorg', inbox: 'Inkorg', noEmail: 'Inget mejl ännu: screeningen är inte klar.', from: 'Från', to: 'Till', subject: 'Ämne',
+      notStartedTitle: 'Inte tillgängligt ännu', notStarted: 'Gör screeningen först (steg 5).',
+      deletedTitle: 'Patienten är raderad', deletedGone: 'Demopatienten är raderad. Tryck på "Börja om" för att starta igen.',
+      deleted: 'Patientjournalen och alla bedömningar är raderade. Raderingen finns kvar i loggen.',
+      emailStatus: 'visas i steget Mejl i den här demon (skickas inte)',
+      noAccount: 'Det finns inget behandlarkonto med den e-postadressen. I demon kan du prova supervisor@clinic.example eller colleague@clinic.example.',
+      context: {
+        login: 'Behandlare loggar in med e-post och lösenord. Inloggningen i demon är ifylld: tryck på Logga in. Välj sedan English eller Svenska i det översta fältet.',
+        patients: 'Behandlaren ser bara sina egna patienter.',
+        'new-patient': 'Behandlaren fyller i patientens uppgifter (16 år eller äldre), också patientens önskade språk.',
+        'edit-patient': 'Rätta patientuppgifter. Loggen sparar vilka fält som ändrades, inte de nya värdena.',
+        patient: 'Starta en bedömning: skicka en länk till patienten eller genomför den på mottagningen, på patientens språk. Längre ner: diagram över uppföljningar, "Vem har behörighet" (ge en handledare eller kollega behörighet, t.ex. supervisor@clinic.example) och radering av journalen. Överst: hur länge journalen sparas.',
+        case: 'Översikten över bedömningen: 1. intagningsintervju, 2. screening (med rutan Svarskvalitet: snabba delar, motsägelser, trötthet), sedan MoCA och observationer, närstående, riskbedömning, föreslagna tillstånd och diagnos.',
+        interview: 'Bedömningens första steg: strukturerad psykiatrisk anamnes och psykiskt status. Den kan göras före screeningen. Bara orsaken är obligatorisk. Det som fylls i här påverkar förslagen (t.ex. bipolär sjukdom i släkten).',
+        informant: 'Uppgifter från någon som står patienten nära. Sparas bara med patientens samtycke.',
+        consent: 'Innan patienten svarar bekräftar hen en informationssida om hur svaren används, på patientens språk.',
+        screening: () => 'En del per sida med en förloppsindikator, på patientens språk (' + LANGUAGE_NAMES[state.language] + '; ändra det på patientsidan i steg 3). Följdfrågor visas bara när de gäller: svara "Ja" och sedan "Nej" på första frågan i del 4. Efter del 3 och 6 skattar patienten sin trötthet; 7 eller mer ger förslag på paus.' + (state.mode === 'onsite' ? ' (På mottagningen fyller behandlaren i svaren; trötthetsfrågan gäller patienter som svarar via länk.)' : ''),
+        break: 'En trötthetsskattning på 7 eller mer ger förslag på paus. Svaren hittills är sparade.',
+        saved: 'Svaren hittills är sparade. Om patienten öppnar samma länk igen fortsätter hen där hen slutade.',
+        thanks: 'Det här ser patienten. Allt annat går bara till behandlaren.',
+        risk: () => 'Suicidriskbedömning och krisplan. Appen räknar inte ut något riskvärde. ' + (D.finalizeBlocker(caseObject())?.includes('risk') ? 'Här krävs den innan bedömningen kan avslutas.' : 'Svara "Flera dagar" på fråga 9 i PHQ-9 i screeningen för att se den bli obligatorisk.'),
+        plan: 'Krisplanen som en sida att ge till patienten.',
+        checklist: 'Skatta varje kriterium som uppfyllt, ej uppfyllt eller oklart, välj specificeringar och spara. Tabellen visar vad som ska uteslutas. Gå sedan tillbaka till bedömningen och bekräfta diagnosen.',
+        final: () => state.finalizedAt
+          ? 'Slutrapporten. På översikten kräver "Öppna igen för att rätta" en orsak, och ändringarna sparas i en historik.'
+          : 'Inte avslutad ännu. Fyll i intagningsintervjun, bekräfta en diagnos och tryck på "Avsluta bedömningen" på översikten.',
+        email: 'Mejlet behandlaren får när screeningen är klar, på behandlarens språk: inga namn eller hälsouppgifter, bara att resultaten är klara och en länk. Svara "Flera dagar" på fråga 9 i PHQ-9 för att se den brådskande versionen.',
+        followup: 'Uppföljande mätningar över tid. Tryck på "Uppföljning på mottagningen" för att lägga till en och se diagrammet och sammanfattningen uppdateras.',
+        'followup-form': 'Uppföljningsformuläret: bara PHQ-9 och GAD-7, på patientens språk.',
+        'followup-thanks': 'Det här ser patienten efter en uppföljning via länk.',
+        audit: 'Varje gång patientens uppgifter visas eller ändras, sparat medan du klickar dig igenom demon.',
+        retention: 'Hur länge uppgifter sparas, och journaler som passerat sin gallringstid för den behandlande behandlaren att granska och radera.',
+        deleted: 'Journalen är raderad, men raderingen finns kvar i loggen. Tryck på "Börja om" för att starta igen.',
+      },
+    },
+  };
+  const LANGUAGE_NAMES = { en: 'English', sv: 'Svenska' };
+  const uiLanguage = () => (CLINICIAN.language === 'sv' ? 'sv' : 'en');
+  const L = (key) => UI[uiLanguage()][key];
+
+  const CLINICIAN = { id: 1, name: 'Dr Demo', email: 'demo@clinic.example', language: 'en' };
+  // A supervisor with read-only access, to show what colleagues see.
+  const SUPERVISOR = { id: 2, name: 'Dr Supervisor', email: 'supervisor@clinic.example', language: 'en' };
+  let asSupervisor = false;
+  const viewer = () => (asSupervisor ? { ...SUPERVISOR, language: CLINICIAN.language } : CLINICIAN);
+  const SAMPLE_PATIENT = {
+    id: 1, clinician_id: 1, first_name: 'Karin', last_name: 'Lund', personal_number: '19580704-XXXX',
+    gender: 'Female', age: 67, education: 'Upper secondary school', employed: 0, preferred_language: 'en',
+  };
+  const SAMPLE_ANSWERS = {
+    phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq6: 1, phq7: 3, phqDifficulty: 2,
+    gad1: 1, gad2: 1, gad3: 1, gad4: 1, gadDifficulty: 1,
+    cog1: 1, pd2: 1, pd3: 1, pd6: 1, pd8: 1, sep1: 1, neuro4: 1, grief1: 1, grief2: 1,
+  };
+  const SAMPLE_INTAKE = {
+    moca: { administered: true, lowEducation: true, domains: { visexec: 3, naming: 3, attention: 5, language: 2, abstraction: 1, recall: 2, orientation: 6 } },
+    delirium: { acute: 'no', inattention: 'no', disorganized: 'no', consciousness: 'no' },
+    catatonia: 'no',
+    notes: 'Tremor of the right hand noted; refer to neurology.',
+    updated_at: '2026-10-02 10:40',
+  };
+  const SAMPLE_INTERVIEW = {
+    reason: 'Low mood since her husband died 8 months ago. Her daughter is worried about her memory.',
+    onset: 'Gradual over the past 8 months.',
+    prev_dx: '', prev_treatment: [], prev_attempt: 'none', self_harm_hist: 'no',
+    family: ['depression', 'dementia'], family_notes: 'Mother had dementia from about 75.',
+    medical: 'Hypertension.', medicines: 'Amlodipine 5 mg.', perinatal: 'na', substance_notes: 'Two glasses of wine a week.',
+    living: 'Lives alone; daughter visits weekly.', occupation: 'Retired teacher.', legal: '', development: '',
+    mse_appearance: 'Neatly dressed, good eye contact.', mse_psychomotor: 'slowed', mse_speech: 'slow', mse_mood: '"Empty"',
+    mse_affect: 'restricted', mse_thought_form: 'normal', mse_delusions: 'no', mse_obsessions: 'no', mse_hallucinations: 'no',
+    mse_thought_notes: 'Thoughts about her husband; no suicidal thoughts reported.', mse_orientation: 'oriented',
+    mse_insight: 'good', mse_judgement: 'good', mse_notes: '', updated_at: '2026-10-02 10:30',
+  };
+  const SAMPLE_INFORMANT = {
+    inf_name: 'Anna Lund', inf_relationship: 'Daughter', inf_consent: 'yes', inf_memory: 'yes',
+    inf_memory_course: 'Forgetting appointments for about a year, slowly worse.', inf_daily: 'no', inf_elevated: 'no',
+    inf_traits: 'no', inf_psychotic: 'no', inf_substance: 'no', inf_safety: 'no', inf_notes: '', updated_at: '2026-10-02 11:00',
+  };
+  const SAMPLE_CHECKLISTS = {
+    mdd: {
+      ratings: { mdd_a1: 'present', mdd_a2: 'present', mdd_a4: 'present', mdd_a6: 'present', mdd_a8: 'present',
+        mdd_b: 'present', mdd_c: 'present', mdd_d: 'present', mdd_e: 'unclear' },
+      specifiers: { episode: 'single', severity: 'moderate', psychotic: 'no' },
+      notes: 'Ask the daughter about any past periods of elevated mood before rating E.',
+      updated_at: '2026-10-02 11:10',
+    },
+  };
+
+  const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const zeroAnswers = () => Object.fromEntries(D.parseAnswers({}).errors.map((id) => [id, 0]));
+
+  let state;
+  function reset() {
+    state = {
+      deleted: false,
+      patient: { ...SAMPLE_PATIENT },
+      // The example patient answered the screening at home by link, so the speed check applies.
+      mode: 'link', language: 'en', started: true, showLink: false, consent: true,
+      answers: { ...zeroAnswers(), ...SAMPLE_ANSWERS }, draft: null,
+      completedAt: '2026-10-02 10:05',
+      intake: clone(SAMPLE_INTAKE), interview: clone(SAMPLE_INTERVIEW), informant: clone(SAMPLE_INFORMANT), risk: null,
+      checklists: clone(SAMPLE_CHECKLISTS), diagnoses: { items: [], finalNote: '' }, finalizedAt: null, amendments: [],
+      disorder: 'mdd', errors: [],
+      // One earlier follow-up, a month after the intake screening.
+      followups: [{ id: 1, mode: 'onsite', language: 'en', completed_at: '2026-11-03 09:15', expires_at: '2099-01-01', revoked: 0,
+        results_json: JSON.stringify(D.scoreFollowup({ ...Object.fromEntries(['phq1','phq2','phq3','phq4','phq5','phq6','phq7','phq8','phq9','phqDifficulty','gad1','gad2','gad3','gad4','gad5','gad6','gad7','gadDifficulty'].map((k) => [k, 0])), phq1: 1, phq2: 1, phq3: 2, phq4: 1, phq7: 2, gad1: 1 })) }],
+      followupLink: null, followupLanguage: 'en', followupMode: 'onsite',
+      audit: [],
+      page: 0, missing: [], breakAfter: null,
+      meta: sampleMeta(),
+      grants: [],
+    };
+    score();
+  }
+
+  // Example timing: about 6 seconds per question, but part 9 rushed (1.2 s per
+  // question), and a tiredness rating of 8 after part 6 without a break.
+  function sampleMeta() {
+    const pages = {};
+    let t = Date.parse('2026-10-02T09:40:00Z');
+    for (const page of D.PAGES) {
+      const n = page.items.filter((i) => D.isShown(i, { ...zeroAnswers(), ...SAMPLE_ANSWERS })).length;
+      const seconds = page.part === 9 ? n * 1.2 : n * 6;
+      pages[page.part] = { shown: t, submitted: t + seconds * 1000, answered: n };
+      t += seconds * 1000 + 5000;
+    }
+    return { pages, contradictions: [], tiredness: [{ part: 3, value: 4, at: pages[3].submitted }, { part: 6, value: 8, at: pages[6].submitted }] };
+  }
+  function startAssessment(mode, language) {
+    Object.assign(state, {
+      mode, language, started: true, showLink: mode === 'link', consent: false, completedAt: null, draft: null,
+      intake: null, interview: null, informant: null, risk: null, checklists: {}, diagnoses: { items: [], finalNote: '' },
+      finalizedAt: null, amendments: [], disorder: null, errors: [],
+      page: 0, missing: [], breakAfter: null, meta: { pages: {}, tiredness: [], contradictions: [] }, draft: {},
+    });
+  }
+  function score() {
+    const results = D.scoreAll(state.answers);
+    results.differential = D.runDifferential(state.answers, state.patient, results);
+    results.quality = D.responseQuality(state.answers, state.meta, state.mode);
+    state.results = results;
+  }
+  function log(action, detail) {
+    state.audit.unshift({ at: now(), clinician_id: viewer().id, clinician_name: viewer().name, action, assessment_id: action.includes('patient') || action.includes('followup') ? null : 1, detail: detail || null });
+  }
+
+  // The same "case" object the server builds in loadCase().
+  function caseObject() {
+    return {
+      assessment: {
+        id: 1, mode: state.mode, language: state.language, created_at: '2026-10-02 09:58', expires_at: '2099-01-01T00:00:00Z', revoked: 0,
+        completed_at: state.completedAt, finalized_at: state.finalizedAt, consent_at: state.consent ? '2026-10-02 10:00' : null,
+        email_status: L('emailStatus'),
+      },
+      patient: state.patient,
+      readOnly: asSupervisor,
+      ownerName: CLINICIAN.name,
+      answers: state.completedAt ? state.answers : null,
+      results: state.completedAt ? state.results : null,
+      intake: state.intake, interview: state.interview, informant: state.informant, risk: state.risk,
+      checklists: state.checklists, diagnoses: state.diagnoses, amendments: state.amendments,
+      defaultLowEducation: D.defaultLowEducation(state.patient),
+    };
+  }
+  const suggestions = (c) => D.buildSuggestions({ answers: c.answers, results: c.results, patient: c.patient, intake: c.intake, interview: c.interview, informant: c.informant });
+  function assessmentRow(c) {
+    return { ...c.assessment, results_json: state.completedAt ? JSON.stringify(state.results) : null };
+  }
+
+  // ---------- Rendering an app page inside a shadow root ----------
+  const screen = document.getElementById('screen');
+  const shadow = screen.attachShadow({ mode: 'open' });
+  const appCss = D.appCss.replace(/:root/g, ':host').replace(/(^|\n)body\s*\{/g, '$1.app-body {');
+  const extraCss = `
+    .app-body { min-height: 480px; }
+    .mail { max-width: 820px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .mail dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0 0 1rem; }
+    .mail dt { color: var(--muted); } .mail dd { margin: 0; overflow-wrap: anywhere; }
+    .mail pre { white-space: pre-wrap; overflow-wrap: anywhere; font: .85rem/1.5 ui-monospace, Menlo, monospace;
+                background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 0; }
+    .urgent { color: var(--danger); font-weight: 700; }`;
+  const bodyOf = (page) => new DOMParser().parseFromString(String(page), 'text/html').body.innerHTML;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function pathOf(view) {
+    const map = {
+      login: '/login', patients: '/clinician', 'new-patient': '/clinician/patients/new', patient: PATIENT,
+      'edit-patient': PATIENT + '/edit', deleted: PATIENT + '/delete', audit: PATIENT + '/audit', followup: PATIENT,
+      screening: (state.mode === 'link' ? '/q/' + TOKEN : BASE + '/screening') + '?page=' + state.page,
+      break: '/q/' + TOKEN + '?page=' + (state.page - 1), retention: '/clinician/retention', consent: '/q/' + TOKEN, saved: '/q/' + TOKEN, thanks: '/q/' + TOKEN,
+      case: BASE, interview: BASE + '/interview', informant: BASE + '/informant', risk: BASE + '/risk', plan: BASE + '/risk/plan',
+      checklist: BASE + '/checklist?disorder=' + (state.disorder || ''), final: state.finalizedAt ? BASE + '/final' : BASE,
+      'followup-form': state.followupMode === 'link' ? '/f/' + FTOKEN : '/clinician/followups/2', 'followup-thanks': '/f/' + FTOKEN,
+    };
+    return map[view] ?? null;
+  }
+
+  // The record is kept 10 years after its last entry (src/retention.js).
+  function keptUntil() {
+    const dates = [state.completedAt, state.finalizedAt, ...state.followups.map((f) => f.completed_at)].filter(Boolean).map((d) => Date.parse(d.replace(' ', 'T') + 'Z'));
+    if (!dates.length) return null;
+    const d = new Date(Math.max(...dates));
+    d.setUTCFullYear(d.getUTCFullYear() + 10);
+    return d;
+  }
+  // Other clinician accounts in this demo, for "Who has access".
+  const DEMO_ACCOUNTS = { 'supervisor@clinic.example': 'Dr Supervisor', 'colleague@clinic.example': 'Dr Colleague' };
+
+  const notStarted = () => `<main><h1>${esc(L('notStartedTitle'))}</h1><p>${esc(L('notStarted'))}</p></main>`;
+
+  function pageHtml(view) {
+    const V = D.views, W = D.workflow;
+    const p = state.patient;
+    const c = caseObject();
+    if (state.deleted && !['login', 'deleted', 'audit', 'new-patient'].includes(view)) {
+      return bodyOf(V.messagePage({ title: L('deletedTitle'), message: L('deletedGone'), clinician: viewer() }));
+    }
+    switch (view) {
+      case 'login': return bodyOf(V.loginPage());
+      case 'patients': return bodyOf(V.dashboardPage({ clinician: viewer(), patients: [{
+        id: 1, first_name: p.first_name, last_name: p.last_name, age: p.age,
+        latest_completed: state.completedAt, latest_safety: state.completedAt && state.results.safetyFlag ? 1 : 0,
+        has_pending: state.started && !state.completedAt ? 1 : 0,
+      }] }));
+      case 'new-patient': return bodyOf(V.newPatientPage({ clinician: viewer() }));
+      case 'edit-patient': return bodyOf(V.newPatientPage({ clinician: viewer(), patient: p, values: { ...p, age: String(p.age), employed: String(p.employed) }, errors: state.errors }));
+      case 'patient':
+      case 'followup': return bodyOf(V.patientPage({
+        clinician: viewer(), patient: p, errors: state.errors,
+        assessments: state.started ? [assessmentRow(c)] : [],
+        newLink: state.showLink ? { url: HOST + '/q/' + TOKEN, expires: '2026-11-20' } : null,
+        followups: state.followups,
+        followupLink: state.followupLink,
+        access: asSupervisor
+          ? { owner: false, role: 'supervisor', grant: { granted_by_name: CLINICIAN.name, reason: 'Weekly clinical supervision', expires_at: null } }
+          : { owner: true },
+        owner: CLINICIAN, grants: state.grants, keptUntil: keptUntil(), retentionYears: 10,
+      }));
+      case 'consent': return bodyOf(V.consentPage({ action: '/q/' + TOKEN + '/consent', language: state.language, error: state.errors[0] }));
+      case 'screening':
+        if (state.mode === 'link' && !state.consent) return pageHtml('consent');
+        return state.mode === 'link'
+          ? bodyOf(V.questionnairePage({ action: '/q/' + TOKEN, pageIndex: state.page, language: state.language, answers: state.draft ?? state.answers, error: state.errors[0], missing: state.missing }))
+          : bodyOf(V.questionnairePage({ action: BASE + '/screening', pageIndex: state.page, clinician: viewer(), patient: p, language: state.language, answers: state.draft ?? state.answers, consentDone: state.consent, error: state.errors[0], missing: state.missing }));
+      case 'break': return bodyOf(V.breakPage({ language: state.language, continueUrl: '/q/' + TOKEN + '?page=' + state.page, stopAction: '/q/' + TOKEN + '?page=' + state.page }));
+      case 'retention': return bodyOf(V.retentionPage({ clinician: viewer(), policy: { recordYears: 10, unusedDays: 30, auditYears: 10 },
+        due: [{ id: 99, first_name: 'Example', last_name: 'Oldrecord', lastEntry: new Date('2014-05-01T10:00:00Z'), keptUntil: new Date('2024-05-01T10:00:00Z') }] }));
+      case 'saved': return bodyOf(V.savedPage({ language: state.language, expires: '2026-11-20' }));
+      case 'thanks': return bodyOf(V.thankYouPage({ safetyFlag: state.results.safetyFlag, language: state.language }));
+      case 'case': return bodyOf(W.casePage({ clinician: viewer(), c, suggestions: c.results ? suggestions(c) : null, errors: state.errors }));
+      case 'interview': return state.started ? bodyOf(W.interviewPage({ clinician: viewer(), c, errors: state.errors })) : notStarted();
+      case 'informant': return c.results ? bodyOf(W.informantPage({ clinician: viewer(), c, errors: state.errors })) : notStarted();
+      case 'risk': return c.results ? bodyOf(W.riskPage({ clinician: viewer(), c, errors: state.errors })) : notStarted();
+      case 'plan': return state.risk ? bodyOf(W.safetyPlanPage({ clinician: viewer(), c })) : pageHtml('risk');
+      case 'checklist': {
+        if (!c.results) return notStarted();
+        const s = suggestions(c);
+        const id = state.disorder || s.suggestions[0]?.disorderId || 'mdd';
+        state.disorder = id;
+        return bodyOf(W.checklistPage({ clinician: viewer(), c, disorder: D.findDisorder(id), suggestion: s.suggestions.find((x) => x.disorderId === id), errors: state.errors }));
+      }
+      case 'final':
+        if (!state.finalizedAt) return pageHtml('case');
+        return bodyOf(W.finalReportPage({ clinician: viewer(), c, suggestions: suggestions(c) }));
+      case 'followup-form':
+        return state.followupMode === 'link'
+          ? bodyOf(V.followupPage({ action: '/f/' + FTOKEN, language: state.followupLanguage, error: state.errors[0] }))
+          : bodyOf(V.followupPage({ action: '/clinician/followups/2', clinician: viewer(), patient: p, language: state.followupLanguage, error: state.errors[0] }));
+      case 'followup-thanks': return bodyOf(V.thankYouPage({ safetyFlag: false, language: state.followupLanguage }));
+      case 'audit': return bodyOf(V.auditPage({ clinician: viewer(), patient: p, entries: state.audit, actions: D.ACTIONS }));
+      case 'deleted': return bodyOf(V.messagePage({ title: L('deletedTitle'), message: L('deleted'), clinician: viewer() }));
+      case 'email': {
+        if (!state.completedAt) return `<div class="mail"><h1>${esc(L('inbox'))}</h1><p>${esc(L('noEmail'))}</p></div>`;
+        // The app's own email text (src/email.js): no names or health data.
+        const urgent = D.isUrgent(state.results);
+        const { subject, text } = D.readyEmail({ kind: 'screening', ref: 1, urgent, url: HOST + BASE, language: uiLanguage() });
+        return `<div class="mail"><h1>${esc(L('inbox'))}</h1><dl>
+          <dt>${esc(L('from'))}</dt><dd>Continuum &lt;continuum@clinic.example&gt;</dd><dt>${esc(L('to'))}</dt><dd>${esc(CLINICIAN.email)}</dd>
+          <dt>${esc(L('subject'))}</dt><dd class="${urgent ? 'urgent' : ''}">${esc(subject)}</dd>
+        </dl><pre>${esc(text)}</pre></div>`;
+      }
+    }
+    return '<p>Not found</p>';
+  }
+
+  // Which views count as a "view" in the audit log.
+  const AUDITED = { patient: 'view_patient', followup: 'view_patient', case: 'view_assessment', interview: 'view_interview', informant: 'view_informant', risk: 'view_risk', plan: 'view_safety_plan', final: 'view_final', audit: 'view_audit' };
+
+  function render(view) {
+    if (AUDITED[view] && !state.deleted && !(view === 'final' && !state.finalizedAt)) log(AUDITED[view]);
+    shadow.innerHTML = `<style>${appCss}${extraCss}</style><div class="app-body">${pageHtml(view)}</div>`;
+    if (view === 'screening') {
+      // The app's own skip logic (public/skip.js), and the start time of the page.
+      D.enableSkipLogic(shadow.querySelector('.app-body'));
+      const part = D.PAGES[state.page].part;
+      state.meta.pages[part] = { ...state.meta.pages[part], shown: Date.now() };
+    }
+    if (view === 'login') {
+      shadow.querySelector('input[name=email]').value = CLINICIAN.email;
+      shadow.querySelector('input[name=password]').value = 'demo-password';
+    }
+    const path = pathOf(view);
+    document.getElementById('addr').textContent = path ? HOST + path : L('inboxAddress') + ' — ' + CLINICIAN.email;
+    renderChrome(view);
+    const stepId = EXTRA[view] ?? view;
+    for (const a of document.querySelectorAll('#steps a')) {
+      if (a.dataset.view === stepId) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    }
+    const ctx = document.getElementById('context');
+    ctx.innerHTML = '';
+    const p = document.createElement('p');
+    const text = L('context')[view];
+    p.textContent = typeof text === 'function' ? text() : text || '';
+    ctx.append(p);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    if (view === 'thanks') actions.append(actionButton(L('continueClinician'), 'case', true), actionButton(L('seeEmail'), 'email'));
+    if (view === 'saved') actions.append(actionButton(L('openAgain'), 'screening', true));
+    if (view === 'followup-thanks') actions.append(actionButton(L('seeChart'), 'followup', true));
+    if (actions.childElementCount) ctx.append(actions);
+    state.errors = [];
+    // The follow-up step scrolls to the follow-up section of the patient page.
+    if (view === 'followup') {
+      const target = [...shadow.querySelectorAll('h2')].find((h) => /^(Follow-up|Uppföljning)/.test(h.textContent));
+      target?.scrollIntoView({ block: 'start' });
+    }
+  }
+
+  function actionButton(label, view, primary) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ui' + (primary ? ' primary' : '');
+    b.textContent = label;
+    b.addEventListener('click', () => go(view));
+    return b;
+  }
+
+  let current = 'login';
+  function go(view, { scroll = true } = {}) {
+    current = view;
+    try { if (location.hash !== '#' + view) history.replaceState(null, '', '#' + view); } catch (e) {}
+    render(view);
+    if (scroll && view !== 'followup') document.getElementById('context').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  // ---------- Making the app's links and forms work in the demo ----------
+  function routeFor(href) {
+    const url = new URL(href, HOST);
+    const path = url.pathname;
+    const map = {
+      '/login': 'login', '/clinician': 'patients', '/clinician/patients/new': 'new-patient', [PATIENT]: 'patient',
+      [PATIENT + '/edit']: 'edit-patient', [PATIENT + '/audit']: 'audit', [BASE]: 'case', [BASE + '/screening']: 'screening',
+      [BASE + '/final']: 'final', [BASE + '/interview']: 'interview', [BASE + '/informant']: 'informant', [BASE + '/risk']: 'risk',
+      [BASE + '/risk/plan']: 'plan',
+    };
+    if (path === BASE + '/checklist') { state.disorder = url.searchParams.get('disorder'); return 'checklist'; }
+    if (path === '/q/' + TOKEN || path === BASE + '/screening') {
+      const n = Number(url.searchParams.get('page'));
+      if (Number.isInteger(n) && n >= 0 && n < D.PAGES.length) state.page = n;
+      return 'screening';
+    }
+    if (path === '/clinician/retention') return 'retention';
+    return map[path] ?? null;
+  }
+
+  shadow.addEventListener('click', (event) => {
+    const a = event.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    event.preventDefault();
+    if (href.startsWith('#')) {
+      shadow.getElementById(href.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (href.endsWith('.pdf')) {
+      document.querySelector('#context p').textContent = L('pdf');
+      document.getElementById('context').scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return;
+    }
+    const view = routeFor(href);
+    if (view) go(view);
+  });
+
+  // FormData, keeping repeated keys (checkboxes) as arrays, like the server.
+  function formBody(form, submitter) {
+    const fd = new FormData(form, submitter);
+    const out = {};
+    for (const [k, v] of fd.entries()) {
+      if (k in out) out[k] = [].concat(out[k], v);
+      else out[k] = v;
+    }
+    return out;
+  }
+
+  // The same steps the server does for each form (see src/server.js),
+  // using the app's own functions for every rule.
+  shadow.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const action = form.getAttribute('action');
+    const data = formBody(form, event.submitter);
+    const url = new URL(action, HOST);
+    const path = url.pathname;
+    const stay = { scroll: false };
+
+    if (path === '/clinician/language') {
+      CLINICIAN.language = data.language === 'sv' ? 'sv' : 'en';
+      return go(current, stay);
+    }
+    // Colleagues with access can only read (the app's guard in server.js).
+    if (asSupervisor && /^\/(clinician\/(patients\/1\/|assessments\/1\/|followups\/)|q\/)/.test(path)) {
+      shadow.querySelector('.app-body').innerHTML = D.views.messagePage({ title: 'Read-only access', message: 'You have read-only access to this patient. Only the treating clinician can make changes.', clinician: viewer() }).toString().match(/<main>([\s\S]*)<\/main>/)[1];
+      return;
+    }
+    if (path === '/login') return go('patients');
+    if (path === '/logout') return go('login');
+    if (path === '/clinician/patients' || path === PATIENT + '/edit') {
+      const before = { ...state.patient };
+      state.patient = {
+        ...state.patient,
+        first_name: String(data.first_name).trim() || 'Karin', last_name: String(data.last_name).trim() || 'Lund',
+        personal_number: String(data.personal_number).trim() || '19580704-XXXX',
+        gender: data.gender, age: Number(data.age), education: data.education, employed: Number(data.employed),
+        preferred_language: D.lang(data.preferred_language),
+      };
+      if (state.patient.age < 16 || state.patient.age > 120) {
+        state.patient = before;
+        state.errors = ['Age must be a whole number between 16 and 120.'];
+        return go(path.endsWith('/edit') ? 'edit-patient' : 'new-patient', stay);
+      }
+      const changed = Object.keys(state.patient).filter((k) => String(before[k]) !== String(state.patient[k]));
+      log(path.endsWith('/edit') ? 'edit_patient' : 'create_patient', changed.length ? 'Changed: ' + changed.join(', ') : null);
+      score();
+      return go('patient');
+    }
+    if (path === PATIENT + '/delete') {
+      if (String(data.confirm_last_name).trim().toLowerCase() !== state.patient.last_name.toLowerCase()) {
+        state.errors = ['To delete, type the patient’s last name exactly.'];
+        return go('patient', stay);
+      }
+      log('delete_patient', data.reason);
+      state.deleted = true;
+      return go('deleted');
+    }
+    if (path === PATIENT + '/assessments') {
+      const mode = data.mode === 'onsite' ? 'onsite' : 'link';
+      startAssessment(mode, D.lang(data.language));
+      state.patient.preferred_language = state.language; // the choice becomes the patient's preference
+      log('start_assessment', mode + ', ' + state.language);
+      return go(mode === 'onsite' ? 'case' : 'patient', { scroll: mode === 'onsite' });
+    }
+    if (path === '/q/' + TOKEN + '/consent') {
+      if (data.agree !== 'yes') { state.errors = [D.STRINGS[state.language].consentNeeded]; return go('consent', stay); }
+      state.consent = true;
+      return go('screening');
+    }
+    if (path === '/q/' + TOKEN || path === BASE + '/screening') {
+      // The same steps as handlePage() in src/server.js, with the app's own functions.
+      const onsite = path === BASE + '/screening';
+      const pageIndex = Number(url.searchParams.get('page')) || 0;
+      const page = D.PAGES[pageIndex];
+      const moving = !['save', 'back', 'stop'].includes(data.intent);
+      if (onsite && !state.consent && pageIndex === 0 && moving) {
+        if (data.consent_given !== 'yes') { state.errors = [D.translator(state.language)('Confirm that the patient has been given the information.')]; return go('screening', stay); }
+        state.consent = true;
+      }
+      const draft = state.draft ?? state.answers;
+      const parsed = D.parsePage(pageIndex, data, draft);
+      state.draft = parsed.answers;
+      for (const c of parsed.contradictions) if (!state.meta.contradictions.some((x) => x.child === c.child)) state.meta.contradictions.push(c);
+      const tired = Number(data.tired);
+      if (page.tiredness && data.tired !== undefined && data.tired !== '') {
+        state.meta.tiredness = state.meta.tiredness.filter((t) => t.part !== page.part).concat({ part: page.part, value: tired, at: Date.now() });
+      }
+      if (data.intent === 'save' || data.intent === 'stop') return go(onsite ? 'case' : 'saved');
+      if (data.intent === 'back') { state.page = Math.max(0, pageIndex - 1); return go('screening'); }
+      if (parsed.missing.length) {
+        state.missing = parsed.missing;
+        state.errors = [D.STRINGS[state.language].pageMissing(parsed.missing.length)];
+        return go('screening', stay);
+      }
+      state.missing = [];
+      const shownOnPage = page.items.filter((i) => D.isShown(i, parsed.answers)).length;
+      state.meta.pages[page.part] = { ...state.meta.pages[page.part], submitted: Date.now(), answered: shownOnPage };
+      if (pageIndex < D.PAGES.length - 1) {
+        state.page = pageIndex + 1;
+        const rating = state.meta.tiredness.find((t) => t.part === page.part);
+        if (page.tiredness && rating && rating.value >= D.TIREDNESS_BREAK_AT && !onsite) return go('break');
+        return go('screening');
+      }
+      const full = D.applySkips(parsed.answers).answers;
+      const { answers, errors } = D.parseAnswers(full);
+      if (errors.length) {
+        state.page = D.firstOpenPage(full);
+        state.missing = errors;
+        state.errors = [D.STRINGS[state.language].pageMissing(errors.length)];
+        return go('screening', stay);
+      }
+      state.answers = answers;
+      state.draft = null;
+      state.completedAt = now();
+      state.showLink = false;
+      score();
+      if (onsite) log('save_screening');
+      return go(onsite ? 'case' : 'thanks');
+    }
+    if (path === PATIENT + '/access') {
+      // Demo version of grantAccess()/revokeAccess() in src/access.js (which needs the database).
+      if (data.action === 'revoke') {
+        const g = state.grants.find((x) => String(x.id) === String(data.grant));
+        if (g) { g.revoked_at = new Date().toISOString(); log('revoke_access', 'Access #' + g.id); }
+        return go('patient', stay);
+      }
+      const email = String(data.email || '').trim().toLowerCase();
+      if (!DEMO_ACCOUNTS[email]) { state.errors = [L('noAccount')]; return go('patient', stay); }
+      if (!String(data.reason || '').trim()) { state.errors = ['Write why this person needs access.']; return go('patient', stay); }
+      const expires = data.until ? new Date(data.until + 'T23:59:59Z').toISOString() : null;
+      if (expires && expires <= new Date().toISOString()) { state.errors = ['The end date must be in the future.']; return go('patient', stay); }
+      for (const g of state.grants) if (g.clinician_email === email && !g.revoked_at) g.revoked_at = new Date().toISOString();
+      state.grants.unshift({ id: state.grants.length + 1, clinician_name: DEMO_ACCOUNTS[email], clinician_email: email, role: data.role, reason: String(data.reason).trim(), expires_at: expires, revoked_at: null });
+      log('grant_access', DEMO_ACCOUNTS[email] + ' as ' + (data.role === 'supervisor' ? 'Supervisor' : 'Close colleague') + ': ' + String(data.reason).trim());
+      return go('patient', stay);
+    }
+    // The three schema forms and the MoCA form: parse with the app's own functions.
+    const FORMS = {
+      [BASE + '/interview']: ['interview', D.parseInterview, 'interview', 'save_interview'],
+      [BASE + '/informant']: ['informant', D.parseInformant, 'informant', 'save_informant'],
+      [BASE + '/risk']: ['risk', D.parseRisk, 'risk', 'save_risk'],
+      [BASE + '/intake']: ['intake', D.parseIntake, 'case', 'save_intake'],
+    };
+    if (FORMS[path]) {
+      const [key, parse, errorView, action] = FORMS[path];
+      const result = parse(data, now());
+      if (result.errors) { state.errors = result.errors; return go(errorView, stay); }
+      state[key] = result[key];
+      log(action);
+      return go('case');
+    }
+    if (path === BASE + '/checklist') {
+      if ((form.getAttribute('method') || 'get').toLowerCase() === 'get') {
+        state.disorder = data.disorder;
+        return go('checklist');
+      }
+      const id = url.searchParams.get('disorder');
+      const disorder = D.findDisorder(id);
+      const ratings = {};
+      for (const cid of D.criterionIds(disorder)) if (D.RATINGS.includes(data[cid])) ratings[cid] = data[cid];
+      const specifiers = {};
+      for (const sp of disorder.specifiers) {
+        const v = data['spec_' + sp.id];
+        if (sp.options.some((o) => o.value === v)) specifiers[sp.id] = v;
+      }
+      state.checklists[id] = { ratings, specifiers, notes: String(data.notes || '').slice(0, 5000), updated_at: now() };
+      state.disorder = id;
+      log('save_checklist', disorder.name);
+      return go('checklist', stay);
+    }
+    if (path === BASE + '/diagnoses') {
+      const result = D.applyDiagnosis(
+        { patient: state.patient, checklists: state.checklists, diagnoses: state.diagnoses },
+        { disorderId: data.disorder, action: data.action, note: data.note, override: data.override },
+        now()
+      );
+      if (result.error) state.errors = [result.error];
+      else { state.diagnoses = result.diagnoses; log('diagnosis', data.action + ' ' + data.disorder); }
+      return go('case', stay);
+    }
+    if (path === BASE + '/finalize') {
+      state.diagnoses.finalNote = String(data.final_note || '');
+      const blocker = D.finalizeBlocker(caseObject());
+      if (blocker) { state.errors = [blocker]; return go('case', stay); }
+      state.finalizedAt = now();
+      log('finalize');
+      return go('final');
+    }
+    if (path === BASE + '/reopen') {
+      const reason = String(data.reason || '').trim();
+      if (!reason) { state.errors = ['Write why the assessment is reopened.']; return go('case', stay); }
+      state.amendments.push({ reopened_at: now(), by: CLINICIAN.name, reason, previously_finalized_at: state.finalizedAt,
+        diagnoses_before: state.diagnoses.items.map((d) => d.code + ' ' + d.name) });
+      state.finalizedAt = null;
+      log('reopen', reason);
+      return go('case');
+    }
+    if (path === PATIENT + '/followups') {
+      state.followupMode = data.mode === 'onsite' ? 'onsite' : 'link';
+      state.followupLanguage = D.lang(data.language);
+      state.patient.preferred_language = state.followupLanguage;
+      log('start_followup', state.followupMode + ', ' + state.followupLanguage);
+      if (state.followupMode === 'link') {
+        state.followupLink = { url: HOST + '/f/' + FTOKEN, expires: '2026-11-20' };
+        return go('followup');
+      }
+      return go('followup-form');
+    }
+    if (path === '/f/' + FTOKEN || path === '/clinician/followups/2') {
+      const { answers, errors } = D.parseFollowupAnswers(data);
+      if (errors.length) { state.errors = [D.STRINGS[state.followupLanguage].missing(errors.length)]; return go('followup-form', stay); }
+      state.followups.unshift({ id: state.followups.length + 1, completed_at: now(), results_json: JSON.stringify(D.scoreFollowup(answers)), revoked: 0, expires_at: '2099-01-01' });
+      state.followupLink = null;
+      return go(path.startsWith('/f/') ? 'followup-thanks' : 'followup');
+    }
+  });
+
+  // ---------- Demo controls ----------
+  const stepsEl = document.getElementById('steps');
+  STEPS.forEach((s, i) => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = '#' + s.id;
+    a.dataset.view = s.id;
+    a.innerHTML = `<span class="n">${i + 1}</span><span><span class="who"></span><br><span class="label"></span></span>`;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      // The follow-up step shows the follow-up form when a link has just been made.
+      go(s.id === 'followup' && state.followupLink ? 'followup-form' : s.id, { scroll: false });
+    });
+    li.append(a);
+    stepsEl.append(li);
+  });
+
+  // The demo page's own texts, in the clinician's language.
+  function renderChrome() {
+    const lang = uiLanguage();
+    document.documentElement.lang = lang;
+    document.title = L('title');
+    document.getElementById('demo-intro').textContent = L('intro');
+    document.getElementById('demo-foot').textContent = L('foot');
+    document.getElementById('steps-nav').setAttribute('aria-label', L('stepsLabel'));
+    document.getElementById('desktop-btn').textContent = L('desktop');
+    document.getElementById('phone-btn').textContent = L('phone');
+    document.getElementById('role-btn').textContent = asSupervisor ? L('supervisorOn') : L('supervisor');
+    document.getElementById('reset-btn').textContent = L('reset');
+    STEPS.forEach((step, i) => {
+      const a = stepsEl.children[i].firstChild;
+      a.querySelector('.who').textContent = L(step.who);
+      a.querySelector('.label').textContent = L('steps')[step.id];
+    });
+  }
+
+  const win = document.getElementById('window');
+  const desktopBtn = document.getElementById('desktop-btn');
+  const phoneBtn = document.getElementById('phone-btn');
+  function setPhone(on) {
+    win.classList.toggle('phone', on);
+    phoneBtn.setAttribute('aria-pressed', String(on));
+    desktopBtn.setAttribute('aria-pressed', String(!on));
+  }
+  desktopBtn.addEventListener('click', () => setPhone(false));
+  phoneBtn.addEventListener('click', () => setPhone(true));
+  const roleBtn = document.getElementById('role-btn');
+  roleBtn.addEventListener('click', () => {
+    asSupervisor = !asSupervisor;
+    roleBtn.setAttribute('aria-pressed', String(asSupervisor));
+    go(current, { scroll: false });
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => { reset(); go('login', { scroll: false }); });
+
+  const VIEWS = new Set([...STEPS.map((s) => s.id), ...Object.keys(EXTRA)]);
+  function fromHash() {
+    const h = location.hash.slice(1);
+    return VIEWS.has(h) ? h : 'login';
+  }
+  window.addEventListener('hashchange', () => { const v = fromHash(); if (v !== current) go(v, { scroll: false }); });
+
+  reset();
+  go(fromHash(), { scroll: false });
+})();
+</script>

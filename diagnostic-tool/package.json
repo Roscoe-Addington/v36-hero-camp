@@ -1,8 +1,8 @@
 {
-  "name": "diagnostic-tool",
+  "name": "continuum",
   "version": "0.1.0",
   "private": true,
-  "description": "Clinician-administered screening questionnaire for major depressive disorder (PHQ-9) and generalized anxiety disorder (GAD-7 + DSM-5-TR criteria items).",
+  "description": "Continuum: supports clinicians through a psychiatric assessment of patients 16 and older, from intake interview and screening to diagnosis and follow-up.",
   "type": "module",
   "engines": {
     "node": ">=22.5"
@@ -11,6 +11,7 @@
     "start": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env src/server.js",
     "create-clinician": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/create-clinician.js",
     "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "build:demo": "node demo/build.js",
     "check:devices": "node --no-warnings=ExperimentalWarning scripts/check-devices.js",
     "retention": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/retention.js"
   },
@@ -18,5 +19,8 @@
     "express": "^5.1.0",
     "nodemailer": "^10.3.1",
     "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }
