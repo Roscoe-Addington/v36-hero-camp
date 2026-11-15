@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { english } from '../src/message.js';
 import assert from 'node:assert/strict';
 import { runDifferential, STATUS, auditCThreshold } from '../src/differential.js';
 import { scoreAll } from '../src/scoring.js';
@@ -99,17 +100,17 @@ test('panic: attacks + worry about more attacks is flagged; attacks alone are un
 test('medical: illness-linked onset flagged; peripartum note only for female patients', () => {
   const f = entry('medical', { medonset: 1 }, woman40);
   assert.equal(f.status, STATUS.FLAGGED);
-  assert.match(f.finding, /peripartum/);
-  assert.doesNotMatch(entry('medical', { medonset: 1 }, man40).finding, /peripartum/);
+  assert.match(english(f.finding), /peripartum/);
+  assert.doesNotMatch(english(entry('medical', { medonset: 1 }, man40).finding), /peripartum/);
   assert.equal(entry('medical', { medcond: 1 }).status, STATUS.POSSIBLE);
 });
 
 test('persistent depressive disorder notes co-occurring MDD', () => {
-  assert.match(entry('pdd', { pdd1: 1, ...MDD }).finding, /AND current major depressive syndrome/);
+  assert.match(english(entry('pdd', { pdd1: 1, ...MDD }).finding), /AND current major depressive syndrome/);
 });
 
 test('neurocognitive entry highlights patients aged 60+', () => {
-  assert.match(entry('neurocognitive', {}, { gender: 'Male', age: 72 }).finding, /Patient is 72: assess cognition/);
+  assert.match(english(entry('neurocognitive', {}, { gender: 'Male', age: 72 }).finding), /Patient is 72: assess cognition/);
 });
 
 test('overlap: warns when the MDD count depends on symptoms shared with anxiety', () => {
@@ -119,5 +120,5 @@ test('overlap: warns when the MDD count depends on symptoms shared with anxiety'
   const diff = runDifferential(a, woman40, scoreAll(a));
   assert.equal(diff.overlap.bothCount, 3);
   assert.equal(diff.overlap.mddSymptomCountWithoutShared, 2);
-  assert.ok(diff.overlap.notes.some((n) => n.includes('falls to 2')));
+  assert.ok(diff.overlap.notes.some((n) => english(n).includes('falls to 2')));
 });

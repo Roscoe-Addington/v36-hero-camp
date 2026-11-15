@@ -7,6 +7,7 @@ import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { answers as makeAnswers, pnForAge } from './helpers.js';
 import { findDisorder, criterionIds } from '../src/disorders.js';
 import { PAGES } from '../src/questionnaire.js';
+import { english } from '../src/message.js';
 
 process.env.DB_PATH = ':memory:';
 process.env.NODE_ENV = 'test';
@@ -492,7 +493,7 @@ test('patient link page by page: skip logic, tiredness break, response-quality b
   const kinds = quality.flags.map((f) => f.kind);
   assert.ok(kinds.includes('Fast answering'), 'pages answered within milliseconds');
   assert.equal(kinds.filter((k) => k === 'Contradiction').length, 2);
-  assert.ok(quality.flags.some((f) => f.text.includes('8/10 after part 3 and continued without a break')));
+  assert.ok(quality.flags.some((f) => english(f.text).includes('8/10 after part 3 and continued without a break')));
 
   const caseHtml = await (await fetch(`${base}/clinician/assessments/${row.id}`, { headers: { cookie } })).text();
   assert.ok(caseHtml.includes('Response quality'));

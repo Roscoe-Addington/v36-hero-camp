@@ -15,7 +15,8 @@
 // 3. Possible inconsistencies: answers that rarely go together.
 // 4. Tiredness: the patient's own rating, asked during the questionnaire.
 
-import { PAGES, PHQ9_ITEMS, GAD7_ITEMS, TIREDNESS_BREAK_AT, findItem } from './questionnaire.js';
+import { PAGES, PHQ9_ITEMS, GAD7_ITEMS, TIREDNESS_BREAK_AT } from './questionnaire.js';
+import { M } from './message.js';
 
 export const SECONDS_PER_QUESTION_MIN = 2;
 const MIN_QUESTIONS_FOR_SPEED = 3; // too few questions on a page to judge speed
@@ -28,13 +29,12 @@ export const KIND = {
 };
 
 const sum = (items, a) => items.reduce((t, i) => t + (a[i.id] ?? 0), 0);
-const short = (id) => findItem(id)?.text.slice(0, 70) ?? id;
 
 export function contradictionChecks(a, skipConflicts = []) {
   const flags = [];
   // Answered a follow-up "Yes" although the earlier answer was "No".
   for (const { parent, child } of skipConflicts) {
-    flags.push({ kind: KIND.CONTRADICTION, text: `Answered "No" to "${short(parent)}…" but "Yes" to the follow-up "${short(child)}…".` });
+    flags.push({ kind: KIND.CONTRADICTION, text: M('Answered "No" to "{parent}" but "Yes" to the follow-up "{child}".', { parent: { item: parent }, child: { item: child } }) });
   }
   if (a.auditc1 === 0 && (a.auditc2 > 0 || a.auditc3 > 0)) {
     flags.push({ kind: KIND.CONTRADICTION, text: 'Says they never drink alcohol, but reports drinks on a typical day or six or more drinks on one occasion.' });
@@ -71,7 +71,13 @@ export function responseQuality(answers, meta = {}, mode = 'link') {
     if (fast.length) {
       flags.push({
         kind: KIND.SPEED,
-        text: `Part${fast.length > 1 ? 's' : ''} ${fast.map((p) => p.part).join(', ')} answered at under ${SECONDS_PER_QUESTION_MIN} seconds per question (${fast.map((p) => `${p.perQuestion} s`).join(', ')}).`,
+        text: M(fast.length > 1
+          ? 'Parts {parts} answered at under {min} seconds per question ({times}).'
+          : 'Part {parts} answered at under {min} seconds per question ({times}).', {
+          parts: fast.map((p) => p.part).join(', '),
+          min: SECONDS_PER_QUESTION_MIN,
+          times: fast.map((p) => `${p.perQuestion} s`).join(', '),
+        }),
       });
     }
   }
@@ -84,7 +90,7 @@ export function responseQuality(answers, meta = {}, mode = 'link') {
     const next = meta.pages?.[t.part + 1];
     const tAt = (meta.tiredness ?? []).find((x) => x.part === t.part)?.at;
     const tookBreak = next?.shown && tAt && next.shown - tAt > 10 * 60 * 1000;
-    flags.push({ kind: KIND.TIRED, text: `Rated tiredness ${t.value}/10 after part ${t.part}${tookBreak ? ' and took a break' : ' and continued without a break'}.` });
+    flags.push({ kind: KIND.TIRED, text: M(tookBreak ? 'Rated tiredness {value}/10 after part {part} and took a break.' : 'Rated tiredness {value}/10 after part {part} and continued without a break.', { value: t.value, part: t.part }) });
   }
 
   const timed = pages.filter((p) => p.seconds !== null);

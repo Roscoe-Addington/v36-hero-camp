@@ -100,7 +100,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
   heading(t('Diagnoses'));
   if (c.diagnoses.items.length) {
     for (const d of c.diagnoses.items) {
-      para(`${d.code}   ${t(d.name)}`, { bold: true });
+      para(`${t(d.code)}   ${t(d.name)}`, { bold: true });
       para(`${t('Criteria at confirmation: {status}', { status: t(d.criteriaStatus) })}${d.note ? `. ${t('Note: {note}', { note: d.note })}` : ''}`, { size: 9, color: COLOR.muted });
       if (d.conflictOverride) para(`${t('Reason for giving {name} despite a conflict:', { name: t(d.name) })} ${d.conflictOverride}`, { size: 9, color: COLOR.danger });
     }
@@ -156,7 +156,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
     { label: t('Differential screening, positive:'), value: r.differential?.summary.flagged.map((x) => t(x)).join('; ') || t('none') },
     { label: t('Response quality:'), value: r.quality ? (r.quality.flags.length ? (r.quality.flags.length === 1 ? t('1 sign to check in the interview.') : t('{n} signs to check in the interview.', { n: r.quality.flags.length })) : t('No signs of tired or careless answering.')) : t('not recorded') },
   ]);
-  for (const f of r.quality?.flags ?? []) bullet(`${t(f.kind)}: ${f.text}`);
+  for (const f of r.quality?.flags ?? []) bullet(`${t(f.kind)}: ${reasonText(t, f.text)}`);
   if (suggestions.medical?.length) {
     para(t('Medical warning signs: check physical health'), { bold: true });
     for (const m of suggestions.medical) bullet(`${reasonText(t, m.finding)}. ${reasonText(t, m.action)}`);

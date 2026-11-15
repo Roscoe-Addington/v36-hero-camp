@@ -10,6 +10,7 @@
 // telling the clinician what to follow up in the interview.
 
 import { findItem, answerLabel } from './questionnaire.js';
+import { M } from './message.js';
 
 export const STATUS = {
   FLAGGED: 'Screen positive — evaluate',
@@ -111,13 +112,14 @@ const RULES = [
       const threshold = auditCThreshold(ctx.patient.gender);
       const alcoholPositive = total >= threshold;
       const drugPositive = a.drug1 >= 1;
-      const parts = [
-        `AUDIT-C = ${total}/12 (cut-off ${threshold} for recorded gender "${ctx.patient.gender}") — ${alcoholPositive ? 'positive' : 'negative'}.`,
-        `Drug use in past 12 months: ${answerLabel('drug1', a.drug1)} — ${drugPositive ? 'positive' : 'negative'}.`,
-      ];
       return {
         status: alcoholPositive || drugPositive ? STATUS.FLAGGED : STATUS.NOT_INDICATED,
-        finding: parts.join(' '),
+        finding: M('AUDIT-C = {total}/12 (cut-off {threshold} for recorded gender "{gender}") — {alcohol}. Drug use in past 12 months: {drugs} — {drugResult}.', {
+          total, threshold, gender: M(String(ctx.patient.gender ?? '')),
+          alcohol: M(alcoholPositive ? 'positive' : 'negative'),
+          drugs: M(answerLabel('drug1', a.drug1)),
+          drugResult: M(drugPositive ? 'positive' : 'negative'),
+        }),
       };
     },
     implication: 'Check whether the symptoms started before the substance use and whether they persist during sustained abstinence (about 1 month). If not, a substance-induced disorder explains them better than MDD/GAD.',
@@ -212,7 +214,7 @@ const RULES = [
     rule: 'Death within 12 months: unclear (bereavement vs MDD). Death more than 12 months ago AND grief2 = Yes: screen positive for prolonged grief disorder.',
     evaluate(a) {
       if (a.grief1 === 1) {
-        return { status: STATUS.POSSIBLE, finding: `Recent bereavement (within 12 months). Ongoing intense longing/preoccupation: ${answerLabel('grief2', a.grief2)}.` };
+        return { status: STATUS.POSSIBLE, finding: M('Recent bereavement (within 12 months). Ongoing intense longing/preoccupation: {answer}.', { answer: M(answerLabel('grief2', a.grief2)) }) };
       }
       if (a.grief1 === 2 && a.grief2 === YES) {
         return { status: STATUS.FLAGGED, finding: 'Bereavement more than 12 months ago with ongoing intense longing or preoccupation most days.' };
@@ -284,10 +286,10 @@ const RULES = [
     rule: 'Screen positive if ocd1 = Yes OR ocd2 = Yes.',
     evaluate(a) {
       if (a.ocd1 === YES || a.ocd2 === YES) {
-        const parts = [];
-        if (a.ocd1 === YES) parts.push('intrusive unwanted thoughts');
-        if (a.ocd2 === YES) parts.push('repetitive behaviours or mental routines');
-        return { status: STATUS.FLAGGED, finding: `Reports ${parts.join(' and ')}.` };
+        const finding = a.ocd1 === YES && a.ocd2 === YES
+          ? 'Reports intrusive unwanted thoughts and repetitive behaviours or mental routines.'
+          : a.ocd1 === YES ? 'Reports intrusive unwanted thoughts.' : 'Reports repetitive behaviours or mental routines.';
+        return { status: STATUS.FLAGGED, finding };
       }
       return { status: STATUS.NOT_INDICATED, finding: 'No obsessions or compulsions reported.' };
     },
@@ -319,7 +321,7 @@ const RULES = [
     evaluate(a) {
       if (a.ptsd0 !== YES) return { status: STATUS.NOT_INDICATED, finding: 'No trauma exposure reported (PC-PTSD-5 items not scored).' };
       const count = ['ptsd1', 'ptsd2', 'ptsd3', 'ptsd4', 'ptsd5'].filter((id) => a[id] === YES).length;
-      const finding = `Trauma exposure reported; PC-PTSD-5 score ${count}/5.`;
+      const finding = M('Trauma exposure reported; PC-PTSD-5 score {count}/5.', { count });
       if (count >= 3) return { status: STATUS.FLAGGED, finding };
       if (count >= 1) return { status: STATUS.POSSIBLE, finding };
       return { status: STATUS.NOT_INDICATED, finding };
@@ -359,9 +361,9 @@ const RULES = [
       const age = ctx.patient.age;
       return {
         status: STATUS.CLINICIAN,
-        finding: age >= 60
-          ? `Patient is ${age}: assess cognition, especially if concentration problems are reported.`
-          : `Patient is ${age}: consider only if there are memory or cognitive complaints.`,
+        finding: M(age >= 60
+          ? 'Patient is {age}: assess cognition, especially if concentration problems are reported.'
+          : 'Patient is {age}: consider only if there are memory or cognitive complaints.', { age: Number(age) }),
       };
     },
     implication: 'Consider a neurocognitive disorder if cognitive problems are prominent or progressive.',
@@ -432,10 +434,10 @@ export function overlapAnalysis(a, results) {
     notes.push('Both MDD and GAD criteria are endorsed. DSM-5-TR allows both diagnoses together; co-occurrence is common.');
   }
   if (results.depression.meetsMajorCriteria && mddWithoutShared < 5) {
-    notes.push(`The MDD symptom count (${results.depression.symptomCount}) falls to ${mddWithoutShared} without symptoms also attributed to anxiety. Check that the depressive syndrome does not rest on shared symptoms.`);
+    notes.push(M('The MDD symptom count ({count}) falls to {without} without symptoms also attributed to anxiety. Check that the depressive syndrome does not rest on shared symptoms.', { count: results.depression.symptomCount, without: mddWithoutShared }));
   }
   if (results.anxiety.meetsCriteriaABC && gadCWithoutShared < 3) {
-    notes.push(`GAD criterion C (${results.anxiety.criteria.associatedCount} of 6) falls to ${gadCWithoutShared} without symptoms also attributed to depression. Check that the anxiety syndrome does not rest on shared symptoms.`);
+    notes.push(M('GAD criterion C ({count} of 6) falls to {without} without symptoms also attributed to depression. Check that the anxiety syndrome does not rest on shared symptoms.', { count: results.anxiety.criteria.associatedCount, without: gadCWithoutShared }));
   }
   if (notes.length === 0) notes.push('No overlap concerns: neither result depends on symptoms shared between MDD and GAD.');
 

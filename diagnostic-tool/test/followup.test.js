@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { english } from '../src/message.js';
 import assert from 'node:assert/strict';
 import { parseFollowupAnswers, scoreFollowup, progressSummary, measurementSeries, FOLLOWUP_IDS } from '../src/followup.js';
 
@@ -20,16 +21,16 @@ test('follow-up scoring and safety flag', () => {
 const p = (date, phq9, gad7) => ({ date, phq9, gad7, source: 'Follow-up' });
 
 test('PHQ-9: 5 points is a meaningful change, 4 is not', () => {
-  assert.match(progressSummary([p('2026-01-01', 15, 6), p('2026-02-01', 11, 6)]).notes[0], /no clear change/);
-  assert.match(progressSummary([p('2026-01-01', 15, 6), p('2026-02-01', 10, 6)]).notes[0], /meaningful improvement/);
-  assert.match(progressSummary([p('2026-01-01', 5, 6), p('2026-02-01', 12, 6)]).notes[0], /meaningful worsening/);
+  assert.match(english(progressSummary([p('2026-01-01', 15, 6), p('2026-02-01', 11, 6)]).notes[0]), /no clear change/);
+  assert.match(english(progressSummary([p('2026-01-01', 15, 6), p('2026-02-01', 10, 6)]).notes[0]), /meaningful improvement/);
+  assert.match(english(progressSummary([p('2026-01-01', 5, 6), p('2026-02-01', 12, 6)]).notes[0]), /meaningful worsening/);
 });
 
 test('GAD-7: 4 points is meaningful; response and remission are noted', () => {
   const s = progressSummary([p('2026-01-01', 16, 12), p('2026-03-01', 4, 8)]);
-  assert.match(s.notes[1], /GAD-7 fell by 4 points/);
-  assert.ok(s.notes.some((n) => n.includes('response')));
-  assert.ok(s.notes.some((n) => n.includes('remission')));
+  assert.match(english(s.notes[1]), /GAD-7 fell by 4 points/);
+  assert.ok(s.notes.some((n) => english(n).includes('response')));
+  assert.ok(s.notes.some((n) => english(n).includes('remission')));
   assert.equal(progressSummary([p('2026-01-01', 10, 10)]), null, 'needs two measurements');
 });
 

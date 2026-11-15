@@ -6,8 +6,8 @@
 // Uses the same auto-escaping html`...` helper as views.js. Interface text
 // goes through t() (i18n-clinician.js) so the pages work in English and
 // Swedish. Clinical content (names, criteria, rule-out reasons, suggestion
-// reasons) also goes through t(): it is Swedish where i18n-clinical-sv.js has
-// it (the feeding and eating disorders), otherwise English (TRA-3).
+// reasons) also goes through t(), with the unofficial Swedish clinical
+// dictionary (i18n-clinical-sv.js, TRA-6).
 
 import { html, layout, screeningSections, employmentLabel } from './views.js';
 import { DISORDERS, CATEGORIES, findDisorder } from './disorders.js';
@@ -20,6 +20,7 @@ import { INTERVIEW, MSE, INTERVIEW_FORM, RISK, INFORMANT, riskIndicators, finali
 import { renderForm, renderSummary } from './views-forms.js';
 import { optionLabel } from './forms.js';
 import { translator } from './i18n-clinician.js';
+import { render } from './message.js';
 
 function levelBadge(t, level) {
   const cls = { [LEVEL.CONFLICT]: 'danger', [LEVEL.CHECK]: 'warn', [LEVEL.CODING]: 'info' }[level];
@@ -35,12 +36,10 @@ function conflictList(t, rules) {
   return html`<ul class="conflicts">${rules.map((r) => html`<li>${levelBadge(t, r.level)} <strong>${pairName(t, r)}.</strong> ${t(r.message)}</li>`)}</ul>`;
 }
 
-// A suggestion reason: plain text, or { text, vars } when it has numbers in it.
-// Decimals get a comma in Swedish (16,5).
+// A suggestion reason or other message: plain text, or { text, vars } when
+// it has values in it (message.js). Decimals get a comma in Swedish (16,5).
 export function reasonText(t, reason) {
-  if (typeof reason === 'string') return t(reason);
-  const vars = Object.fromEntries(Object.entries(reason.vars ?? {}).map(([k, v]) => [k, decimal(t, v)]));
-  return t(reason.text, vars);
+  return render(t, reason);
 }
 export function decimal(t, value) {
   return typeof value === 'number' && t.language === 'sv' ? String(value).replace('.', ',') : value;
@@ -76,7 +75,7 @@ function patientLine(t, patient) {
 
 // Fixed error messages are translated; ones with names or numbers in them stay as they are.
 const errorList = (t, errors) =>
-  errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : '';
+  errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${render(t, e)}</li>`)}</ul></div>` : '';
 
 // "1 sign …" / "3 signs …"
 const signsToCheck = (t, n) => (n === 1 ? t('1 sign to check in the interview.') : t('{n} signs to check in the interview.', { n }));
@@ -202,7 +201,6 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
       <section class="card">
         <h2>${t('6. In-depth assessment')}</h2>
         <p>${t('Based on the intake screening, assess these disorders with the full criteria checklist. You decide which to assess; the list only shows where the screening points.')}</p>
-        ${t.language === 'sv' ? html`<p class="hint">${t('Disorder names, criteria and reasons are in English until the official Swedish DSM-5-TR terminology is added, except for the feeding and eating disorders (unofficial Swedish translation).')}</p>` : ''}
         ${suggestions.suggestions.length === 0
           ? html`<p class="hint">${t('The screening does not point toward any disorder in this app.')}</p>`
           : html`<div class="table-scroll"><table>
@@ -336,7 +334,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
       ? html`<div class="table-scroll"><table>
           <thead><tr><th>ICD-10</th><th>${t('Diagnosis')}</th><th>${t('Criteria')}</th><th>${t('Note')}</th>${locked ? '' : html`<th></th>`}</tr></thead>
           <tbody>${confirmed.map((d) => html`<tr>
-            <td class="code">${d.code}</td>
+            <td class="code">${t(d.code)}</td>
             <td>${t(d.name)}</td>
             <td>${criteriaBadge(t, d.criteriaStatus)}</td>
             <td>${d.note}</td>
@@ -363,7 +361,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
                 return html`<form method="post" action="${base}/diagnoses" class="confirm-row">
                   <input type="hidden" name="disorder" value="${id}" />
                   <input type="hidden" name="action" value="confirm" />
-                  <div><strong>${t(d.name)}</strong> ${criteriaBadge(t, ev.status)} <span class="code">${ev.code}</span></div>
+                  <div><strong>${t(d.name)}</strong> ${criteriaBadge(t, ev.status)} <span class="code">${t(ev.code)}</span></div>
                   <label>${ev.status === STATUS.MET ? t('Note (optional)') : t('Note (required)')}
                     <input name="note" maxlength="1000" ${ev.status === STATUS.MET ? '' : html`required`} />
                   </label>
@@ -381,7 +379,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
             : html`<p class="hint">${t('Assess a disorder in step 6 to be able to confirm it here.')}</p>`}
 
         <h3>${t('Finalize')}</h3>
-        ${finalizeBlocker(c) ? html`<p class="note">${t(finalizeBlocker(c))}</p>` : ''}
+        ${finalizeBlocker(c) ? html`<p class="note">${render(t, finalizeBlocker(c))}</p>` : ''}
         <form method="post" action="${base}/finalize">
           <label>${t('Summary for the final report')}
             <textarea name="final_note" rows="3" maxlength="5000">${c.diagnoses.finalNote ?? ''}</textarea>
@@ -408,7 +406,7 @@ function qualityBox(t, q) {
   return html`<section class="card ${q.flags.length ? 'quality-warn' : ''}">
     <h2>${t('Response quality')}</h2>
     <p><strong>${q.flags.length ? signsToCheck(t, q.flags.length) : t('No signs of tired or careless answering.')}</strong> ${q.flags.length ? t('The scores are unchanged; check these answers in the interview.') : ''}</p>
-    ${q.flags.length ? html`<ul class="conflicts">${q.flags.map((f) => html`<li><span class="badge ${f.kind === 'Contradiction' ? 'danger' : 'warn'}">${t(f.kind)}</span> ${f.text}</li>`)}</ul>` : ''}
+    ${q.flags.length ? html`<ul class="conflicts">${q.flags.map((f) => html`<li><span class="badge ${f.kind === 'Contradiction' ? 'danger' : 'warn'}">${t(f.kind)}</span> ${render(t, f.text)}</li>`)}</ul>` : ''}
     <details><summary>${t('Time per part')}${q.mode === 'onsite' ? ` ${t('(on site: speed is not checked)')}` : ''}</summary>
       <div class="table-scroll"><table>
         <thead><tr><th>${t('Part')}</th><th>${t('Time')}</th><th>${t('Seconds per question')}</th></tr></thead>
@@ -428,7 +426,7 @@ function riskCard(t, base, c, locked) {
   return html`<section class="card ${reasons.length && !r?.updated_at ? 'attention' : ''}">
     <h2>${t('5. Suicide risk assessment')}</h2>
     ${reasons.length
-      ? html`<p><strong>${t('Required before finalizing')}</strong>, ${t('because of:')}</p><ul>${reasons.map((x) => html`<li>${t(x)}</li>`)}</ul>`
+      ? html`<p><strong>${t('Required before finalizing')}</strong>, ${t('because of:')}</p><ul>${reasons.map((x) => html`<li>${render(t, x)}</li>`)}</ul>`
       : html`<p class="hint">${t('No screening or interview finding requires it, but you can always do one.')}</p>`}
     ${r?.updated_at
       ? html`<ul class="facts">
@@ -512,9 +510,9 @@ export function riskPage({ clinician, c, errors, values }) {
       <li>${t('PHQ-9 total: {total}/27; hopelessness (item 2): {answer}', { total: c.results?.depression.total ?? '–', answer: t(c.results?.depression.itemScores[1].answer ?? '–') })}</li>
       <li>${t('Self-harm ever (screening):')} ${a.pd16 === 1 ? t('Yes') : t('No')}</li>
       <li>${t('Previous suicide attempts (interview):')} ${c.interview?.prev_attempt ? t(optionLabel(INTERVIEW, 'prev_attempt', c.interview.prev_attempt)) : t('not recorded')}</li>
-      <li>${t('Alcohol/drug screening:')} ${c.results?.differential?.entries.find((e) => e.id === 'substance')?.finding ?? '–'}</li>
+      <li>${t('Alcohol/drug screening:')} ${render(t, c.results?.differential?.entries.find((e) => e.id === 'substance')?.finding) || '–'}</li>
     </ul>
-    ${reasons.length ? html`<p><strong>${t('A risk assessment is required')}</strong> ${t('because of:')} ${reasons.map((x) => t(x)).join(' ')}</p>` : ''}
+    ${reasons.length ? html`<p><strong>${t('A risk assessment is required')}</strong> ${t('because of:')} ${reasons.map((x) => render(t, x)).join(' ')}</p>` : ''}
     <p class="hint">${t('This form does not calculate a risk score or category. Guidelines (e.g. NICE 2022) advise against using risk scales to predict suicide; write a formulation and a plan based on the person’s needs.')}</p>
   </section>`;
   return formPage({
@@ -566,7 +564,7 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
       ${errorList(t, errors)}
 
       <section class="card summary">
-        <p>${t('Current result:')} ${criteriaBadge(t, ev.status)} · ICD-10 <span class="code">${ev.code}</span></p>
+        <p>${t('Current result:')} ${criteriaBadge(t, ev.status)} · ICD-10 <span class="code">${t(ev.code)}</span></p>
         <ul class="facts">
           <li>${t('{present} present, {absent} absent, {unclear} unclear, {unrated} not rated', { present: ev.present.length, absent: ev.absent.length, unclear: ev.unclear.length, unrated: ev.unrated.length })}</li>
           ${ev.counts.map((n) => html`<li>${t('Symptom count: {present} of {of} present (at least {min} needed)', n)}</li>`)}
@@ -688,7 +686,7 @@ export function finalReportPage({ clinician, c, suggestions }) {
         ${c.diagnoses.items.length
           ? html`<div class="table-scroll"><table>
               <thead><tr><th>ICD-10</th><th>${t('Diagnosis (DSM-5-TR)')}</th><th>${t('Criteria at confirmation')}</th><th>${t('Note')}</th></tr></thead>
-              <tbody>${c.diagnoses.items.map((d) => html`<tr><td class="code">${d.code}</td><td>${t(d.name)}</td><td>${criteriaBadge(t, d.criteriaStatus)}</td><td>${d.note}</td></tr>`)}</tbody>
+              <tbody>${c.diagnoses.items.map((d) => html`<tr><td class="code">${t(d.code)}</td><td>${t(d.name)}</td><td>${criteriaBadge(t, d.criteriaStatus)}</td><td>${d.note}</td></tr>`)}</tbody>
             </table></div>`
           : html`<p>${t('No diagnosis in the scope of this app was made.')}</p>`}
         ${checks.length ? html`<h3>${t('Combination checks')}</h3>${conflictList(t, checks)}` : ''}

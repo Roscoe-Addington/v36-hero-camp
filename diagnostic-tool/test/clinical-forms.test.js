@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { english } from '../src/message.js';
 import assert from 'node:assert/strict';
 import { parseForm } from '../src/forms.js';
 import { parseInterview, parseRisk, parseInformant, riskIndicators, finalizeBlocker, INTERVIEW_FORM, RISK, INFORMANT } from '../src/clinical-forms.js';
@@ -60,9 +61,9 @@ test('risk assessment is required by item 9, self-harm, previous attempts or inf
 });
 
 test('finalizing is blocked without the interview, and without a required risk assessment', () => {
-  assert.match(finalizeBlocker(caseFor({}, { interview: null })), /intake interview/);
+  assert.match(english(finalizeBlocker(caseFor({}, { interview: null }))), /intake interview/);
   assert.equal(finalizeBlocker(caseFor()), null);
-  assert.match(finalizeBlocker(caseFor({ phq9: 2 })), /risk assessment is required/);
+  assert.match(english(finalizeBlocker(caseFor({ phq9: 2 }))), /risk assessment is required/);
   assert.equal(finalizeBlocker(caseFor({ phq9: 2 }, { risk: { updated_at: 'now' } })), null);
 });
 

@@ -9,6 +9,7 @@
 // as NICE (2022) advise against using risk scales to predict suicide or to
 // decide who gets care. The clinician writes a formulation and a plan instead.
 
+import { M } from './message.js';
 import { parseForm } from './forms.js';
 
 const YES_NO = [['no', 'No'], ['yes', 'Yes']];
@@ -190,7 +191,7 @@ export function parseInformant(body, now) {
 export function riskIndicators(c) {
   const reasons = [];
   const a = c.answers ?? {};
-  if (c.results?.safetyFlag) reasons.push(`PHQ-9 item 9 (thoughts of death or self-harm): "${c.results.safetyAnswer}".`);
+  if (c.results?.safetyFlag) reasons.push(M('PHQ-9 item 9 (thoughts of death or self-harm): "{answer}".', { answer: M(c.results.safetyAnswer) }));
   if (a.pd16 === 1) reasons.push('Reports having deliberately hurt themselves (screening).');
   if (['one', 'multiple'].includes(c.interview?.prev_attempt)) reasons.push('Previous suicide attempt (intake interview).');
   if (c.interview?.self_harm_hist === 'recent') reasons.push('Self-harm in the past year (intake interview).');
@@ -203,7 +204,9 @@ export function riskIndicators(c) {
 export function finalizeBlocker(c) {
   if (!c.interview?.updated_at) return 'Complete the intake interview before finalizing.';
   if (riskIndicators(c).length && !c.risk?.updated_at) {
-    return 'A suicide risk assessment is required before finalizing, because of: ' + riskIndicators(c).join(' ');
+    return M('A suicide risk assessment is required before finalizing, because of: {reasons}', {
+      reasons: M(riskIndicators(c).map((_, i) => `{r${i}}`).join(' '), Object.fromEntries(riskIndicators(c).map((r, i) => [`r${i}`, typeof r === 'string' ? M(r) : r]))),
+    });
   }
   return null;
 }

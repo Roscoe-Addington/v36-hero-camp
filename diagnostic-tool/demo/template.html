@@ -212,7 +212,7 @@
         break: 'A tiredness rating of 7 or more offers a break. The answers so far are saved.',
         saved: 'The answers so far are saved. Opening the same link again continues where the patient left off.',
         thanks: 'The patient sees this. Everything else goes only to the clinician.',
-        risk: () => 'Suicide risk assessment and safety plan. The app does not calculate a risk score. ' + (D.finalizeBlocker(caseObject())?.includes('risk') ? 'It is required here before finalizing.' : 'Answer "Several days" to PHQ-9 item 9 in the screening to see it become required.'),
+        risk: () => 'Suicide risk assessment and safety plan. The app does not calculate a risk score. ' + (JSON.stringify(D.finalizeBlocker(caseObject()) ?? '').includes('risk') ? 'It is required here before finalizing.' : 'Answer "Several days" to PHQ-9 item 9 in the screening to see it become required.'),
         plan: 'The safety plan as a page to give to the patient.',
         checklist: 'Rate each criterion present, absent or unclear, pick specifiers and save. The rule-out table lists what to exclude. Then go back to the assessment to confirm the diagnosis.',
         final: () => state.finalizedAt
@@ -258,7 +258,7 @@
         break: 'En trötthetsskattning på 7 eller mer ger förslag på paus. Svaren hittills är sparade.',
         saved: 'Svaren hittills är sparade. Om patienten öppnar samma länk igen fortsätter hen där hen slutade.',
         thanks: 'Det här ser patienten. Allt annat går bara till behandlaren.',
-        risk: () => 'Suicidriskbedömning och krisplan. Appen räknar inte ut något riskvärde. ' + (D.finalizeBlocker(caseObject())?.includes('risk') ? 'Här krävs den innan bedömningen kan avslutas.' : 'Svara "Flera dagar" på fråga 9 i PHQ-9 i screeningen för att se den bli obligatorisk.'),
+        risk: () => 'Suicidriskbedömning och krisplan. Appen räknar inte ut något riskvärde. ' + (JSON.stringify(D.finalizeBlocker(caseObject()) ?? '').includes('risk') ? 'Här krävs den innan bedömningen kan avslutas.' : 'Svara "Flera dagar" på fråga 9 i PHQ-9 i screeningen för att se den bli obligatorisk.'),
         plan: 'Krisplanen som en sida att ge till patienten.',
         checklist: 'Skatta varje kriterium som uppfyllt, ej uppfyllt eller oklart, välj specificeringar och spara. Tabellen visar vad som ska uteslutas. Gå sedan tillbaka till bedömningen och bekräfta diagnosen.',
         final: () => state.finalizedAt

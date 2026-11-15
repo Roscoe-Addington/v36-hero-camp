@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { english } from '../src/message.js';
 import assert from 'node:assert/strict';
 import { PAGES, applySkips, isShown, parsePage, firstOpenPage, progress, findItem } from '../src/questionnaire.js';
 import { responseQuality, contradictionChecks, KIND } from '../src/response-quality.js';
@@ -75,10 +76,10 @@ test('tiredness 7+ is flagged, noting whether a break was taken', () => {
   const page4 = (shown) => ({ shown, submitted: shown + 5 * 1000 * PAGES[3].items.length, answered: PAGES[3].items.length });
   const continued = meta(5, { tiredness: [{ part: 3, value: 8, at: tiredAt }] });
   continued.pages[4] = page4(tiredAt + 1000);
-  assert.match(responseQuality(answers(), continued).flags[0].text, /continued without a break/);
+  assert.match(english(responseQuality(answers(), continued).flags[0].text), /continued without a break/);
   const rested = meta(5, { tiredness: [{ part: 3, value: 8, at: tiredAt }] });
   rested.pages[4] = page4(tiredAt + 20 * 60 * 1000);
-  assert.match(responseQuality(answers(), rested).flags[0].text, /took a break/);
+  assert.match(english(responseQuality(answers(), rested).flags[0].text), /took a break/);
   assert.deepEqual(responseQuality(answers(), meta(5, { tiredness: [{ part: 3, value: 4, at: 0 }] })).flags, []);
 });
 

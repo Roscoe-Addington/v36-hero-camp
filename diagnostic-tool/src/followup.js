@@ -8,6 +8,7 @@
 // - GAD-7: a change of 4 points or more is clinically meaningful; below 5 is
 //   in the minimal range (Toussaint et al. 2020).
 
+import { M } from './message.js';
 import { PHQ9_ITEMS, GAD7_ITEMS, PHQ_DIFFICULTY_ID, GAD_DIFFICULTY_ID, FREQUENCY_OPTIONS } from './questionnaire.js';
 import { phq9Severity, gad7Severity } from './scoring.js';
 
@@ -60,9 +61,9 @@ export function measurementSeries(assessments, followups) {
 function describe(first, last, meaningful, label) {
   const change = last - first;
   let text;
-  if (Math.abs(change) < meaningful) text = `${label} changed by ${change >= 0 ? '+' : ''}${change} (less than ${meaningful} points: no clear change).`;
-  else if (change < 0) text = `${label} fell by ${-change} points: a clinically meaningful improvement.`;
-  else text = `${label} rose by ${change} points: a clinically meaningful worsening.`;
+  if (Math.abs(change) < meaningful) text = M('{label} changed by {change} (less than {meaningful} points: no clear change).', { label, change: `${change >= 0 ? '+' : ''}${change}`, meaningful });
+  else if (change < 0) text = M('{label} fell by {points} points: a clinically meaningful improvement.', { label, points: -change });
+  else text = M('{label} rose by {points} points: a clinically meaningful worsening.', { label, points: change });
   return { change, text };
 }
 

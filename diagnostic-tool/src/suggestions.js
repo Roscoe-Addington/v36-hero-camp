@@ -15,6 +15,7 @@ import { findDisorder } from './disorders.js';
 import { scoreMoca } from './moca.js';
 import { STATUS as DIFF } from './differential.js';
 import { medicalWarnings } from './body.js';
+import { M } from './message.js';
 
 export const STRENGTH = { SUGGESTED: 'Suggested', CONSIDER: 'Consider' };
 
@@ -62,9 +63,9 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
 
   // ----- Mood -----
   if (dep.meetsMajorCriteria || dep.total >= 10) {
-    add('mdd', STRENGTH.SUGGESTED, `PHQ-9 ${dep.total}/27 (${dep.severity}). Algorithm: ${dep.syndrome}.`);
+    add('mdd', STRENGTH.SUGGESTED, M('PHQ-9 {total}/27 ({severity}). Algorithm: {syndrome}.', { total: dep.total, severity: M(dep.severity), syndrome: M(dep.syndrome) }));
   } else if (dep.total >= 5 || dep.symptomCount >= 2) {
-    add('mdd', STRENGTH.CONSIDER, `Subthreshold depressive symptoms (PHQ-9 ${dep.total}).`);
+    add('mdd', STRENGTH.CONSIDER, M('Subthreshold depressive symptoms (PHQ-9 {total}).', { total: dep.total }));
   }
   if (a.pdd1 === YES) add('pdd', STRENGTH.SUGGESTED, 'Reports depressed mood on most days for 2+ years.');
   if (a.bp1 === YES && (a.bp2 === YES || a.bp3 === YES)) {
@@ -93,9 +94,9 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
 
   // ----- Anxiety -----
   if (anx.meetsCriteriaABC || anx.total >= 10) {
-    add('gad', STRENGTH.SUGGESTED, `GAD-7 ${anx.total}/21 (${anx.severity}); 6-month criteria ${anx.meetsCriteriaABC ? 'endorsed' : 'not fully endorsed'}.`);
+    add('gad', STRENGTH.SUGGESTED, M(anx.meetsCriteriaABC ? 'GAD-7 {total}/21 ({severity}); 6-month criteria endorsed.' : 'GAD-7 {total}/21 ({severity}); 6-month criteria not fully endorsed.', { total: anx.total, severity: M(anx.severity) }));
   } else if (anx.total >= 5 || a.gadA === YES) {
-    add('gad', STRENGTH.CONSIDER, `Subthreshold anxiety symptoms (GAD-7 ${anx.total}).`);
+    add('gad', STRENGTH.CONSIDER, M('Subthreshold anxiety symptoms (GAD-7 {total}).', { total: anx.total }));
   }
   if (a.panic1 === YES && a.panic2 === YES) add('panic', STRENGTH.SUGGESTED, 'Panic attacks with worry about further attacks or avoidance.');
   else if (a.panic1 === YES) add('panic', STRENGTH.CONSIDER, 'Panic attacks without reported persistent worry or avoidance.');
@@ -109,22 +110,25 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
   // ----- Personality -----
   const pd = personalityScreen(a);
   const bpd = borderlineCount(a);
-  if (bpd >= 5) add('bpd', STRENGTH.SUGGESTED, `${bpd} of 8 borderline-related traits endorsed.`);
-  else if (bpd >= 3) add('bpd', STRENGTH.CONSIDER, `${bpd} of 8 borderline-related traits endorsed.`);
+  const bpdReason = M('{n} of 8 borderline-related traits endorsed.', { n: bpd });
+  if (bpd >= 5) add('bpd', STRENGTH.SUGGESTED, bpdReason);
+  else if (bpd >= 3) add('bpd', STRENGTH.CONSIDER, bpdReason);
   if (pd.positive) {
-    const screen = `Personality screen ${pd.score}/8 (3 or more suggests further assessment)`;
-    if (a.pd3 === NO) add('ppd', STRENGTH.CONSIDER, `${screen}; does not trust others.`);
-    if (a.pd2 === YES && a.pd1 === YES) add('szpd', STRENGTH.CONSIDER, `${screen}; loner with difficulty making friends.`);
-    if (a.pd9 === YES) add('stpd', STRENGTH.CONSIDER, `${screen}; odd behaviour or unusual experiences.`);
+    const screen = (detail) => M('Personality screen {score}/8 (3 or more suggests further assessment); {detail}', { score: pd.score, detail: M(detail) });
+    if (a.pd3 === NO) add('ppd', STRENGTH.CONSIDER, screen('does not trust others.'));
+    if (a.pd2 === YES && a.pd1 === YES) add('szpd', STRENGTH.CONSIDER, screen('loner with difficulty making friends.'));
+    if (a.pd9 === YES) add('stpd', STRENGTH.CONSIDER, screen('odd behaviour or unusual experiences.'));
     if (a.pd12 === YES) {
       const age = Number(patient.age);
-      add('aspd', STRENGTH.CONSIDER, `${screen}; repeated rule-breaking without remorse since the teens${age < 18 ? ' (patient is under 18: antisocial personality disorder cannot be diagnosed yet; consider conduct disorder)' : ''}.`);
+      add('aspd', STRENGTH.CONSIDER, screen(age < 18
+        ? 'repeated rule-breaking without remorse since the teens (patient is under 18: antisocial personality disorder cannot be diagnosed yet; consider conduct disorder).'
+        : 'repeated rule-breaking without remorse since the teens.'));
     }
-    if (a.pd10 === YES) add('hpd', STRENGTH.CONSIDER, `${screen}; needs to be the centre of attention.`);
-    if (a.pd11 === YES) add('npd', STRENGTH.CONSIDER, `${screen}; feels special and needs admiration.`);
-    if (a.pd13 === YES) add('avpd', STRENGTH.CONSIDER, `${screen}; avoids people for fear of criticism or rejection.`);
-    if (a.pd7 === YES) add('dpd', STRENGTH.CONSIDER, `${screen}; depends a lot on others.`);
-    if (a.pd8 === YES) add('ocpd', STRENGTH.CONSIDER, `${screen}; perfectionist.`);
+    if (a.pd10 === YES) add('hpd', STRENGTH.CONSIDER, screen('needs to be the centre of attention.'));
+    if (a.pd11 === YES) add('npd', STRENGTH.CONSIDER, screen('feels special and needs admiration.'));
+    if (a.pd13 === YES) add('avpd', STRENGTH.CONSIDER, screen('avoids people for fear of criticism or rejection.'));
+    if (a.pd7 === YES) add('dpd', STRENGTH.CONSIDER, screen('depends a lot on others.'));
+    if (a.pd8 === YES) add('ocpd', STRENGTH.CONSIDER, screen('perfectionist.'));
   }
 
   // ----- Neurocognitive -----
@@ -134,43 +138,42 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
     add('delirium', STRENGTH.SUGGESTED, 'Clinician observed acute onset or fluctuation, inattention, and disorganised thinking or altered consciousness.');
   }
   if (moca) {
-    const mocaText = `MoCA ${moca.adjusted}/30 (${moca.band})`;
-    if (moca.adjusted < 18) add('major_ncd', STRENGTH.SUGGESTED, `${mocaText}.`);
+    const vars = { score: moca.adjusted, band: M(moca.band) };
+    if (moca.adjusted < 18) add('major_ncd', STRENGTH.SUGGESTED, M('MoCA {score}/30 ({band}).', vars));
     else if (moca.belowCutoff) {
-      add('mild_ncd', STRENGTH.SUGGESTED, `${mocaText}.`);
-      if (a.cog2 === YES) add('major_ncd', STRENGTH.SUGGESTED, `${mocaText} and everyday activities affected.`);
+      add('mild_ncd', STRENGTH.SUGGESTED, M('MoCA {score}/30 ({band}).', vars));
+      if (a.cog2 === YES) add('major_ncd', STRENGTH.SUGGESTED, M('MoCA {score}/30 ({band}) and everyday activities affected.', vars));
     } else if (a.cog1 === YES) {
-      add('mild_ncd', STRENGTH.CONSIDER, `Memory concern reported but ${mocaText}.`);
+      add('mild_ncd', STRENGTH.CONSIDER, M('Memory concern reported but MoCA {score}/30 ({band}).', vars));
     }
   } else if (a.cog1 === YES) {
     const reason = 'Memory or thinking decline reported. Give the MoCA on site to assess further.';
     add('mild_ncd', Number(patient.age) >= 60 ? STRENGTH.SUGGESTED : STRENGTH.CONSIDER, reason);
-    if (a.cog2 === YES) add('major_ncd', STRENGTH.CONSIDER, `${reason} Everyday activities affected.`);
+    if (a.cog2 === YES) add('major_ncd', STRENGTH.CONSIDER, 'Memory or thinking decline reported. Give the MoCA on site to assess further. Everyday activities affected.');
   }
 
   // ----- Psychotic disorders -----
   if (a.psy1 === YES) {
-    const base = 'Reports hallucinations or persecutory ideas';
     if (a.psy2 === YES) {
       // Only during mood episodes: points to a mood disorder with psychotic features.
       if (dep.total >= 10 || a.bp1 === YES) {
-        add(a.bp1 === YES ? 'bipolar1' : 'mdd', STRENGTH.SUGGESTED, `${base}, only during extreme mood: consider the "with psychotic features" specifier.`);
+        add(a.bp1 === YES ? 'bipolar1' : 'mdd', STRENGTH.SUGGESTED, 'Reports hallucinations or persecutory ideas, only during extreme mood: consider the "with psychotic features" specifier.');
       }
-      add('schizoaffective', STRENGTH.CONSIDER, `${base} during mood episodes: check whether psychosis also occurs without them.`);
+      add('schizoaffective', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas during mood episodes: check whether psychosis also occurs without them.');
     } else if (a.psy3 === YES) {
-      add('schizophrenia', STRENGTH.SUGGESTED, `${base}, lasting more than a month and not only during mood episodes.`);
-      add('schizophreniform', STRENGTH.CONSIDER, `${base} for more than a month: schizophreniform if under 6 months.`);
-      add('delusional', STRENGTH.CONSIDER, `${base}: delusional disorder if delusions are the only symptom.`);
-      if (dep.total >= 10 || a.bp1 === YES) add('schizoaffective', STRENGTH.CONSIDER, `${base}, together with marked mood symptoms.`);
+      add('schizophrenia', STRENGTH.SUGGESTED, 'Reports hallucinations or persecutory ideas, lasting more than a month and not only during mood episodes.');
+      add('schizophreniform', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas for more than a month: schizophreniform if under 6 months.');
+      add('delusional', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas: delusional disorder if delusions are the only symptom.');
+      if (dep.total >= 10 || a.bp1 === YES) add('schizoaffective', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas, together with marked mood symptoms.');
     } else if (a.psy3 === NO) {
-      add('brief_psychotic', STRENGTH.SUGGESTED, `${base}, lasting less than a month.`);
-      add('schizophreniform', STRENGTH.CONSIDER, `${base}: check the duration.`);
+      add('brief_psychotic', STRENGTH.SUGGESTED, 'Reports hallucinations or persecutory ideas, lasting less than a month.');
+      add('schizophreniform', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas: check the duration.');
     } else {
-      add('schizophrenia', STRENGTH.CONSIDER, `${base}; duration not reported.`);
-      add('brief_psychotic', STRENGTH.CONSIDER, `${base}; duration not reported.`);
+      add('schizophrenia', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas; duration not reported.');
+      add('brief_psychotic', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas; duration not reported.');
     }
-    if (flagged('substance') || flagged('medication')) add('substance_psychotic', STRENGTH.SUGGESTED, `${base}, together with substance or medicine use.`);
-    if (flagged('medical') || possible('medical')) add('medical_psychotic', STRENGTH.CONSIDER, `${base}, together with a medical condition.`);
+    if (flagged('substance') || flagged('medication')) add('substance_psychotic', STRENGTH.SUGGESTED, 'Reports hallucinations or persecutory ideas, together with substance or medicine use.');
+    if (flagged('medical') || possible('medical')) add('medical_psychotic', STRENGTH.CONSIDER, 'Reports hallucinations or persecutory ideas, together with a medical condition.');
   }
   if (intake?.catatonia === 'yes') add('catatonia', STRENGTH.SUGGESTED, 'Clinician observed catatonic signs.');
 
@@ -179,7 +182,7 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
     const count = ['ptsd1', 'ptsd2', 'ptsd3', 'ptsd4', 'ptsd5'].filter((id) => a[id] === YES).length;
     const recent = a.ptsd_recent === YES;
     const target = recent ? 'acute_stress' : 'ptsd';
-    const text = `Trauma exposure; PC-PTSD-5 ${count}/5${recent ? ', event within the past month' : ''}.`;
+    const text = M(recent ? 'Trauma exposure; PC-PTSD-5 {count}/5, event within the past month.' : 'Trauma exposure; PC-PTSD-5 {count}/5.', { count });
     if (count >= 3) add(target, STRENGTH.SUGGESTED, text);
     else if (count >= 1) add(target, STRENGTH.CONSIDER, text);
   }
@@ -214,8 +217,8 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
   const scoff = ['scoff1', 'scoff2', 'scoff3', 'scoff4', 'scoff5'].filter((id) => a[id] === YES).length;
   const bmiValue = intake?.body?.bmi;
   const lowBmi = bmiValue !== undefined && bmiValue !== null && bmiValue < 18.5;
-  const scoffReason = { text: 'SCOFF {score} of 5 (2 or more suggests an eating disorder).', vars: { score: scoff } };
-  const bmiReason = { text: 'BMI {bmi}: below 18.5.', vars: { bmi: bmiValue } };
+  const scoffReason = M('SCOFF {score} of 5 (2 or more suggests an eating disorder).', { score: scoff });
+  const bmiReason = M('BMI {bmi}: below 18.5.', { bmi: bmiValue });
   const purging = a.scoff1 === YES || a.ed_comp === YES;
   if ((scoff >= 2 && (a.scoff3 === YES || a.scoff4 === YES)) || (lowBmi && (scoff >= 2 || a.scoff4 === YES || a.scoff5 === YES))) {
     add('anorexia', STRENGTH.SUGGESTED, scoffReason);
@@ -268,12 +271,12 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
     add('major_ncd', STRENGTH.CONSIDER, 'Disoriented in the mental status examination.');
   }
   if (inf.inf_elevated === 'yes') {
-    const reason = `Informant (${inf.inf_relationship}) has seen periods of elevated mood, energy or reduced sleep lasting days.`;
+    const reason = M('Informant ({relationship}) has seen periods of elevated mood, energy or reduced sleep lasting days.', { relationship: inf.inf_relationship });
     add('bipolar1', STRENGTH.SUGGESTED, reason);
     add('bipolar2', STRENGTH.SUGGESTED, reason);
   }
   if (inf.inf_memory === 'yes') {
-    add('mild_ncd', Number(patient.age) >= 60 ? STRENGTH.SUGGESTED : STRENGTH.CONSIDER, `Informant (${inf.inf_relationship}) has noticed a decline in memory or thinking.`);
+    add('mild_ncd', Number(patient.age) >= 60 ? STRENGTH.SUGGESTED : STRENGTH.CONSIDER, M('Informant ({relationship}) has noticed a decline in memory or thinking.', { relationship: inf.inf_relationship }));
     if (inf.inf_daily === 'yes') add('major_ncd', STRENGTH.SUGGESTED, 'Informant reports decline in memory or thinking AND more help needed with everyday activities.');
   }
   if (inf.inf_psychotic === 'yes') add('schizophrenia', STRENGTH.CONSIDER, 'Informant has noticed odd beliefs, suspiciousness or responding to things that are not there.');
@@ -307,7 +310,7 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
   ];
   const outOfScope = OUT.filter((o) => flagged(o.id)).map((o) => ({
     condition: o.condition,
-    reason: `${diff[o.id].finding} This app does not include the DSM-5-TR chapter on ${o.where}; assess it separately.`,
+    reason: M('{finding} This app does not include the DSM-5-TR chapter on {where}; assess it separately.', { finding: typeof diff[o.id].finding === 'string' ? M(diff[o.id].finding) : diff[o.id].finding, where: M(o.where) }),
   }));
 
   const order = (s) => (s.strength === STRENGTH.SUGGESTED ? 0 : 1);

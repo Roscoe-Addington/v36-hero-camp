@@ -7,11 +7,18 @@
 // Swedish-speaking psychiatrist review it (TRA-6 in docs/VALIDATION-PLAN.md),
 // and replace it with the official terms if a licence is obtained.
 //
-// Only content added after the rule "everything new in Swedish and English"
-// (the feeding and eating disorders onwards) is here. Older clinical content
-// has no entry and is shown in English (TRA-3).
+// The older disorders' content is in i18n-clinical-sv-core.js (names,
+// groups, specifiers, notes), -criteria.js (criteria) and -reasons.js
+// (rule-out reasons, combination rules, screening and suggestion texts).
+
+import { CORE_SV } from './i18n-clinical-sv-core.js';
+import { CORE_CRITERIA_SV } from './i18n-clinical-sv-criteria.js';
+import { CORE_REASONS_SV } from './i18n-clinical-sv-reasons.js';
 
 export const CLINICAL_SV = {
+  ...CORE_SV,
+  ...CORE_CRITERIA_SV,
+  ...CORE_REASONS_SV,
   // ----- Category and names -----
   'Feeding and eating disorders': 'Ätstörningar',
   Pica: 'Pica',

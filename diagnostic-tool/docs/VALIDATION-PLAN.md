@@ -347,10 +347,10 @@ These are not questions, but they decide what the clinician sees.
 | --- | --- | --- | --- |
 | TRA-1 | Swedish PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5, SCOFF (unofficial translation in `src/i18n.js`) | Replace with the official validated Swedish versions; do not validate our own translation. | Open |
 | TRA-2 | Swedish wording of the own and adapted items | Forward translation by two translators, reconciliation, back-translation, review, then cognitive interviews in Swedish (ISPOR / WHO translation guidance). Items replaced by instruments use the instrument's official Swedish version instead. | Open |
-| TRA-3 | Swedish clinical terms on the clinician pages | Interface, forms and messages are translated (`src/i18n-clinician-sv.js`). Still in English for the disorders added before the eating disorders: disorder names, criteria labels, specifiers, rule-out reasons, conflict messages, suggestion reasons, the differential report and the MoCA error messages (newer content: TRA-6). Use the official Swedish DSM-5-TR terminology (licensed) and ICD-10-SE names; do not invent terms. | Open |
+| TRA-3 | Official Swedish clinical terms | All clinical content now has an unofficial Swedish translation (TRA-6). If a licence for the official Swedish DSM-5-TR text is obtained, replace the unofficial terms with it; check disorder names against ICD-10-SE. | Open |
 | TRA-5 | Swedish interface text on the clinician pages and in the emails to clinicians; the Swedish copyright footer on the patient pages | Review by a Swedish-speaking clinician (written for this app). | Open |
 | TRA-4 | Patient information text (consent page) | Written by the data protection officer in both languages. | Open |
-| TRA-6 | Swedish clinical content for the feeding and eating disorders and everything added after them (unofficial translation in `src/i18n-clinical-sv.js`): names, criteria, specifiers, rule-out reasons, combination rules, suggestion reasons, medical warnings | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
+| TRA-6 | Swedish clinical content for all 60 disorders (unofficial translation in `src/i18n-clinical-sv*.js`): names, criteria, specifiers, notes, rule-out reasons, combination rules, suggestion reasons, the differential screening report, response-quality notes, follow-up summaries, medical warnings | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
 
 ## 8. Order of work
 

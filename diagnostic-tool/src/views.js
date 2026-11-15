@@ -26,6 +26,7 @@ import { STRINGS, LANGUAGES, itemText, optionText, sectionText, difficultyText }
 import { measurementSeries, progressSummary } from './followup.js';
 import { translator, CLINICIAN_LANGUAGES } from './i18n-clinician.js';
 import { findDisorder } from './disorders.js';
+import { render as renderMessage } from './message.js';
 
 // ---------- The escaping helper ----------
 
@@ -351,7 +352,7 @@ export function likelihoodBadge(likelihood, t = (x) => x) {
 
 function symptomList(t, list) {
   if (list.length === 0) return html`<p class="hint">${t('None.')}</p>`;
-  return html`<ul>${list.map((s) => html`<li>${s.symptom} — <em>${t(s.frequency)}</em></li>`)}</ul>`;
+  return html`<ul>${list.map((s) => html`<li>${t(s.symptom)} — <em>${t(s.frequency)}</em></li>`)}</ul>`;
 }
 
 function itemTable(t, items) {
@@ -384,7 +385,7 @@ function differentialSection(t, differential) {
     <h2>${t('Differential diagnosis screening')}</h2>
     <p class="hint">${t('{n} alternative or co-occurring conditions checked against DSM-5-TR differentials for MDD and GAD. This shows what to explore in the interview; it does not confirm or exclude any diagnosis.', { n: summary.checked })}</p>
     ${summary.priority.length
-      ? html`<div class="alert" role="alert"><strong>${t('Priority:')}</strong> ${t('screen positive for {list}.', { list: summary.priority.join('; ') })}</div>`
+      ? html`<div class="alert" role="alert"><strong>${t('Priority:')}</strong> ${t('screen positive for {list}.', { list: summary.priority.map((x) => t(x)).join('; ') })}</div>`
       : ''}
 
     <div class="table-scroll"><table class="diff-summary">
@@ -405,11 +406,11 @@ function differentialSection(t, differential) {
       <thead><tr><th>${t('Shared symptom')}</th><th>${t('Counted for depression')}</th><th>${t('Counted for anxiety')}</th></tr></thead>
       <tbody>
         ${overlap.shared.map(
-          (o) => html`<tr><td>${o.symptom}</td><td>${o.onDepressionSide ? t('Yes') : t('No')}</td><td>${o.onAnxietySide ? t('Yes') : t('No')}</td></tr>`
+          (o) => html`<tr><td>${t(o.symptom)}</td><td>${o.onDepressionSide ? t('Yes') : t('No')}</td><td>${o.onAnxietySide ? t('Yes') : t('No')}</td></tr>`
         )}
       </tbody>
     </table></div>
-    ${overlap.notes.map((n) => html`<p class="note">${n}</p>`)}
+    ${overlap.notes.map((n) => html`<p class="note">${renderMessage(t, n)}</p>`)}
 
     <h3>${t('Detailed reasoning')}</h3>
     ${entries.map(
@@ -421,7 +422,7 @@ function differentialSection(t, differential) {
           ${e.evidence.length
             ? html`<dt>${t('Answers used')}</dt><dd><ul>${e.evidence.map((ev) => html`<li>${itemText(t.language, findItem(ev.id) ?? { text: ev.question })} — <strong>${t(ev.answer)}</strong></li>`)}</ul></dd>`
             : ''}
-          <dt>${t('Finding')}</dt><dd>${t(e.finding)}</dd>
+          <dt>${t('Finding')}</dt><dd>${renderMessage(t, e.finding)}</dd>
           <dt>${t('What it means')}</dt><dd>${t(e.implication)}</dd>
           <dt>${t('Next step')}</dt><dd>${t(e.nextStep)}</dd>
         </dl>
@@ -449,7 +450,7 @@ export function screeningSections(results, t = translator('en')) {
         <ul class="facts">
           <li>${t('PHQ-9 total:')} <strong>${d.total}/${d.maxTotal}</strong> (${t(d.severity)})</li>
           <li>${t('DSM-5-TR symptom count: {n} of 9 at threshold; core symptom (mood or anhedonia) {core}', { n: d.symptomCount, core: d.coreSymptomPresent ? t('present') : t('absent') })}</li>
-          <li>${t('Algorithm:')} ${d.syndrome}</li>
+          <li>${t('Algorithm:')} ${t(d.syndrome)}</li>
           <li>${t('Functional impairment:')} ${t(d.functionalDifficulty)}</li>
         </ul>
         <h3>${t('Symptoms at diagnostic threshold')}</h3>
@@ -469,7 +470,7 @@ export function screeningSections(results, t = translator('en')) {
           <li>${t('Criterion C — at least 3 of 6 associated symptoms:')} ${yes(a.criteria.C)} (${t('{n} of 6', { n: a.criteria.associatedCount })})</li>
           <li>${t('Functional impairment:')} ${t(a.functionalDifficulty)}</li>
         </ul>
-        ${a.notes.map((n) => html`<p class="note">${n}</p>`)}
+        ${a.notes.map((n) => html`<p class="note">${renderMessage(t, n)}</p>`)}
         <h3>${t('Symptoms more than half the days')}</h3>
         ${symptomList(t, a.thresholdSymptoms)}
         <h3>${t('Subclinical symptoms')}</h3>
@@ -481,7 +482,7 @@ export function screeningSections(results, t = translator('en')) {
 
       <section class="card">
         <h2>${t('Before making a diagnosis')}</h2>
-        <ul>${CLINICIAN_CHECKLIST.map((c) => html`<li>${c}</li>`)}</ul>
+        <ul>${CLINICIAN_CHECKLIST.map((c) => html`<li>${t(c)}</li>`)}</ul>
       </section>`;
 }
 
@@ -817,7 +818,7 @@ function followupSection(t, patient, assessments, followups, followupLink, canSt
       : ''}
     ${points.length
       ? html`${progressChart(t, points)}
-        ${progress ? html`<ul class="facts">${progress.notes.map((n) => html`<li>${n}</li>`)}</ul>` : html`<p class="hint">${t('One measurement so far. Add a follow-up to see change.')}</p>`}
+        ${progress ? html`<ul class="facts">${progress.notes.map((n) => html`<li>${renderMessage(t, n)}</li>`)}</ul>` : html`<p class="hint">${t('One measurement so far. Add a follow-up to see change.')}</p>`}
         <div class="table-scroll"><table>
           <thead><tr><th>${t('Date')}</th><th>${t('Measurement')}</th><th>PHQ-9</th><th>GAD-7</th><th></th></tr></thead>
           <tbody>${points.map((p) => html`<tr><td class="code">${p.date}</td><td>${t(p.source)}</td><td>${p.phq9}</td><td>${p.gad7}</td>

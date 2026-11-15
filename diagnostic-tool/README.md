@@ -17,13 +17,15 @@ It covers eight groups of DSM-5-TR disorders (60 in total):
 | Obsessive-compulsive and related disorders | OCD, body dysmorphic disorder, hoarding disorder, trichotillomania, excoriation (skin-picking) disorder, substance/medication-induced and medical-condition OCRD |
 | Feeding and eating disorders | Pica, rumination disorder, ARFID, anorexia nervosa, bulimia nervosa, binge-eating disorder, other specified and unspecified feeding or eating disorder |
 
-**Languages of the clinical content.** Everything added from the eating
-disorders onwards is in English and Swedish, including disorder names,
-criteria, rule-out reasons, combination rules and suggestion reasons. The
-Swedish wording is an **unofficial translation** written for this app
-(`src/i18n-clinical-sv.js`, to be reviewed: TRA-6), because the official
-Swedish DSM-5-TR text is licensed. The older disorders' clinical content
-is still in English (TRA-3).
+**Languages of the clinical content.** All clinical content is in English
+and Swedish: disorder names, criteria, specifiers, rule-out reasons,
+combination rules, suggestion reasons, the screening report, response-
+quality notes and follow-up summaries. In Swedish mode only Swedish is
+shown; a test renders every clinician page in Swedish and fails if English
+is left. The Swedish wording is an **unofficial translation** written for
+this app (`src/i18n-clinical-sv*.js`, to be reviewed: TRA-6), because the
+official Swedish DSM-5-TR text is licensed. Free text that clinicians type
+is shown as written.
 
 Other neurological symptoms (seizures, weakness, speech or vision loss,
 tremor, new headaches, head injury) are **flagged for referral**, not
@@ -409,9 +411,9 @@ of the clinician who downloads it. The interface
 text, the forms (interview, MSE, risk, informant) and the server messages
 are translated (`src/i18n-clinician.js`, `src/i18n-clinician-sv.js`); a
 test fails if a text on the clinician pages has no Swedish translation.
-**Still in English:** disorder names, criteria, rule-out reasons,
-suggestion reasons and the differential report. They need the official
-Swedish DSM-5-TR terminology (TRA-3 in the validation plan).
+The clinical content (disorder names, criteria, rule-out reasons,
+suggestion reasons, the differential report) is translated too, with an
+unofficial Swedish clinical dictionary (TRA-6 in the validation plan).
 
 > **The Swedish PHQ-9, GAD-7, AUDIT-C and PC-PTSD-5 wording is an
 > unofficial translation written for this app.** Validated Swedish

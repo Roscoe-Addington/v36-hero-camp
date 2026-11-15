@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { english } from '../src/message.js';
 import assert from 'node:assert/strict';
 import { buildSuggestions, personalityScreen, STRENGTH } from '../src/suggestions.js';
 import { scoreMoca, parseMoca, defaultLowEducation } from '../src/moca.js';
@@ -26,7 +27,7 @@ test('depression screen suggests MDD with the reason', () => {
   const out = suggest({ phq1: 2, phq2: 2, phq3: 2, phq4: 2, phq7: 2 });
   const mdd = out.suggestions.find((s) => s.disorderId === 'mdd');
   assert.equal(mdd.strength, STRENGTH.SUGGESTED);
-  assert.match(mdd.reasons[0], /PHQ-9 10\/27/);
+  assert.match(english(mdd.reasons[0]), /PHQ-9 10\/27/);
 });
 
 test('anxiety items suggest the matching anxiety disorders', () => {
@@ -154,5 +155,5 @@ test('catatonic signs observed by the clinician suggest catatonia', () => {
 
 test('antisocial suggestion for a 17-year-old explains the age limit', () => {
   const out = suggest({ pd12: 1, pd1: 1, pd4: 1, pd5: 1 }, null, { ...patient, age: 17 });
-  assert.match(out.suggestions.find((s) => s.disorderId === 'aspd').reasons[0], /under 18/);
+  assert.match(english(out.suggestions.find((s) => s.disorderId === 'aspd').reasons[0]), /under 18/);
 });
