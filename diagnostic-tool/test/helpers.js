@@ -44,18 +44,36 @@ export function englishLeft(page) {
 }
 
 
-// A fake PubMed: esearch returns three ids, esummary their publication types.
-export function fakePubmed(calls = []) {
-  const records = {
-    111: { uid: '111', title: 'A meta-analysis', fulljournalname: 'Journal A', pubdate: '2026 Oct 1', pubtype: ['Journal Article', 'Meta-Analysis'] },
+// Fake research services (PubMed, Europe PMC, ClinicalTrials.gov), so the
+// tests never use the network. Every disorder gets the same answers:
+// - PubMed: a meta-analysis (111), a randomized trial (222) and a comment (333, left out);
+// - Europe PMC: the same meta-analysis again (PMID 111, so it is merged), an
+//   RCT in a priority journal only in PubMed Central, and a preprint (left out);
+// - ClinicalTrials.gov: one trial with results.
+export function fakeResearch(calls = []) {
+  const pubmed = {
+    111: { uid: '111', title: 'A meta-analysis', fulljournalname: 'Journal A', source: 'J A', pubdate: '2026 Oct 1', pubtype: ['Journal Article', 'Meta-Analysis'] },
     222: { uid: '222', title: 'A randomized trial', source: 'J B', pubdate: '2026 Sep', pubtype: ['Journal Article', 'Randomized Controlled Trial'] },
     333: { uid: '333', title: 'A comment', fulljournalname: 'Journal C', pubdate: '2026', pubtype: ['Comment'] },
   };
+  const europePmc = { resultList: { result: [
+    { id: '111', source: 'MED', pmid: '111', title: 'A meta-analysis', journalTitle: 'J A', pubYear: '2026', pubType: 'meta-analysis; systematic review; journal article' },
+    { id: 'PMC999', source: 'PMC', title: 'A trial only in PubMed Central', journalTitle: 'Lancet Psychiatry', pubYear: '2026', pubType: 'research-article; randomized controlled trial' },
+    { id: 'PPR1', source: 'PPR', title: 'A preprint', journalTitle: '', pubYear: '2026', pubType: 'preprint' },
+  ] } };
+  const trials = { studies: [{ protocolSection: {
+    identificationModule: { nctId: 'NCT00000001', briefTitle: 'A registered trial with results' },
+    statusModule: { resultsFirstPostDateStruct: { date: '2026-10-09' } },
+    sponsorCollaboratorsModule: { leadSponsor: { name: 'A University' } },
+  } }] };
   return async (url) => {
     calls.push(url);
-    const body = url.includes('esearch.fcgi')
-      ? { esearchresult: { count: '3', idlist: ['111', '222', '333'] } }
-      : { result: { uids: ['111', '222', '333'], ...records } };
+    let body;
+    if (url.includes('esearch.fcgi')) body = { esearchresult: { count: '3', idlist: ['111', '222', '333'] } };
+    else if (url.includes('esummary.fcgi')) body = { result: { uids: ['111', '222', '333'], ...pubmed } };
+    else if (url.includes('europepmc')) body = europePmc;
+    else if (url.includes('clinicaltrials.gov')) body = trials;
+    else throw new Error(`unexpected URL ${url}`);
     return { ok: true, json: async () => body };
   };
 }

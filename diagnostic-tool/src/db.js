@@ -223,6 +223,27 @@ db.exec(`
   );
 `);
 
+// Added with Europe PMC and ClinicalTrials.gov: a priority-journal flag and
+// which sources found the article.
+{
+  const columns = new Set(db.prepare('PRAGMA table_info(evidence_items)').all().map((c) => c.name));
+  if (!columns.has('priority')) db.exec('ALTER TABLE evidence_items ADD COLUMN priority INTEGER NOT NULL DEFAULT 0');
+  if (!columns.has('found_via')) db.exec("ALTER TABLE evidence_items ADD COLUMN found_via TEXT NOT NULL DEFAULT 'pubmed'");
+}
+
+// The yearly check of Swedish guidance (guidance.js): who checked which
+// source when, and whether anything needs updating.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS guidance_checks (
+    id          INTEGER PRIMARY KEY,
+    source_id   TEXT NOT NULL,
+    checked_at  TEXT NOT NULL,
+    checked_by  INTEGER NOT NULL REFERENCES clinicians(id),
+    outcome     TEXT NOT NULL,
+    note        TEXT
+  );
+`);
+
 // Each clinician chooses the language of the clinician pages ('en' or 'sv').
 if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'language')) {
   db.exec("ALTER TABLE clinicians ADD COLUMN language TEXT NOT NULL DEFAULT 'en'");

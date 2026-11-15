@@ -145,13 +145,16 @@ export function loginPage({ error, language = 'en' } = {}) {
 
 // ---------- Clinician: patient list ----------
 
-export function dashboardPage({ clinician, patients }) {
+export function dashboardPage({ clinician, patients, guidanceDue = [] }) {
   const t = translator(clinician?.language);
   return layout({
     title: t('Patients'),
     clinician,
     body: html`
       <h1>${t('Patients')}</h1>
+      ${guidanceDue.length
+        ? html`<p class="note" role="status">${t('The yearly check of Swedish guidance is due: {names}.', { names: guidanceDue.join(', ') })} <a href="/clinician/evidence#guidance">${t('Open Research')}</a></p>`
+        : ''}
       <p><a class="button" href="/clinician/patients/new">${t('+ Add patient')}</a></p>
       ${patients.length === 0
         ? html`<p>${t('No patients yet.')}</p>`

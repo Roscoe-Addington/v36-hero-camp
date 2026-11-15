@@ -327,7 +327,8 @@ src/records.js         patient record entries and personal-number search
 src/views-records.js   record search and the record timeline
 src/knowledge.js       disorder summaries and treatments, with evidence levels
 src/disorder-search.js disorder search and treatment ranking
-src/evidence-watch.js  the PubMed research watch and review rules
+src/evidence-watch.js  the research watch (PubMed, Europe PMC, ClinicalTrials.gov)
+src/guidance.js        the yearly check of Swedish guidance
 src/views-knowledge.js disorder information and the research review pages
 src/response-quality.js  signs of tired or careless answering
 public/skip.js         skip logic in the browser
@@ -396,36 +397,60 @@ disorder page has:
 
 ## Research watch
 
-Once a week (`EVIDENCE_WATCH_DAYS`), Continuum searches **PubMed**, which
-indexes peer-reviewed journals, for new research on the treatment of each
-disorder (`src/evidence-watch.js`). It looks for meta-analyses, systematic
-reviews, guidelines and randomized and other clinical trials, and leaves
-out comments, letters, editorials, preprints and retracted papers. Only
-the disorder search terms are sent; never patient data.
+Once a week (`EVIDENCE_WATCH_DAYS`), Continuum searches three sources for
+new research on the treatment of each disorder (`src/evidence-watch.js`).
+The clinic approved these sources on 2026-11-15:
+
+| Source | What it adds | How |
+| --- | --- | --- |
+| **PubMed** | Peer-reviewed journals | MeSH terms per disorder, treatment topic, study-design filter. Searched twice: in all journals, and in the **priority journals** only, so they are never crowded out |
+| **Europe PMC** | PubMed Central and European content | Titles and abstracts; only MEDLINE and PubMed Central records, so **no preprints**. An article with a PubMed id is stored as the PubMed article, never twice |
+| **ClinicalTrials.gov** | Registered interventional trials whose results were posted in the period | Marked **not peer-reviewed** and ranked last |
+
+**Priority journals** (22, approved): JAMA Psychiatry, Lancet Psychiatry,
+American Journal of Psychiatry, World Psychiatry, British Journal of
+Psychiatry, Psychological Medicine, BMJ, Lancet, NEJM, Cochrane Database of
+Systematic Reviews; Journal of Affective Disorders, Depression and Anxiety,
+Journal of Anxiety Disorders, Behaviour Research and Therapy, International
+Journal of Eating Disorders, Schizophrenia Bulletin, Bipolar Disorders,
+Internet Interventions; Acta Psychiatrica Scandinavica, Nordic Journal of
+Psychiatry, Läkartidningen, Cognitive Behaviour Therapy. Their articles get
+a "Priority journal" badge and come first within each study design.
 
 New articles go to **Research** in the top bar, **ranked by study design**:
 meta-analyses (5), systematic reviews and guidelines (4), randomized
-controlled trials (3), other clinical trials (2). **Nothing is added to
-the disorder information automatically.** A clinician opens the article,
-then either rejects it or approves it with a short summary **in both
-English and Swedish** (the article title stays in English, marked as the
-original title). Approved research appears on the disorder page with the
-reviewer's name and date. Decisions are final and in the audit log.
-"Search now" starts a search at once.
+controlled trials (3), other clinical trials (2), trial registrations (1);
+priority journals first within each. Comments, letters, editorials,
+preprints and retracted papers are left out. Each article shows which
+sources found it. **Nothing is added to the disorder information
+automatically**: a research reviewer opens the article, then rejects it or
+approves it with a short summary **in both English and Swedish** (the
+article title stays in English, marked as the original title). Decisions
+are final and in the audit log. "Search now" starts a search at once.
+
+**Swedish guidance: yearly check.** SBU, Socialstyrelsen, Kunskapsstyrning
+vård and Läkemedelsverket have no feed or search interface the app can
+read, and their guidance changes every few years, so a research reviewer
+checks each one by hand once a year (`src/guidance.js`). The Research page
+links to each, says what to look for, and records who checked, when, and
+whether the disorder information needs updating (a note is then required).
+The start page reminds reviewers when a check is due.
 
 - **Research reviewers** are named by an administrator on the
-  Administration page. Only reviewers may approve, reject or start a
-  search; until one is named, nobody can. The research is shared by every
-  clinician, so keep the group small.
+  Administration page. Only reviewers may approve, reject, start a search
+  or record a guidance check; until one is named, nobody can.
+- `EVIDENCE_SOURCES` limits the sources (default
+  `pubmed,europepmc,clinicaltrials`). `EVIDENCE_WATCH=off` turns the watch off.
 - `NCBI_EMAIL`, `NCBI_API_KEY`: NCBI asks for a contact email and allows
   more requests with a free API key. Use a service mailbox, not a person's.
-- `EVIDENCE_WATCH=off` turns it off.
-- The server needs to reach `eutils.ncbi.nlm.nih.gov`. Behind a proxy,
-  start Node with `NODE_USE_ENV_PROXY=1` (Node 22.21 or later), because
-  Node's built-in `fetch` ignores `HTTPS_PROXY` otherwise.
+- Only the disorder search terms and dates are sent; never patient data.
+- The server needs to reach `eutils.ncbi.nlm.nih.gov`, `www.ebi.ac.uk` and
+  `clinicaltrials.gov`. Behind a proxy, start Node with
+  `NODE_USE_ENV_PROXY=1` (Node 22.21 or later), because Node's built-in
+  `fetch` ignores `HTTPS_PROXY` otherwise.
 
-The ranking is by study design only. It does not judge the quality,
-size or relevance of a study: that is the reviewer's job.
+The ranking is by study design and journal only. It does not judge the
+quality, size or relevance of a study: that is the reviewer's job.
 
 ## Who can see a patient
 

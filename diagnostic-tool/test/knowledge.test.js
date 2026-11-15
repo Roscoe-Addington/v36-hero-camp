@@ -8,6 +8,7 @@ import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS } from '../src/knowledge.js';
 import { rankedTreatments, searchDisorders } from '../src/disorder-search.js';
 import { disorderInfoPage, disorderSearchPage, evidenceReviewPage } from '../src/views-knowledge.js';
 import { englishLeft } from './helpers.js';
+import { GUIDANCE_SOURCES } from '../src/guidance.js';
 
 const filled = (both) => Boolean(both && String(both.en ?? '').trim() && String(both.sv ?? '').trim());
 
@@ -54,7 +55,14 @@ test('Swedish disorder pages and the review page show only Swedish', () => {
   for (const d of DISORDERS) hits.push(...englishLeft(disorderInfoPage({ clinician, disorder: d, evidence })).map((h) => `${d.id}: ${h}`));
   hits.push(...englishLeft(disorderSearchPage({ clinician, query: 'ångest', results: searchDisorders('ångest') })));
   hits.push(...englishLeft(disorderSearchPage({ clinician })));
-  hits.push(...englishLeft(evidenceReviewPage({ clinician, pending: evidence.map((e) => ({ ...e, status: 'pending' })), reviewed: evidence, lastRun: { finished_at: '2026-11-15T10:00:00Z', found: 3, added: 2 }, errors: { 1: ['Choose approve or reject.'] } })));
+  const more = [
+    { ...evidence[0], id: 2, source: 'europepmc', source_id: 'PMC:PMC999', priority: 1, found_via: 'europepmc', design: 'rct', rank: 3, url: 'https://europepmc.org/article/PMC/PMC999' },
+    { ...evidence[0], id: 3, source: 'clinicaltrials', source_id: 'NCT00000001', journal: 'A University', found_via: 'clinicaltrials', design: 'registry', rank: 1, url: 'https://clinicaltrials.gov/study/NCT00000001' },
+  ];
+  const guidance = GUIDANCE_SOURCES.map((g, i) => ({ ...g, due: i > 0, last: i === 0 ? { checked_at: '2026-11-15T10:00:00Z', checked_by_name: 'Dr Test', outcome: 'update_needed', note: 'Ny rapport om ätstörningar' } : null }));
+  hits.push(...englishLeft(evidenceReviewPage({ clinician, pending: [...evidence, ...more].map((e) => ({ ...e, status: 'pending' })), reviewed: [...evidence, ...more], lastRun: { finished_at: '2026-11-15T10:00:00Z', found: 3, added: 2 }, errors: { 1: ['Choose approve or reject.'] },
+    guidance, guidanceErrors: { sbu: ['Write what is new and what needs updating.'] } })));
+  hits.push(...englishLeft(disorderInfoPage({ clinician, disorder: findDisorder('ptsd'), evidence: more.map((e) => ({ ...e, status: 'approved' })) })));
   assert.deepEqual(hits, []);
   const page = String(disorderInfoPage({ clinician, disorder: findDisorder('ptsd'), evidence }));
   assert.ok(page.includes('Exponering fungerar.') && !page.includes('Exposure works.'));

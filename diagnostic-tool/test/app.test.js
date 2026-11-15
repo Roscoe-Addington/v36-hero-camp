@@ -813,8 +813,8 @@ test('disorder information: search from the top bar, ranked treatments, Swedish'
 });
 
 test('research watch: search now, review queue ranked, approve needs both languages, reviewers only', async () => {
-  const { fakePubmed } = await import('./helpers.js');
-  app.locals.evidenceOptions = { fetchImpl: fakePubmed(), pauseMs: 0 };
+  const { fakeResearch } = await import('./helpers.js');
+  app.locals.evidenceOptions = { fetchImpl: fakeResearch(), pauseMs: 0 };
   const cookie = (await post('/login', { email: 'dr@example.com', password: 'correct horse battery' })).headers.get('set-cookie').split(';')[0];
   const get = async (path) => (await fetch(base + path, { headers: { cookie } })).text();
   db.prepare('DELETE FROM evidence_items').run();
@@ -992,4 +992,32 @@ test('administrators make other administrators and name research reviewers; neve
 
   const log = db.prepare("SELECT detail FROM audit_log WHERE action = 'change_roles' ORDER BY id").all().map((r) => r.detail);
   assert.deepEqual(log, ['Dr Second: Made administrator', 'Dr Second: Named research reviewer', 'Ada Admin: Removed as administrator', 'Ada Admin: Made administrator', 'Dr Second: Removed as research reviewer']);
+});
+
+test('yearly check of Swedish guidance: reminder on the start page for reviewers, recorded with a note when something is new', async () => {
+  const login = async (email, password) => (await post('/login', { email, password })).headers.get('set-cookie').split(';')[0];
+  const reviewer = await login('dr@example.com', 'correct horse battery');
+  const other = await login('second@example.com', 'second password long');
+  const text = async (path, cookie) => (await fetch(base + path, { headers: { cookie } })).text();
+  db.prepare("UPDATE clinicians SET evidence_reviewer = CASE WHEN email = 'dr@example.com' THEN 1 ELSE 0 END").run();
+  db.prepare('DELETE FROM guidance_checks').run();
+
+  assert.ok((await text('/clinician', reviewer)).includes('The yearly check of Swedish guidance is due: SBU, Socialstyrelsen, Kunskapsstyrning vård, Läkemedelsverket.'));
+  assert.ok(!(await text('/clinician', other)).includes('yearly check of Swedish guidance'), 'only reviewers are reminded');
+  assert.equal((await post('/clinician/evidence/guidance/sbu', { outcome: 'no_change' }, other)).status, 403);
+
+  // "Needs updating" requires a note
+  const noNote = await post('/clinician/evidence/guidance/socialstyrelsen', { outcome: 'update_needed', note: '' }, reviewer);
+  assert.equal(noNote.status, 400);
+  assert.equal((await post('/clinician/evidence/guidance/nope', { outcome: 'no_change' }, reviewer)).status, 400);
+  for (const id of ['sbu', 'kunskapsstyrning', 'lakemedelsverket']) assert.equal((await post(`/clinician/evidence/guidance/${id}`, { outcome: 'no_change' }, reviewer)).status, 302);
+  assert.equal((await post('/clinician/evidence/guidance/socialstyrelsen', { outcome: 'update_needed', note: 'Revised eating-disorder guideline' }, reviewer)).status, 302);
+  assert.ok(!(await text('/clinician', reviewer)).includes('yearly check of Swedish guidance'), 'no reminder once everything is checked');
+  const page = await text('/clinician/evidence', reviewer);
+  assert.ok(page.includes('Revised eating-disorder guideline') && page.includes('New guidance: the disorder information needs updating'));
+
+  // A year later the reminder is back
+  db.prepare("UPDATE guidance_checks SET checked_at = '2025-11-01T00:00:00.000Z' WHERE source_id = 'sbu'").run();
+  assert.ok((await text('/clinician', reviewer)).includes('is due: SBU.'));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'check_guidance'").get().n, 4);
 });

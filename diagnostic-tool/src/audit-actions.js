@@ -37,4 +37,5 @@ export const ACTIONS = {
   assign_patient: 'Assigned the patient to a clinician',
   view_admin: 'Viewed the patient list (administration)',
   change_roles: 'Changed administrators or research reviewers',
+  check_guidance: 'Recorded the yearly check of Swedish guidance',
 };

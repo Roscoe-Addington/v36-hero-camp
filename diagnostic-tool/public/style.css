@@ -708,3 +708,5 @@ button.danger {
 .evidence-item h3 { font-size: 1rem; }
 .evidence-item textarea { min-height: 3.5rem; }
 .role-form { display: inline-flex; gap: 0.5rem; align-items: center; margin: 0; }
+.guidance-item { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.75rem; }
+.guidance-item h3 { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }

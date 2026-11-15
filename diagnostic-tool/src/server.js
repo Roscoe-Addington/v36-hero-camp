@@ -34,6 +34,7 @@ import * as knowledgeViews from './views-knowledge.js';
 import * as adminViews from './views-admin.js';
 import { searchDisorders } from './disorder-search.js';
 import { runEvidenceWatch, parseReview } from './evidence-watch.js';
+import { guidanceStatus, parseGuidanceCheck } from './guidance.js';
 import * as workflow from './views-workflow.js';
 import { buildSuggestions } from './suggestions.js';
 import { findDisorder, criterionIds } from './disorders.js';
@@ -228,7 +229,9 @@ clinician.get('/', (req, res) => {
         ORDER BY p.last_name, p.first_name`
     )
     .all(accessParams(req.clinician, { asAdmin: false })); // the start page lists my patients, also for administrators
-  send(res, views.dashboardPage({ clinician: req.clinician, patients }));
+  // Research reviewers are reminded when the yearly check of Swedish guidance is due.
+  const guidanceDue = req.clinician.reviewer ? guidanceStatus(db).filter((g) => g.due).map((g) => g.name) : [];
+  send(res, views.dashboardPage({ clinician: req.clinician, patients, guidanceDue }));
 });
 
 clinician.get('/patients/new', (req, res) => send(res, views.newPatientPage({ clinician: req.clinician })));
@@ -498,7 +501,7 @@ clinician.get('/disorders/:id', (req, res) => {
   if (!disorder) return send(res, views.messagePage({ title: 'Not found', message: 'This page does not exist.', clinician: req.clinician }), 404);
   const evidence = db
     .prepare(`SELECT e.*, c.name AS reviewer_name FROM evidence_items e LEFT JOIN clinicians c ON c.id = e.reviewed_by
-               WHERE e.disorder_id = ? AND e.status = 'approved' ORDER BY e.rank DESC, e.year DESC, e.reviewed_at DESC`)
+               WHERE e.disorder_id = ? AND e.status = 'approved' ORDER BY e.rank DESC, e.priority DESC, e.year DESC, e.reviewed_at DESC`)
     .all(disorder.id);
   send(res, knowledgeViews.disorderInfoPage({ clinician: req.clinician, disorder, evidence }));
 });
@@ -517,20 +520,32 @@ export function startEvidenceWatch(options = {}) {
   return evidenceRun;
 }
 
-function showEvidence(req, res, { errors = {}, values = {}, message = '', status = 200 } = {}) {
+function showEvidence(req, res, { errors = {}, values = {}, message = '', guidanceErrors = {}, guidanceValues = {}, status = 200 } = {}) {
   const pending = db.prepare(`SELECT * FROM evidence_items WHERE status = 'pending'
-                               ORDER BY rank DESC, year DESC, found_at DESC, id DESC LIMIT 200`).all();
+                               ORDER BY rank DESC, priority DESC, year DESC, found_at DESC, id DESC LIMIT 200`).all();
   const reviewed = db.prepare(`SELECT e.*, c.name AS reviewer_name FROM evidence_items e LEFT JOIN clinicians c ON c.id = e.reviewed_by
                                 WHERE e.status != 'pending' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 30`).all();
   const lastRun = db.prepare('SELECT * FROM evidence_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1').get() ?? null;
   send(res, knowledgeViews.evidenceReviewPage({
     clinician: req.clinician, pending, reviewed, lastRun, running: Boolean(evidenceRun),
     canReview: canReviewEvidence(req.clinician), errors, values, message,
+    guidance: guidanceStatus(db), guidanceErrors, guidanceValues,
     reviewerNames: db.prepare('SELECT name FROM clinicians WHERE evidence_reviewer = 1 ORDER BY name').all().map((r) => r.name),
   }), status);
 }
 
 clinician.get('/evidence', (req, res) => showEvidence(req, res, { message: req.query.started ? 'The search has started. Reload the page in a minute or two.' : '' }));
+
+// The yearly check of one Swedish guidance source (guidance.js).
+clinician.post('/evidence/guidance/:source', (req, res) => {
+  if (!canReviewEvidence(req.clinician)) return showEvidence(req, res, { status: 403 });
+  const { check, errors } = parseGuidanceCheck(req.params.source, req.body);
+  if (errors) return showEvidence(req, res, { guidanceErrors: { [req.params.source]: errors }, guidanceValues: { [req.params.source]: req.body }, status: 400 });
+  db.prepare('INSERT INTO guidance_checks (source_id, checked_at, checked_by, outcome, note) VALUES (?, ?, ?, ?, ?)')
+    .run(check.sourceId, new Date().toISOString(), req.clinician.id, check.outcome, check.note || null);
+  audit(req.clinician.id, 'check_guidance', { detail: `${check.sourceId}: ${check.outcome}` });
+  res.redirect('/clinician/evidence#guidance');
+});
 
 clinician.post('/evidence/run', (req, res) => {
   if (!canReviewEvidence(req.clinician)) return showEvidence(req, res, { status: 403 });
