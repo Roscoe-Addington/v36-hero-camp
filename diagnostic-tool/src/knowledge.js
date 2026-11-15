@@ -695,7 +695,7 @@ export const KNOWLEDGE = {
 // 'mixed' when it combines a medicine with psychological treatment (the
 // psychologist can give that part). Recognised from the English text; the
 // test suite lists every match so the list can be checked.
-const PHYSICIAN = /\b(medicines?|medication|antidepressants?|SSRIs?|SNRIs?|sertraline|escitalopram|fluoxetine|paroxetine|venlafaxine|duloxetine|clomipramine|mirtazapine|tricyclic|lithium|antipsychotics?|aripiprazole|risperidone|olanzapine|quetiapine|clozapine|paliperidone|haloperidol|ziprasidone|zuclopenthixol|lurasidone|lamotrigine|depot|esketamine|electroconvulsive|ECT|rTMS|magnetic stimulation|pregabalin|hydroxyzine|benzodiazepines?|lorazepam|prazosin|cholinesterase|memantine|donepezil|galantamine|rivastigmine|lisdexamfetamine|stimulants?|methylphenidate|mood stabiliser|valproate|naltrexone|acamprosate|disulfiram|buprenorphine|methadone|N-acetylcysteine|antibiotics?|immunoglobulin|hormonal|contraceptive|melatonin)\b/i;
+const PHYSICIAN = /\b(medicines?|medication|antidepressants?|SSRIs?|SNRIs?|sertraline|escitalopram|fluoxetine|paroxetine|venlafaxine|duloxetine|clomipramine|mirtazapine|tricyclic|lithium|antipsychotics?|aripiprazole|risperidone|olanzapine|quetiapine|clozapine|paliperidone|haloperidol|ziprasidone|zuclopenthixol|lurasidone|lamotrigine|depot|esketamine|electroconvulsive|ECT|rTMS|magnetic stimulation|pregabalin|hydroxyzine|benzodiazepines?|lorazepam|prazosin|cholinesterase|memantine|donepezil|galantamine|rivastigmine|lisdexamfetamine|stimulants?|methylphenidate|mood stabiliser|valproate|naltrexone|acamprosate|disulfiram|buprenorphine|methadone|N-acetylcysteine|antibiotics?|skin infections|immunoglobulin|hormonal|contraceptive|melatonin)\b/i;
 const PSYCHOLOGICAL = /\b(CBT|IPT|ERP|psychotherapy|psychological|psychoeducation|family intervention|family-focused therapy|motivational interviewing|behaviour therapy|non-drug)\b/i;
 // Advice about medicines rather than a treatment to give.
 const ADVICE = /^(Avoid|Medicines are not|Review medicines|No medicine|Stop or reduce)/;
@@ -704,3 +704,9 @@ export function physicianRole(treatment) {
   if (ADVICE.test(text) || !PHYSICIAN.test(text)) return null;
   return PSYCHOLOGICAL.test(text) ? 'mixed' : 'rx';
 }
+
+// Medical checks (examinations, blood tests, ECG, monitoring of weight and
+// electrolytes) are done by a physician or nurse, not by the psychologist:
+// marked "Medical check (physician or nurse)". A treatment can have both marks.
+const MEDICAL_CHECK = /\b(blood tests?|physical examination|ECG|electrolytes|medical monitoring|medical work-up|metabolic risk factors|deficiencies|rule out [a-z ]*disease)\b/i;
+export const medicalCheck = (treatment) => MEDICAL_CHECK.test(treatment.what.en);

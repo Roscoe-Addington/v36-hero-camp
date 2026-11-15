@@ -6,7 +6,7 @@ import { html, layout } from './views.js';
 import { translator } from './i18n-clinician.js';
 import { findDisorder, DISORDERS, CATEGORIES } from './disorders.js';
 import { DIFFERENTIALS } from './differential-lists.js';
-import { KNOWLEDGE, EVIDENCE_LABELS, physicianRole } from './knowledge.js';
+import { KNOWLEDGE, EVIDENCE_LABELS, physicianRole, medicalCheck } from './knowledge.js';
 import { rankedTreatments, otherTreatments, categoryOf } from './disorder-search.js';
 import { DESIGNS, SOURCES } from './evidence-watch.js';
 import { OUTCOMES } from './guidance.js';
@@ -60,6 +60,7 @@ export function disorderInfoPage({ clinician, disorder, evidence = [] }) {
           ${typeof x.sos === 'number' ? html`<span class="badge ok">${t('Socialstyrelsen priority {n}', { n: x.sos })}</span>` : fromSos && !x.sos ? html`<span class="badge info">${t('Not prioritised by Socialstyrelsen')}</span>` : ''}
           ${x.sos === 'fou' || x.sos === 'dont' ? '' : html`<span class="badge ${x.evidence === 'strong' ? 'ok' : x.evidence === 'moderate' ? 'info' : 'warn'}">${pick(EVIDENCE_LABELS[x.evidence], lang)}</span>`}
           ${x.sos !== 'dont' && physicianRole(x) ? html`<span class="badge physician">${t(physicianRole(x) === 'rx' ? 'Prescribed by a physician' : 'The medicine part is prescribed by a physician')}</span>` : ''}
+          ${x.sos !== 'dont' && medicalCheck(x) ? html`<span class="badge physician">${t('Medical check (physician or nurse)')}</span>` : ''}
           ${x.sosId ? html` <span class="hint">(${t('id {id}', { id: x.sosId })})</span>` : ''}
           ${x.note ? html`<br /><span class="hint">${pick(x.note, lang)}</span>` : ''}
           ${x.differs ? html`<br /><span class="differs"><strong>${t('Guidelines differ:')}</strong> ${pick(x.differs, lang)}</span>` : ''}

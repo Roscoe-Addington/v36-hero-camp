@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DISORDERS, findDisorder } from '../src/disorders.js';
-import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS, physicianRole } from '../src/knowledge.js';
+import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS, physicianRole, medicalCheck } from '../src/knowledge.js';
 import { rankedTreatments, otherTreatments, searchDisorders } from '../src/disorder-search.js';
 import { disorderInfoPage, disorderSearchPage, evidenceReviewPage } from '../src/views-knowledge.js';
 import { englishLeft } from './helpers.js';
@@ -92,6 +92,22 @@ test('treatments a physician prescribes are marked; psychological treatments and
   assert.ok(page('sv', 'social').includes('Läkemedelsdelen ordineras av läkare'));
   const advised = page('en', 'gad').split('Socialstyrelsen advises against')[1];
   assert.ok(!advised.split('Based on:')[0].includes('Prescribed by a physician'));
+});
+
+test('medical checks (blood tests, ECG, monitoring) are marked for a physician or nurse', () => {
+  const check = (en) => medicalCheck({ what: { en } });
+  for (const en of ['Regular checks of metabolic risk factors (blood tests and physical examination)', 'Check electrolytes (potassium) and the ECG when there is vomiting or laxative use',
+    'Medical monitoring if weight is low or purging is present', 'Rule out gastrointestinal disease together with a physician', 'Weight restoration with medical monitoring; watch for refeeding syndrome']) {
+    assert.ok(check(en), en);
+  }
+  for (const en of ['Adults: eating-disorder-focused CBT (CBT-E)', 'Weight loss programmes are not a treatment for the binge eating itself', 'Case management']) assert.ok(!check(en), en);
+  assert.equal(physicianRole({ what: { en: 'Treat skin infections and other skin conditions' } }), 'rx');
+  const page = (language) => String(disorderInfoPage({ clinician: { id: 1, name: 'Dr Test', language }, disorder: findDisorder('bulimia') }));
+  assert.ok(page('en').includes('Medical check (physician or nurse)'));
+  assert.ok(page('sv').includes('Medicinsk kontroll (läkare eller sjuksköterska)'));
+  let marked = 0;
+  for (const k of Object.values(KNOWLEDGE)) for (const t of k.treatments) if (medicalCheck(t)) marked += 1;
+  assert.ok(marked >= 9, `${marked} marked`);
 });
 
 test('search by name, Swedish name, abbreviation and code', () => {

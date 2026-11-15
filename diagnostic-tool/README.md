@@ -391,7 +391,9 @@ disorder page has:
   mainly supports psychologists, treatments with a medicine or a medical
   procedure (ECT, rTMS) are marked **"Prescribed by a physician"**, and
   combinations with psychological treatment **"The medicine part is
-  prescribed by a physician"**. Where NICE differs
+  prescribed by a physician"**. Blood tests, ECG, weight and electrolyte
+  monitoring and medical work-ups are marked **"Medical check (physician
+  or nurse)"**. Where NICE differs
   from Socialstyrelsen, the page says how ("Guidelines differ"). The
   sources are linked (`src/knowledge.js`, `src/disorder-search.js`);
 - **new research approved by a clinician** (below);
