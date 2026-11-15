@@ -11,30 +11,7 @@ import { buildSuggestions } from '../src/suggestions.js';
 import { responseQuality } from '../src/response-quality.js';
 import { PAGES } from '../src/questionnaire.js';
 import * as workflow from '../src/views-workflow.js';
-import { answers } from './helpers.js';
-
-// Words that only occur in English text (Swedish never uses them as words).
-const ENGLISH = /(?<![\p{L}\d])(the|and|with|not|only|are|of|to|from|this|that|have|has|been|was|were|which|when|than|during|after|before|should|could|would|your|their|there|these|those|without|because|between|within|also|other|another|about|into|over|more|less|most|least|any|each|every|some|such|both|either|neither|while|until|since|then|they|them|it|its|be|by|an|at|on|as|if|or|no|yes|can|may|must|will|do|does|did)(?![\p{L}\d])/giu;
-
-// Allowed: proper names, instrument names and author citations.
-const ALLOWED = [
-  /Mind Självmordslinjen/g, /et al\.?/g, /US National Center for PTSD/g, /Pfizer Inc\./g,
-];
-
-export function englishLeft(page) {
-  let text = String(page)
-    .replace(/<script[\s\S]*?<\/script>/g, '')
-    .replace(/<style[\s\S]*?<\/style>/g, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[a-z#0-9]+;/gi, ' ');
-  for (const re of ALLOWED) text = text.replace(re, ' ');
-  const hits = [];
-  for (const m of text.matchAll(ENGLISH)) {
-    const start = Math.max(0, m.index - 50);
-    hits.push(text.slice(start, m.index + 50).replace(/\s+/g, ' ').trim());
-  }
-  return [...new Set(hits)];
-}
+import { answers, englishLeft } from './helpers.js';
 
 const clinician = { id: 1, name: 'Dr Test', language: 'sv' };
 const patient = { id: 1, first_name: 'Eva', last_name: 'Ek', age: 67, gender: 'Female', education: 'Primary / compulsory school', employed: 0, personal_number: '19590101-0000' };

@@ -688,3 +688,22 @@ button.danger {
 .record-item > p { margin: 0.3rem 0; }
 .record-item.entry-treatment { box-shadow: inset 4px 0 0 var(--ok); }
 .record-item.entry-note { box-shadow: inset 4px 0 0 var(--accent); }
+
+/* Disorder information and research review */
+.topsearch input {
+  width: 12rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+}
+.lead { font-size: 1.1rem; }
+.disorder-results { list-style: none; padding: 0; }
+.disorder-results li { display: grid; gap: 0.2rem; }
+.disorder-results p { margin: 0.2rem 0 0; }
+.disorder-list { columns: 2 16rem; padding-left: 1.2rem; }
+.treatments li { margin-bottom: 0.6rem; }
+.evidence li { margin-bottom: 0.6rem; }
+.evidence-item h3 { font-size: 1rem; }
+.evidence-item textarea { min-height: 3.5rem; }

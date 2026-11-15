@@ -108,6 +108,12 @@ for (let i = 0; i < 2; i++) {
   await post(f.headers.get('location'), followupAnswers, cookie);
 }
 
+// A record entry and an article to review, so those pages have content.
+await post(`${patientPath}/record`, { kind: 'treatment', title: 'Session 1: behavioural activation', text: 'Activity plan agreed. Next session in one week.' }, cookie);
+db.prepare(`INSERT INTO evidence_items (disorder_id, source, source_id, title, journal, year, design, rank, url, found_at)
+            VALUES ('ptsd', 'pubmed', '42504047', 'Pacing in posttraumatic stress disorder therapy: A meta-regression of treatment frequency and completion rates.',
+                    'Journal of traumatic stress', 2026, 'meta', 5, 'https://pubmed.ncbi.nlm.nih.gov/42504047/', '2026-11-15')`).run();
+
 const PAGES = [
   ['login', '/login'],
   ['patients', '/clinician'],
@@ -122,6 +128,11 @@ const PAGES = [
   ['informant', `${casePath}/informant`],
   ['checklist', `${casePath}/checklist?disorder=${DISORDERS[0].id}`],
   ['final', `${casePath}/final`],
+  ['records', '/clinician/records?pn=19800101-1234'],
+  ['record', `${patientPath}/record`],
+  ['disorders', '/clinician/disorders'],
+  ['disorder', '/clinician/disorders/anorexia'],
+  ['evidence', '/clinician/evidence'],
 ];
 
 // ---------- Checks run inside the page ----------

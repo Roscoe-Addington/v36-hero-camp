@@ -30,6 +30,9 @@ import { sendResultsEmail, sendFollowupEmail } from './email.js';
 import { parseFollowupAnswers, scoreFollowup } from './followup.js';
 import * as views from './views.js';
 import * as recordViews from './views-records.js';
+import * as knowledgeViews from './views-knowledge.js';
+import { searchDisorders } from './disorder-search.js';
+import { runEvidenceWatch, parseReview } from './evidence-watch.js';
 import * as workflow from './views-workflow.js';
 import { buildSuggestions } from './suggestions.js';
 import { findDisorder, criterionIds } from './disorders.js';
@@ -411,6 +414,76 @@ clinician.post('/patients/:id/record', (req, res) => {
     .run(patient.id, req.clinician.id, entry.kind, entry.title, entry.text, now());
   audit(req.clinician.id, 'add_record_entry', { patientId: patient.id, detail: entry.kind });
   res.redirect(`/clinician/patients/${patient.id}/record`);
+});
+
+// ---------- Disorder information and the research watch ----------
+// General clinical information, not patient data, so no patient access check.
+// The research found on PubMed is shared by every clinician, so only the
+// clinicians listed in EVIDENCE_REVIEWERS (email addresses, comma-separated)
+// may approve or reject it; with the setting empty, every clinician may.
+
+clinician.get('/disorders', (req, res) => {
+  const query = clean(req.query.q, 80);
+  send(res, knowledgeViews.disorderSearchPage({ clinician: req.clinician, query, results: query ? searchDisorders(query) : [] }));
+});
+
+clinician.get('/disorders/:id', (req, res) => {
+  const disorder = findDisorder(req.params.id);
+  if (!disorder) return send(res, views.messagePage({ title: 'Not found', message: 'This page does not exist.', clinician: req.clinician }), 404);
+  const evidence = db
+    .prepare(`SELECT e.*, c.name AS reviewer_name FROM evidence_items e LEFT JOIN clinicians c ON c.id = e.reviewed_by
+               WHERE e.disorder_id = ? AND e.status = 'approved' ORDER BY e.rank DESC, e.year DESC, e.reviewed_at DESC`)
+    .all(disorder.id);
+  send(res, knowledgeViews.disorderInfoPage({ clinician: req.clinician, disorder, evidence }));
+});
+
+const reviewers = () => String(process.env.EVIDENCE_REVIEWERS ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+const canReviewEvidence = (c) => !reviewers().length || reviewers().includes(String(c.email).toLowerCase());
+let evidenceRun = null; // the search that is running now, if any
+
+export function startEvidenceWatch(options = {}) {
+  if (!evidenceRun) {
+    // app.locals.evidenceOptions lets the tests stand in for PubMed.
+    evidenceRun = runEvidenceWatch(db, { ...app.locals.evidenceOptions, ...options })
+      .then((r) => { if (r.added || r.errors.length) console.log('[research watch]', r.added, 'new;', r.errors.length, 'errors'); return r; })
+      .catch((err) => console.error('[research watch]', err))
+      .finally(() => { evidenceRun = null; });
+  }
+  return evidenceRun;
+}
+
+function showEvidence(req, res, { errors = {}, values = {}, message = '', status = 200 } = {}) {
+  const pending = db.prepare(`SELECT * FROM evidence_items WHERE status = 'pending'
+                               ORDER BY rank DESC, year DESC, found_at DESC, id DESC LIMIT 200`).all();
+  const reviewed = db.prepare(`SELECT e.*, c.name AS reviewer_name FROM evidence_items e LEFT JOIN clinicians c ON c.id = e.reviewed_by
+                                WHERE e.status != 'pending' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 30`).all();
+  const lastRun = db.prepare('SELECT * FROM evidence_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1').get() ?? null;
+  send(res, knowledgeViews.evidenceReviewPage({
+    clinician: req.clinician, pending, reviewed, lastRun, running: Boolean(evidenceRun),
+    canReview: canReviewEvidence(req.clinician), errors, values, message,
+  }), status);
+}
+
+clinician.get('/evidence', (req, res) => showEvidence(req, res, { message: req.query.started ? 'The search has started. Reload the page in a minute or two.' : '' }));
+
+clinician.post('/evidence/run', (req, res) => {
+  if (!canReviewEvidence(req.clinician)) return showEvidence(req, res, { status: 403 });
+  audit(req.clinician.id, 'run_evidence_watch');
+  startEvidenceWatch();
+  res.redirect('/clinician/evidence?started=1');
+});
+
+clinician.post('/evidence/:id', (req, res) => {
+  const item = db.prepare("SELECT * FROM evidence_items WHERE id = ? AND status = 'pending'").get(Number(req.params.id));
+  if (!item) return send(res, views.messagePage({ title: 'Not found', message: 'This page does not exist.', clinician: req.clinician }), 404);
+  if (!canReviewEvidence(req.clinician)) return showEvidence(req, res, { status: 403 });
+  const { review, errors } = parseReview(req.body);
+  if (errors) return showEvidence(req, res, { errors: { [item.id]: errors }, values: { [item.id]: req.body }, status: 400 });
+  db.prepare(`UPDATE evidence_items SET status = ?, summary_en = ?, summary_sv = ?, note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?`)
+    .run(review.action === 'approve' ? 'approved' : 'rejected', review.summary_en || null, review.summary_sv || null, review.note || null,
+      req.clinician.id, new Date().toISOString(), item.id);
+  audit(req.clinician.id, review.action === 'approve' ? 'approve_evidence' : 'reject_evidence', { detail: `PMID ${item.source_id} (${item.disorder_id})` });
+  res.redirect('/clinician/evidence');
 });
 
 // ---------- Starting an assessment: link or on site ----------
@@ -1043,6 +1116,18 @@ if (process.env.NODE_ENV !== 'test') {
   };
   runCleanup();
   setInterval(runCleanup, 24 * 3600 * 1000).unref();
+
+  // The research watch: searches PubMed every EVIDENCE_WATCH_DAYS days
+  // (default 7). Checked hourly, so a restart does not skip or repeat a run.
+  if (process.env.EVIDENCE_WATCH !== 'off') {
+    const everyDays = Number(process.env.EVIDENCE_WATCH_DAYS || 7);
+    const checkWatch = () => {
+      const last = db.prepare('SELECT MAX(started_at) AS at FROM evidence_runs').get()?.at;
+      if (!last || Date.now() - new Date(last).getTime() >= everyDays * 24 * 3600 * 1000) startEvidenceWatch();
+    };
+    setTimeout(checkWatch, 60 * 1000).unref();
+    setInterval(checkWatch, 3600 * 1000).unref();
+  }
   app.listen(PORT, () => console.log(`Listening on ${BASE_URL}`));
 }
 

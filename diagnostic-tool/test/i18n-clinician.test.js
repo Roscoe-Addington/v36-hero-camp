@@ -20,7 +20,7 @@ const missing = (texts) => [...new Set(texts)].filter((x) => !hasSwedish(x));
 
 test('every t(…) text on the clinician pages has Swedish', () => {
   const texts = [];
-  for (const f of ['views.js', 'views-workflow.js', 'views-forms.js', 'views-records.js', 'pdf-report.js']) {
+  for (const f of ['views.js', 'views-workflow.js', 'views-forms.js', 'views-records.js', 'views-knowledge.js', 'pdf-report.js']) {
     // ’ written in source as an escape is turned into the real character
     for (const m of read(f).matchAll(/\b(?:t|ct|translator\([^)]*\))\(\s*'((?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\u2019/g, '’'));
   }

@@ -793,3 +793,76 @@ test('patient records: search by personal number within access, notes and treatm
   await post(`${patientPath}/delete`, { confirm_last_name: 'Berg', reason: 'Test' }, owner);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM record_entries WHERE patient_id = ?').get(Number(patientPath.split('/').pop())).n, 0);
 });
+
+test('disorder information: search from the top bar, ranked treatments, Swedish', async () => {
+  const cookie = (await post('/login', { email: 'dr@example.com', password: 'correct horse battery' })).headers.get('set-cookie').split(';')[0];
+  const get = async (path) => (await fetch(base + path, { headers: { cookie } })).text();
+  assert.ok((await get('/clinician')).includes('action="/clinician/disorders"'), 'search box in the top bar');
+  const browse = await get('/clinician/disorders');
+  assert.ok(browse.includes('/clinician/disorders/anorexia'), 'empty search lists every disorder');
+  const found = await get('/clinician/disorders?q=PTSD');
+  assert.ok(found.includes('/clinician/disorders/ptsd'));
+  const page = await get('/clinician/disorders/ptsd');
+  assert.ok(page.includes('Most effective first') && page.includes('Strong evidence'));
+  assert.equal((await fetch(`${base}/clinician/disorders/nope`, { headers: { cookie } })).status, 404);
+
+  await post('/clinician/language', { language: 'sv' }, cookie);
+  const sv = await get('/clinician/disorders/ptsd');
+  assert.ok(sv.includes('Mest effektiv först') && sv.includes('Behandling'));
+  await post('/clinician/language', { language: 'en' }, cookie);
+});
+
+test('research watch: search now, review queue ranked, approve needs both languages, reviewers only', async () => {
+  const { fakePubmed } = await import('./helpers.js');
+  app.locals.evidenceOptions = { fetchImpl: fakePubmed(), pauseMs: 0 };
+  const cookie = (await post('/login', { email: 'dr@example.com', password: 'correct horse battery' })).headers.get('set-cookie').split(';')[0];
+  const get = async (path) => (await fetch(base + path, { headers: { cookie } })).text();
+  db.prepare('DELETE FROM evidence_items').run();
+
+  // "Search now" runs in the background; wait for it here
+  const { startEvidenceWatch } = await import('../src/server.js');
+  const started = await post('/clinician/evidence/run', {}, cookie);
+  assert.equal(started.status, 302);
+  await startEvidenceWatch();
+  const queue = await get('/clinician/evidence');
+  assert.ok(queue.includes('Original title (English):'));
+  assert.ok(queue.indexOf('A meta-analysis') < queue.indexOf('A randomized trial'), 'meta-analyses before trials');
+  assert.ok(!queue.includes('A comment'), 'comments are left out');
+
+  const item = db.prepare("SELECT * FROM evidence_items WHERE disorder_id = 'ptsd' AND source_id = '111'").get();
+  const half = await post(`/clinician/evidence/${item.id}`, { action: 'approve', summary_en: 'Trauma-focused therapy helps.' }, cookie);
+  assert.equal(half.status, 400);
+  assert.ok((await half.text()).includes('both English and Swedish'));
+  assert.equal(db.prepare('SELECT status FROM evidence_items WHERE id = ?').get(item.id).status, 'pending');
+
+  // Not before approval: the disorder page shows nothing from the queue
+  assert.ok(!(await get('/clinician/disorders/ptsd')).includes('Trauma-focused therapy helps.'));
+  const ok = await post(`/clinician/evidence/${item.id}`, { action: 'approve', summary_en: 'Trauma-focused therapy helps.', summary_sv: 'Traumafokuserad terapi hjälper.' }, cookie);
+  assert.equal(ok.status, 302);
+  assert.ok((await get('/clinician/disorders/ptsd')).includes('Trauma-focused therapy helps.'));
+  await post('/clinician/language', { language: 'sv' }, cookie);
+  const sv = await get('/clinician/disorders/ptsd');
+  assert.ok(sv.includes('Traumafokuserad terapi hjälper.') && !sv.includes('Trauma-focused therapy helps.'));
+  await post('/clinician/language', { language: 'en' }, cookie);
+
+  const other = db.prepare("SELECT id FROM evidence_items WHERE status = 'pending' LIMIT 1").get();
+  assert.equal((await post(`/clinician/evidence/${other.id}`, { action: 'reject' }, cookie)).status, 302);
+  assert.equal(db.prepare('SELECT status FROM evidence_items WHERE id = ?').get(other.id).status, 'rejected');
+  assert.equal((await post(`/clinician/evidence/${other.id}`, { action: 'approve', summary_en: 'x', summary_sv: 'y' }, cookie)).status, 404, 'a decision is final');
+
+  const log = db.prepare("SELECT action, detail FROM audit_log WHERE action IN ('run_evidence_watch', 'approve_evidence', 'reject_evidence') ORDER BY id").all();
+  assert.deepEqual(log.map((l) => l.action), ['run_evidence_watch', 'approve_evidence', 'reject_evidence']);
+  assert.equal(log[1].detail, 'PMID 111 (ptsd)');
+
+  // With EVIDENCE_REVIEWERS set, other clinicians can read but not decide
+  process.env.EVIDENCE_REVIEWERS = 'someone.else@example.com';
+  try {
+    const next = db.prepare("SELECT id FROM evidence_items WHERE status = 'pending' LIMIT 1").get();
+    assert.equal((await post(`/clinician/evidence/${next.id}`, { action: 'reject' }, cookie)).status, 403);
+    assert.equal((await post('/clinician/evidence/run', {}, cookie)).status, 403);
+    assert.ok((await get('/clinician/evidence')).includes('Only the clinicians named as research reviewers'));
+  } finally {
+    delete process.env.EVIDENCE_REVIEWERS;
+    delete app.locals.evidenceOptions;
+  }
+});

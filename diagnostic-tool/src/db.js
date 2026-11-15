@@ -154,6 +154,40 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS record_patient ON record_entries (patient_id);
 `);
 
+// The research watch (evidence-watch.js): articles found on PubMed, waiting
+// for a clinician to approve (with a summary in both languages) or reject.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS evidence_items (
+    id          INTEGER PRIMARY KEY,
+    disorder_id TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    source_id   TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    journal     TEXT,
+    year        INTEGER,
+    design      TEXT NOT NULL,
+    rank        INTEGER NOT NULL,
+    url         TEXT NOT NULL,
+    found_at    TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    summary_en  TEXT,
+    summary_sv  TEXT,
+    note        TEXT,
+    reviewed_by INTEGER REFERENCES clinicians(id),
+    reviewed_at TEXT,
+    UNIQUE (source, source_id, disorder_id)
+  );
+  CREATE INDEX IF NOT EXISTS evidence_status ON evidence_items (status, disorder_id);
+  CREATE TABLE IF NOT EXISTS evidence_runs (
+    id          INTEGER PRIMARY KEY,
+    started_at  TEXT NOT NULL,
+    finished_at TEXT,
+    found       INTEGER,
+    added       INTEGER,
+    error       TEXT
+  );
+`);
+
 // Each clinician chooses the language of the clinician pages ('en' or 'sv').
 if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'language')) {
   db.exec("ALTER TABLE clinicians ADD COLUMN language TEXT NOT NULL DEFAULT 'en'");

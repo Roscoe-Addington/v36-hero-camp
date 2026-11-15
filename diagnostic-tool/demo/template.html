@@ -196,6 +196,7 @@
       deletedTitle: 'Patient deleted', deletedGone: 'This demo patient was deleted. Press "Reset demo" to start again.',
       deleted: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.',
       emailStatus: 'shown in the Email step of this demo (not sent)',
+      evidenceRun: 'In the real app this searches PubMed now. The demo shows example articles and does not search.',
       noAccount: 'No clinician account with that email address. In this demo, try supervisor@clinic.example or colleague@clinic.example.',
       supervisionReason: 'Weekly clinical supervision',
       context: {
@@ -225,6 +226,11 @@
         audit: 'Every view and change of this patient’s information, recorded as you click through this demo.',
         retention: 'How long data is kept, and records past their retention period for the treating clinician to review and delete.',
         deleted: 'The record is deleted, but the deletion stays in the audit log. Press "Reset demo" to start again.',
+        records: 'Search patient records by personal number. Only patients you have access to are found. Try the demo patient’s number, 19580704-XXXX.',
+        record: 'The patient record: assessments, intake interviews, follow-ups, clinical notes and treatment reports, newest first. Entries cannot be changed once saved.',
+        disorders: 'Disorder information: search by name, abbreviation or ICD-10 code, also from the search box in the top bar.',
+        disorder: 'Summary, treatments with the most effective first, research approved by a clinician, and what to rule out.',
+        evidence: 'New research found on PubMed (real articles from November 2026), best study designs first. Nothing reaches the disorder information until a clinician approves it with a summary in both languages. Note that some articles are not about treatment: reject those.',
       },
     },
     sv: {
@@ -242,6 +248,7 @@
       deletedTitle: 'Patienten är raderad', deletedGone: 'Demopatienten är raderad. Tryck på "Börja om" för att starta igen.',
       deleted: 'Patientjournalen och alla bedömningar är raderade. Raderingen finns kvar i loggen.',
       emailStatus: 'visas i steget Mejl i den här demon (skickas inte)',
+      evidenceRun: 'I den riktiga appen söker detta i PubMed nu. Demon visar exempelartiklar och söker inte.',
       noAccount: 'Det finns inget behandlarkonto med den e-postadressen. I demon kan du prova supervisor@clinic.example eller colleague@clinic.example.',
       supervisionReason: 'Handledning varje vecka',
       context: {
@@ -271,6 +278,11 @@
         audit: 'Varje gång patientens uppgifter visas eller ändras, sparat medan du klickar dig igenom demon.',
         retention: 'Hur länge uppgifter sparas, och journaler som passerat sin gallringstid för den behandlande behandlaren att granska och radera.',
         deleted: 'Journalen är raderad, men raderingen finns kvar i loggen. Tryck på "Börja om" för att starta igen.',
+        records: 'Sök i patientjournaler med personnummer. Bara patienter du har behörighet till hittas. Prova demopatientens nummer, 19580704-XXXX.',
+        record: 'Patientjournalen: bedömningar, intagningsintervjuer, uppföljningar, journalanteckningar och behandlingsrapporter, nyast först. Anteckningar kan inte ändras när de har sparats.',
+        disorders: 'Diagnosinformation: sök på namn, förkortning eller ICD-10-kod, även från sökrutan i menyraden.',
+        disorder: 'Sammanfattning, behandlingar med den mest effektiva först, forskning som godkänts av en kliniker och vad som ska uteslutas.',
+        evidence: 'Ny forskning från PubMed (verkliga artiklar från november 2026), bästa studiedesign först. Inget når diagnosinformationen förrän en kliniker har godkänt det med en sammanfattning på båda språken. Observera att vissa artiklar inte handlar om behandling: avvisa dem.',
       },
     },
   };
@@ -365,6 +377,12 @@
   const clone = (x) => JSON.parse(JSON.stringify(x));
   const zeroAnswers = () => Object.fromEntries(D.parseAnswers({}).errors.map((id) => [id, 0]));
 
+  const SAMPLE_EVIDENCE = [
+    { id: 1, disorder_id: 'ptsd', source: 'pubmed', source_id: '42504047', title: 'Pacing in posttraumatic stress disorder therapy: A meta-regression of treatment frequency and completion rates.', journal: 'Journal of traumatic stress', year: 2026, design: 'meta', rank: 5, url: 'https://pubmed.ncbi.nlm.nih.gov/42504047/', status: 'pending' },
+    { id: 2, disorder_id: 'mdd', source: 'pubmed', source_id: '42574354', title: 'Acupuncture as an Adjunctive Therapy for Depression: A Systematic Review and Meta-Analysis of Randomized Controlled Trials.', journal: 'Journal of visualized experiments : JoVE', year: 2026, design: 'meta', rank: 5, url: 'https://pubmed.ncbi.nlm.nih.gov/42574354/', status: 'pending' },
+    { id: 3, disorder_id: 'anorexia', source: 'pubmed', source_id: '42930534', title: 'Bone Mineral Density in Women with Functional Hypothalamic Amenorrhea: A Systematic Review and Meta-Analysis.', journal: 'Medical sciences (Basel, Switzerland)', year: 2026, design: 'meta', rank: 5, url: 'https://pubmed.ncbi.nlm.nih.gov/42930534/', status: 'pending' },
+  ];
+
   let state;
   function reset() {
     state = {
@@ -385,6 +403,10 @@
       page: 0, missing: [], breakAfter: null,
       meta: sampleMeta(),
       grants: [],
+      records: [], recordQuery: '', recordShow: 'all', recordValues: {},
+      disorderQuery: '', disorderId: 'ptsd',
+      // Real PubMed articles found by the research watch (November 2026).
+      evidence: SAMPLE_EVIDENCE.map((e) => ({ ...e })), evidenceErrors: {}, evidenceValues: {}, evidenceMessage: '',
     };
     score();
   }
@@ -467,6 +489,10 @@
       case: BASE, interview: BASE + '/interview', informant: BASE + '/informant', risk: BASE + '/risk', plan: BASE + '/risk/plan',
       checklist: BASE + '/checklist?disorder=' + (state.disorder || ''), final: state.finalizedAt ? BASE + '/final' : BASE,
       'followup-form': state.followupMode === 'link' ? '/f/' + FTOKEN : '/clinician/followups/2', 'followup-thanks': '/f/' + FTOKEN,
+      records: '/clinician/records' + (state.recordQuery ? '?pn=' + encodeURIComponent(state.recordQuery) : ''),
+      record: PATIENT + '/record' + (state.recordShow !== 'all' ? '?show=' + state.recordShow : ''),
+      disorders: '/clinician/disorders' + (state.disorderQuery ? '?q=' + encodeURIComponent(state.disorderQuery) : ''),
+      disorder: '/clinician/disorders/' + state.disorderId, evidence: '/clinician/evidence',
     };
     return map[view] ?? null;
   }
@@ -543,6 +569,28 @@
           ? bodyOf(V.followupPage({ action: '/f/' + FTOKEN, language: state.followupLanguage, error: state.errors[0] }))
           : bodyOf(V.followupPage({ action: '/clinician/followups/2', clinician: viewer(), patient: p, language: state.followupLanguage, error: state.errors[0] }));
       case 'followup-thanks': return bodyOf(V.thankYouPage({ safetyFlag: false, language: state.followupLanguage }));
+      case 'records': {
+        const q = state.recordQuery;
+        const match = q && !state.deleted && D.personalNumberKey(q) === D.personalNumberKey(p.personal_number);
+        const dates = [state.completedAt, state.finalizedAt, ...state.followups.map((f) => f.completed_at), ...state.records.map((r) => r.created_at)]
+          .filter(Boolean).map((d) => Date.parse(d.replace(' ', 'T') + 'Z'));
+        const row = { ...p, id: 1, assessment_count: state.started ? 1 : 0, lastEntry: dates.length ? new Date(Math.max(...dates)) : null };
+        return bodyOf(D.recordViews.recordSearchPage({ clinician: viewer(), query: q, results: q ? (match ? [row] : []) : null }));
+      }
+      case 'record': return bodyOf(D.recordViews.recordPage({
+        clinician: viewer(), patient: p, access: { owner: !asSupervisor }, show: state.recordShow, errors: state.errors, values: state.recordValues,
+        assessments: state.started ? [{ id: 1, mode: state.mode, created_at: state.completedAt || now(), completed_at: state.completedAt, finalized_at: state.finalizedAt, revoked: 0,
+          results_json: state.completedAt ? JSON.stringify(state.results) : null, diagnoses_json: JSON.stringify(state.diagnoses),
+          interview_json: state.interview ? JSON.stringify(state.interview) : null, risk_json: state.risk ? JSON.stringify(state.risk) : null }] : [],
+        followups: state.followups, entries: state.records,
+      }));
+      case 'disorders': return bodyOf(D.knowledgeViews.disorderSearchPage({ clinician: viewer(), query: state.disorderQuery, results: state.disorderQuery ? D.searchDisorders(state.disorderQuery) : [] }));
+      case 'disorder': return bodyOf(D.knowledgeViews.disorderInfoPage({ clinician: viewer(), disorder: D.findDisorder(state.disorderId),
+        evidence: state.evidence.filter((e) => e.status === 'approved' && e.disorder_id === state.disorderId) }));
+      case 'evidence': return bodyOf(D.knowledgeViews.evidenceReviewPage({ clinician: viewer(),
+        pending: state.evidence.filter((e) => e.status === 'pending'), reviewed: state.evidence.filter((e) => e.status !== 'pending').reverse(),
+        lastRun: { finished_at: '2026-11-15T10:00:00Z', found: 24, added: 24 }, canReview: !asSupervisor,
+        errors: state.evidenceErrors, values: state.evidenceValues, message: state.evidenceMessage }));
       case 'audit': return bodyOf(V.auditPage({ clinician: viewer(), patient: p, entries: state.audit, actions: D.ACTIONS }));
       case 'deleted': return bodyOf(V.messagePage({ title: L('deletedTitle'), message: L('deleted'), clinician: viewer() }));
       case 'email': {
@@ -560,7 +608,7 @@
   }
 
   // Which views count as a "view" in the audit log.
-  const AUDITED = { patient: 'view_patient', followup: 'view_patient', case: 'view_assessment', interview: 'view_interview', informant: 'view_informant', risk: 'view_risk', plan: 'view_safety_plan', final: 'view_final', audit: 'view_audit' };
+  const AUDITED = { record: 'view_record', patient: 'view_patient', followup: 'view_patient', case: 'view_assessment', interview: 'view_interview', informant: 'view_informant', risk: 'view_risk', plan: 'view_safety_plan', final: 'view_final', audit: 'view_audit' };
 
   function render(view) {
     if (AUDITED[view] && !state.deleted && !(view === 'final' && !state.finalizedAt)) log(AUDITED[view]);
@@ -597,6 +645,7 @@
     if (view === 'followup-thanks') actions.append(actionButton(L('seeChart'), 'followup', true));
     if (actions.childElementCount) ctx.append(actions);
     state.errors = [];
+    state.evidenceErrors = {}; state.evidenceValues = {}; state.recordValues = {};
     // The follow-up step scrolls to the follow-up section of the patient page.
     if (view === 'followup') {
       const target = [...shadow.querySelectorAll('h2')].find((h) => /^(Follow-up|Uppföljning)/.test(h.textContent));
@@ -638,6 +687,11 @@
       return 'screening';
     }
     if (path === '/clinician/retention') return 'retention';
+    if (path === '/clinician/records') { state.recordQuery = url.searchParams.get('pn') || ''; return 'records'; }
+    if (path === PATIENT + '/record') { state.recordShow = url.searchParams.get('show') || 'all'; return 'record'; }
+    if (path === '/clinician/disorders') { state.disorderQuery = url.searchParams.get('q') || ''; return 'disorders'; }
+    if (path.startsWith('/clinician/disorders/') && D.findDisorder(path.split('/').pop())) { state.disorderId = path.split('/').pop(); return 'disorder'; }
+    if (path === '/clinician/evidence') return 'evidence';
     return map[path] ?? null;
   }
 
@@ -684,6 +738,22 @@
     if (path === '/clinician/language') {
       setDemoLanguage(data.language === 'sv' ? 'sv' : 'en');
       return go(current, stay);
+    }
+    // Searches (GET forms): records by personal number, disorder information
+    if (path === '/clinician/records') { state.recordQuery = String(data.pn || '').trim(); return go('records', stay); }
+    if (path === '/clinician/disorders') { state.disorderQuery = String(data.q || '').trim(); return go('disorders'); }
+    // The research watch (the same rules as src/server.js and src/evidence-watch.js)
+    if (path === '/clinician/evidence/run') { state.evidenceMessage = ''; render('evidence'); document.querySelector('#context p').textContent = L('evidenceRun'); return; }
+    if (path.startsWith('/clinician/evidence/')) {
+      if (asSupervisor) return go('evidence', stay);
+      const item = state.evidence.find((e) => e.id === Number(path.split('/').pop()) && e.status === 'pending');
+      if (!item) return go('evidence', stay);
+      const { review, errors } = D.parseReview(data);
+      if (errors) { state.evidenceErrors = { [item.id]: errors }; state.evidenceValues = { [item.id]: data }; return go('evidence', stay); }
+      Object.assign(item, { status: review.action === 'approve' ? 'approved' : 'rejected', summary_en: review.summary_en, summary_sv: review.summary_sv,
+        reviewer_name: CLINICIAN.name, reviewed_at: new Date().toISOString() });
+      state.evidenceErrors = {}; state.evidenceValues = {};
+      return go('evidence', stay);
     }
     // Colleagues with access can only read (the app's guard in server.js).
     if (asSupervisor && /^\/(clinician\/(patients\/1\/|assessments\/1\/|followups\/)|q\/)/.test(path)) {
@@ -856,6 +926,14 @@
       state.finalizedAt = now();
       log('finalize');
       return go('final');
+    }
+    if (path === PATIENT + '/record') {
+      const { entry, errors } = D.parseEntry(data);
+      if (errors) { state.errors = errors; state.recordValues = data; return go('record', stay); }
+      state.records.unshift({ id: state.records.length + 1, kind: entry.kind, title: entry.title, text: entry.text, created_at: now(), clinician_name: CLINICIAN.name });
+      state.recordValues = {};
+      log('add_record_entry', entry.kind);
+      return go('record', stay);
     }
     if (path === BASE + '/reopen') {
       const reason = String(data.reason || '').trim();

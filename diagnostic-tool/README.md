@@ -303,7 +303,7 @@ src/questionnaire.js   the questions and answer options
 src/scoring.js         the scoring rules  <- the clinical logic
 src/differential.js    the differential diagnosis rules
 src/suggestions.js     which disorders to assess in depth, and why
-src/disorders.js       the 31 disorders: criteria, rules, ICD-10 codes
+src/disorders.js       the 60 disorders: criteria, rules, ICD-10 codes
 src/criteria.js        evaluates a checklist (met / not met / incomplete)
 src/moca.js            MoCA score entry and interpretation
 src/views-workflow.js  assessment, checklist and final report pages
@@ -322,6 +322,12 @@ src/pdf-report.js      the final report as a PDF
 docs/VALIDATION-PLAN.md  what needs validating, and how (living document)
 src/access.js          who may see a patient (treating clinician + named colleagues)
 src/retention.js       how long data is kept, and automatic cleanup
+src/records.js         patient record entries and personal-number search
+src/views-records.js   record search and the record timeline
+src/knowledge.js       disorder summaries and treatments, with evidence levels
+src/disorder-search.js disorder search and treatment ranking
+src/evidence-watch.js  the PubMed research watch and review rules
+src/views-knowledge.js disorder information and the research review pages
 src/response-quality.js  signs of tired or careless answering
 public/skip.js         skip logic in the browser
 src/email.js           the email to the clinician
@@ -348,6 +354,76 @@ also summarised in the email:
 
 It never changes answers or scores: the clinician checks the flagged
 answers in the interview. Time per part is shown as well.
+
+## Patient records
+
+**Records** in the top bar searches by **personal number** (with or
+without the dash, 10 or 12 digits). It only finds patients you may see:
+your own and those shared with you (see below). The log records that a
+search was made and how many records were found, never the number itself.
+
+A patient's record is one timeline, newest first, that can be filtered:
+assessments (with PHQ-9/GAD-7, safety alerts, diagnoses and links to the
+final report and risk assessment), intake interviews, follow-ups,
+**clinical notes** and **treatment reports**. The treating clinician adds
+notes and treatment reports; colleagues with access read only. As in a
+health record, an entry **cannot be changed or deleted** once saved; a
+correction is a new entry. Entries count as "last entry" for retention.
+
+## Disorder information and treatment
+
+**Disorders** in the top bar, or the search box next to it, finds a
+disorder by English or Swedish name, abbreviation (PTSD, OCD, BED, EIPS…)
+or ICD-10 code (F32, F50…). An empty search lists all 60 by group. Each
+disorder page has:
+
+- a short summary;
+- **treatments, most effective first**: ordered by the strength of the
+  evidence (strong, moderate, limited, expert consensus), then by the
+  order of the guideline recommendation (`src/knowledge.js`,
+  `src/disorder-search.js`), with the guidelines it is based on (NICE,
+  Socialstyrelsen, APA, WFSBP and others);
+- **new research approved by a clinician** (below);
+- what to rule out, linked to those disorders' pages, and the criteria.
+
+> **The treatment content was written for this app from published
+> guidelines and has not been reviewed by a clinician** (CON-6 in the
+> validation plan). It supports, and does not replace, clinical judgement;
+> doses and interactions are not given (check FASS). Treatment
+> recommendations make medical-device regulation (MDR) more likely to
+> apply; ask your regulatory adviser before use.
+
+## Research watch
+
+Once a week (`EVIDENCE_WATCH_DAYS`), Continuum searches **PubMed**, which
+indexes peer-reviewed journals, for new research on the treatment of each
+disorder (`src/evidence-watch.js`). It looks for meta-analyses, systematic
+reviews, guidelines and randomized and other clinical trials, and leaves
+out comments, letters, editorials, preprints and retracted papers. Only
+the disorder search terms are sent; never patient data.
+
+New articles go to **Research** in the top bar, **ranked by study design**:
+meta-analyses (5), systematic reviews and guidelines (4), randomized
+controlled trials (3), other clinical trials (2). **Nothing is added to
+the disorder information automatically.** A clinician opens the article,
+then either rejects it or approves it with a short summary **in both
+English and Swedish** (the article title stays in English, marked as the
+original title). Approved research appears on the disorder page with the
+reviewer's name and date. Decisions are final and in the audit log.
+"Search now" starts a search at once.
+
+- `EVIDENCE_REVIEWERS`: email addresses of the clinicians who may approve
+  or reject (comma-separated). Leave it empty only while testing: the
+  research is shared by every clinician, so name the reviewers.
+- `NCBI_EMAIL`, `NCBI_API_KEY`: NCBI asks for a contact email and allows
+  more requests with a free API key. Use a service mailbox, not a person's.
+- `EVIDENCE_WATCH=off` turns it off.
+- The server needs to reach `eutils.ncbi.nlm.nih.gov`. Behind a proxy,
+  start Node with `NODE_USE_ENV_PROXY=1` (Node 22.21 or later), because
+  Node's built-in `fetch` ignores `HTTPS_PROXY` otherwise.
+
+The ranking is by study design only. It does not judge the quality,
+size or relevance of a study: that is the reviewer's job.
 
 ## Who can see a patient
 

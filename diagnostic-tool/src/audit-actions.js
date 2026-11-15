@@ -31,4 +31,7 @@ export const ACTIONS = {
   search_records: 'Searched patient records',
   view_record: 'Viewed patient record',
   add_record_entry: 'Added record entry',
+  approve_evidence: 'Approved research for the disorder information',
+  reject_evidence: 'Rejected research',
+  run_evidence_watch: 'Started a research search',
 };

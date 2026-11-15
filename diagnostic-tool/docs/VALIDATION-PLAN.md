@@ -35,7 +35,7 @@ On top of the questions, the app contains **rules and clinical content**
 that also need checking: the suggestion rules, differential screening,
 rule-out lists, conflict rules, response-quality thresholds, 60 sets of
 diagnostic criteria labels, ICD-10 codes, BMI limits and medical warnings,
-and the clinician forms (section 6).
+the clinician forms, treatment information and the research watch (section 6).
 
 **Validating a question is more than factor analysis.** For screening
 questions the key evidence is **diagnostic accuracy against a gold
@@ -335,11 +335,13 @@ These are not questions, but they decide what the clinician sees.
 | ALG-6 | Personality screen cut-off (3 of 8) and borderline count (5 of 8) | `src/suggestions.js` | Replaced by the cut-offs of the chosen instruments (route R), or set from the study. | Open |
 | ALG-7 | MoCA cut-offs (26, bands) and education point | `src/moca.js` | Check against published Swedish norms; consider a lower cut-off (23–24). | Open |
 | ALG-8 | BMI limits (15, 17.5, 18.5), medical warnings and the SCOFF cut-off (2 of 5) | `src/body.js`, `src/suggestions.js` | Review by a physician experienced in eating disorders against national guidance; under 18, BMI for age (ISO-BMI) should replace the adult limits. | Open |
+| ALG-9 | Research watch: PubMed search terms per disorder, study-design filter and ranking (meta-analysis 5, systematic review / guideline 4, RCT 3, other trial 2) | `src/evidence-watch.js` | Librarian review of the search strings (recall on a sample of known trials per disorder); check that the ranking is agreed by the clinicians who review. The ranking does not judge study quality: reviewers use a checklist (e.g. GRADE, risk of bias) before approving. | Open |
 | CON-1 | Criteria labels, rules and specifiers for 60 disorders | `src/disorders.js` | Expert review against the DSM-5-TR text, rule by rule; the test suite already checks that each rule works. | Open |
 | CON-2 | ICD-10 codes | `src/disorders.js` | Check every code against ICD-10-SE. | Open |
 | CON-3 | Intake interview and mental status examination form | `src/clinical-forms.js` | Expert review against local intake routines. | Open |
 | CON-4 | Suicide risk assessment and safety plan form | `src/clinical-forms.js` | Expert review against national guidance; by design it gives no risk score, so no predictive validation is planned. | Open |
 | CON-5 | Red-flag neurological prompts | `src/suggestions.js` | Neurologist review; audit of referrals. | Open |
+| CON-6 | Disorder summaries and treatments with evidence levels for 60 disorders (the order shown is "most effective first") | `src/knowledge.js` | Review by two psychiatrists against current NICE, Socialstyrelsen and other cited guidelines; re-check yearly and when a guideline changes. A regulatory review (MDR) is needed because treatment suggestions are shown. | Open |
 
 ## 7. Translations
 
@@ -350,7 +352,7 @@ These are not questions, but they decide what the clinician sees.
 | TRA-3 | Official Swedish clinical terms | All clinical content now has an unofficial Swedish translation (TRA-6). If a licence for the official Swedish DSM-5-TR text is obtained, replace the unofficial terms with it; check disorder names against ICD-10-SE. | Open |
 | TRA-5 | Swedish interface text on the clinician pages and in the emails to clinicians; the Swedish copyright footer on the patient pages | Review by a Swedish-speaking clinician (written for this app). | Open |
 | TRA-4 | Patient information text (consent page) | Written by the data protection officer in both languages. | Open |
-| TRA-6 | Swedish clinical content for all 60 disorders (unofficial translation in `src/i18n-clinical-sv*.js`): names, criteria, specifiers, notes, rule-out reasons, combination rules, suggestion reasons, the differential screening report, response-quality notes, follow-up summaries, medical warnings | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
+| TRA-6 | Swedish clinical content for all 60 disorders (unofficial translation in `src/i18n-clinical-sv*.js`): names, criteria, specifiers, notes, rule-out reasons, combination rules, suggestion reasons, the differential screening report, response-quality notes, follow-up summaries, medical warnings, disorder summaries and treatments, the research review pages | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
 
 ## 8. Order of work
 
@@ -382,3 +384,4 @@ These are not questions, but they decide what the clinician sees.
 | 2026-11-06 | Clinician pages translated into Swedish: TRA-3 narrowed to the clinical content, TRA-5 added (review of the Swedish interface text). |
 | 2026-11-09 | Patient's preferred language added; patient pages (and on-site questionnaires) now entirely in that language. TRA-5 extended to the Swedish emails and the patient-page copyright footer. |
 | 2026-11-15 | Feeding and eating disorders added (8 disorders, now 60). New Part 11 "Eating and weight": SCOFF (4 validated items, 1 adapted) and 5 own items, with rows in 3.9 and candidates in section 4. ALG-8 added (BMI limits and medical warnings). TRA-6 added: from now on all new content is in Swedish and English, with an unofficial Swedish clinical translation to review. |
+| 2026-11-15 | All older clinical content translated to Swedish (TRA-6 now covers everything). Patient records, disorder information with ranked treatments (CON-6) and the PubMed research watch with clinician review (ALG-9) added; TRA-6 extended to the treatment content. |

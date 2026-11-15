@@ -93,7 +93,12 @@ export function layout({ title, clinician, body, language = 'en', patientLanguag
             <a href="/clinician">${t('Patients')}</a>
             <a href="/clinician/patients/new">${t('New patient')}</a>
             <a href="/clinician/records">${t('Records')}</a>
+            <a href="/clinician/disorders">${t('Disorders')}</a>
+            <a href="/clinician/evidence">${t('Research')}</a>
             <a href="/clinician/retention">${t('Retention')}</a>
+            ${patientLanguage ? '' : html`<form method="get" action="/clinician/disorders" class="inline topsearch" role="search">
+              <input name="q" type="search" maxlength="80" aria-label="${t('Search for a disorder')}" placeholder="${t('Search disorders')}" />
+            </form>`}
             ${patientLanguage ? '' : clinicianLanguageSwitch(t, clinician)}
             <form method="post" action="/logout" class="inline"><button class="link">${t('Log out ({name})', { name: clinician.name })}</button></form>
           </nav>`
