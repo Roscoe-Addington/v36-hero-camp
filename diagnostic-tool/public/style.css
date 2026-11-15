@@ -707,3 +707,4 @@ button.danger {
 .evidence li { margin-bottom: 0.6rem; }
 .evidence-item h3 { font-size: 1rem; }
 .evidence-item textarea { min-height: 3.5rem; }
+.role-form { display: inline-flex; gap: 0.5rem; align-items: center; margin: 0; }

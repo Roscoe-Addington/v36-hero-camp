@@ -7,13 +7,15 @@ import { translator } from './i18n-clinician.js';
 
 const day = (text) => String(text ?? '').slice(0, 10);
 
-export function adminPage({ clinician, query = '', clinicianFilter = null, patients = [], total = patients.length, clinicians = [] }) {
+export function adminPage({ clinician, query = '', clinicianFilter = null, patients = [], total = patients.length, clinicians = [], errors = [], message = '' }) {
   const t = translator(clinician?.language);
   return layout({
     title: t('Administration'),
     clinician,
     body: html`
       <h1>${t('Administration')}</h1>
+      ${message ? html`<p class="note" role="status">${t(message)}</p>` : ''}
+      ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : ''}
       <p>${t('Every patient and the clinician they are assigned to. Only the assigned clinician can change a patient’s file; earlier clinicians keep read-only access. Every view and assignment is in the audit log.')}</p>
       <form method="get" action="/clinician/admin" class="card search" role="search">
         <label>${t('Personal number or name')}
@@ -43,18 +45,28 @@ export function adminPage({ clinician, query = '', clinicianFilter = null, patie
           ${total > patients.length ? html`<p class="hint">${t('Showing the first {n}. Search to narrow the list.', { n: patients.length })}</p>` : ''}`
         : html`<p class="note">${t('No patient matches the search.')}</p>`}
 
-      <h2>${t('Clinicians')}</h2>
+      <h2 id="clinicians">${t('Clinicians')}</h2>
+      <p class="hint">${t('Administrators read every patient file and manage this page. Research reviewers approve or reject new research for the disorder information. There is always at least one administrator.')}</p>
       <div class="table-scroll"><table>
-        <thead><tr><th>${t('Name')}</th><th>${t('Email')}</th><th>${t('Role')}</th><th>${t('Patients')}</th></tr></thead>
+        <thead><tr><th>${t('Name')}</th><th>${t('Email')}</th><th>${t('Patients')}</th><th>${t('Administrator')}</th><th>${t('Research reviewer')}</th></tr></thead>
         <tbody>${clinicians.map((c) => html`<tr>
           <td><a href="/clinician/admin?clinician=${c.id}">${c.name}</a></td>
           <td>${c.email}</td>
-          <td>${c.role === 'admin' ? t('Administrator') : t('Clinician')}</td>
           <td>${c.patient_count}</td>
+          <td>${roleButton(t, c, c.role === 'admin', 'remove_admin', 'make_admin')}</td>
+          <td>${roleButton(t, c, c.evidence_reviewer === 1, 'remove_reviewer', 'add_reviewer')}</td>
         </tr>`)}</tbody>
       </table></div>
-      <p class="hint">${t('New accounts and the administrator role are set up on the server: npm run create-clinician (add --admin for an administrator).')}</p>`,
+      <p class="hint">${t('New accounts are set up on the server: npm run create-clinician.')}</p>`,
   });
+}
+
+// "Yes" with a button to take the role away, or "No" with a button to give it.
+function roleButton(t, c, has, remove, add) {
+  return html`<form method="post" action="/clinician/admin/clinicians/${c.id}" class="inline role-form">
+    <span class="badge ${has ? 'ok' : 'info'}">${has ? t('Yes') : t('No')}</span>
+    <button name="change" value="${has ? remove : add}" class="link">${has ? t('Remove') : t('Add')}</button>
+  </form>`;
 }
 
 export function assignPage({ clinician, patient, owner, history = [], clinicians = [], errors = [], values = {}, saved = false }) {

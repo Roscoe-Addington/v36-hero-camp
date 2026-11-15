@@ -46,7 +46,7 @@ import { clinicianLanguage, translator } from './i18n-clinician.js';
 import { ageFromPersonalNumber } from '../public/personal-number.js';
 import { cleanup, recordsDue, keptUntil, lastEntry, policy as retentionPolicy } from './retention.js';
 import { personalNumberKey, parseEntry } from './records.js';
-import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES, isAdmin, startAssignment, assignmentsFor, assignPatient } from './access.js';
+import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES, isAdmin, startAssignment, assignmentsFor, assignPatient, changeAccount, ACCOUNT_CHANGES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -431,11 +431,11 @@ function requireAdmin(req, res, next) {
 }
 
 const cliniciansWithCounts = () => db
-  .prepare(`SELECT c.id, c.name, c.email, c.role, (SELECT COUNT(*) FROM patients p WHERE p.clinician_id = c.id) AS patient_count
+  .prepare(`SELECT c.id, c.name, c.email, c.role, c.evidence_reviewer, (SELECT COUNT(*) FROM patients p WHERE p.clinician_id = c.id) AS patient_count
               FROM clinicians c ORDER BY c.name`)
   .all();
 
-clinician.get('/admin', requireAdmin, (req, res) => {
+function showAdmin(req, res, { errors = [], message = '', status = 200 } = {}) {
   const query = clean(req.query.q, 80);
   const clinicianFilter = Number(req.query.clinician) || null;
   let patients = db
@@ -450,7 +450,17 @@ clinician.get('/admin', requireAdmin, (req, res) => {
     patients = patients.filter((p) => personalNumberKey(p.personal_number) === key || `${p.first_name} ${p.last_name}`.toLowerCase().includes(words));
   }
   audit(req.clinician.id, 'view_admin', { detail: `${patients.length}` });
-  send(res, adminViews.adminPage({ clinician: req.clinician, query, clinicianFilter, patients: patients.slice(0, 500), total: patients.length, clinicians: cliniciansWithCounts() }));
+  send(res, adminViews.adminPage({ clinician: req.clinician, query, clinicianFilter, patients: patients.slice(0, 500), total: patients.length, clinicians: cliniciansWithCounts(), errors, message }), status);
+}
+
+clinician.get('/admin', requireAdmin, (req, res) => showAdmin(req, res, { message: req.query.changed ? 'The change has been saved.' : '' }));
+
+// Administrators and research reviewers: only an administrator changes them.
+clinician.post('/admin/clinicians/:id', requireAdmin, (req, res) => {
+  const result = changeAccount({ admin: req.clinician, clinicianId: req.params.id, change: req.body.change });
+  if (result.error) return showAdmin(req, res, { errors: [result.error], status: 400 });
+  audit(req.clinician.id, 'change_roles', { detail: `${result.name}: ${ACCOUNT_CHANGES[result.done]}` });
+  res.redirect('/clinician/admin?changed=1#clinicians');
 });
 
 function showAssign(req, res, { errors = [], values = {}, saved = false, status = 200 } = {}) {
@@ -474,9 +484,9 @@ clinician.post('/admin/patients/:id/assign', requireAdmin, (req, res) => {
 
 // ---------- Disorder information and the research watch ----------
 // General clinical information, not patient data, so no patient access check.
-// The research found on PubMed is shared by every clinician, so only the
-// clinicians listed in EVIDENCE_REVIEWERS (email addresses, comma-separated)
-// may approve or reject it; with the setting empty, every clinician may.
+// The research found is shared by every clinician, so only research
+// reviewers, named by an administrator, may approve or reject it or start a
+// search. Until someone is named, nobody can.
 
 clinician.get('/disorders', (req, res) => {
   const query = clean(req.query.q, 80);
@@ -493,8 +503,7 @@ clinician.get('/disorders/:id', (req, res) => {
   send(res, knowledgeViews.disorderInfoPage({ clinician: req.clinician, disorder, evidence }));
 });
 
-const reviewers = () => String(process.env.EVIDENCE_REVIEWERS ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
-const canReviewEvidence = (c) => !reviewers().length || reviewers().includes(String(c.email).toLowerCase());
+const canReviewEvidence = (c) => c.reviewer === true;
 let evidenceRun = null; // the search that is running now, if any
 
 export function startEvidenceWatch(options = {}) {
@@ -517,6 +526,7 @@ function showEvidence(req, res, { errors = {}, values = {}, message = '', status
   send(res, knowledgeViews.evidenceReviewPage({
     clinician: req.clinician, pending, reviewed, lastRun, running: Boolean(evidenceRun),
     canReview: canReviewEvidence(req.clinician), errors, values, message,
+    reviewerNames: db.prepare('SELECT name FROM clinicians WHERE evidence_reviewer = 1 ORDER BY name').all().map((r) => r.name),
   }), status);
 }
 

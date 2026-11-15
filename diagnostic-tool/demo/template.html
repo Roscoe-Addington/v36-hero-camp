@@ -226,7 +226,7 @@
         audit: 'Every view and change of this patient’s information, recorded as you click through this demo.',
         retention: 'How long data is kept, and records past their retention period for the treating clinician to review and delete.',
         deleted: 'The record is deleted, but the deletion stays in the audit log. Press "Reset demo" to start again.',
-        admin: 'Administration (for administrators; Dr Demo is one in this demo): every patient with the clinician they are assigned to. Press "Assign" to give the patient to another clinician.',
+        admin: 'Administration (for administrators; Dr Demo is one in this demo): every patient with the clinician they are assigned to, and who is an administrator or research reviewer. Press "Assign" to give the patient to another clinician, or "Add"/"Remove" to change roles. There is always at least one administrator.',
         assign: 'Assign the patient to another clinician, with a reason. Try it: afterwards Dr Demo can still read the patient’s file but no longer change it, because only the assigned clinician can. "Reset demo" starts again.',
         records: 'Search patient records by personal number. Only patients you have access to are found. Try the demo patient’s number, 19580704-XXXX.',
         record: 'The patient record: assessments, intake interviews, follow-ups, clinical notes and treatment reports, newest first. Entries cannot be changed once saved.',
@@ -280,7 +280,7 @@
         audit: 'Varje gång patientens uppgifter visas eller ändras, sparat medan du klickar dig igenom demon.',
         retention: 'Hur länge uppgifter sparas, och journaler som passerat sin gallringstid för den behandlande behandlaren att granska och radera.',
         deleted: 'Journalen är raderad, men raderingen finns kvar i loggen. Tryck på "Börja om" för att starta igen.',
-        admin: 'Administration (för administratörer; Dr Demo är en i den här demon): alla patienter och den behandlare de är tilldelade. Tryck på "Tilldela" för att ge patienten till en annan behandlare.',
+        admin: 'Administration (för administratörer; Dr Demo är en i den här demon): alla patienter och den behandlare de är tilldelade, och vilka som är administratörer eller forskningsgranskare. Tryck på "Tilldela" för att ge patienten till en annan behandlare, eller "Lägg till"/"Ta bort" för att ändra roller. Det finns alltid minst en administratör.',
         assign: 'Tilldela patienten en annan behandlare, med ett skäl. Prova: efteråt kan Dr Demo fortfarande läsa patientens journal men inte ändra i den, eftersom bara den tilldelade behandlaren kan det. "Börja om" startar om.',
         records: 'Sök i patientjournaler med personnummer. Bara patienter du har behörighet till hittas. Prova demopatientens nummer, 19580704-XXXX.',
         record: 'Patientjournalen: bedömningar, intagningsintervjuer, uppföljningar, journalanteckningar och behandlingsrapporter, nyast först. Anteckningar kan inte ändras när de har sparats.',
@@ -299,14 +299,19 @@
   // A supervisor with read-only access, to show what colleagues see.
   const SUPERVISOR = { id: 2, name: 'Dr Supervisor', email: 'supervisor@clinic.example', language: 'en' };
   let asSupervisor = false;
-  const viewer = () => (asSupervisor ? { ...SUPERVISOR, language: CLINICIAN.language } : CLINICIAN);
+  // The viewer's roles come from the demo's clinician list, which administrators can change.
+  const viewer = () => {
+    const base = asSupervisor ? { ...SUPERVISOR, language: CLINICIAN.language } : CLINICIAN;
+    const row = state?.clinicians?.find((c) => c.id === base.id);
+    return row ? { ...base, role: row.role, reviewer: row.evidence_reviewer === 1 } : base;
+  };
   // The clinicians in this demo, for assigning the patient (administration).
   const DEMO_CLINICIANS = [
-    { id: 1, name: 'Dr Demo', email: 'demo@clinic.example', role: 'admin' },
-    { id: 2, name: 'Dr Supervisor', email: 'supervisor@clinic.example', role: 'clinician' },
-    { id: 3, name: 'Dr Colleague', email: 'colleague@clinic.example', role: 'clinician' },
+    { id: 1, name: 'Dr Demo', email: 'demo@clinic.example', role: 'admin', evidence_reviewer: 1 },
+    { id: 2, name: 'Dr Supervisor', email: 'supervisor@clinic.example', role: 'clinician', evidence_reviewer: 0 },
+    { id: 3, name: 'Dr Colleague', email: 'colleague@clinic.example', role: 'clinician', evidence_reviewer: 0 },
   ];
-  const ownerNow = () => DEMO_CLINICIANS.find((c) => c.id === state.ownerId);
+  const ownerNow = () => state.clinicians.find((c) => c.id === state.ownerId);
   // Read-only: viewing as the supervisor, or after the patient was assigned to someone else.
   const readOnly = () => asSupervisor || state.ownerId !== CLINICIAN.id;
   const SAMPLE_PATIENT = {
@@ -418,7 +423,8 @@
       meta: sampleMeta(),
       grants: [],
       records: [], recordQuery: '', recordShow: 'all', recordValues: {},
-      ownerId: 1, adminQuery: '', adminFilter: null, assignSaved: false,
+      ownerId: 1, adminQuery: '', adminFilter: null, assignSaved: false, adminMessage: '',
+      clinicians: DEMO_CLINICIANS.map((c) => ({ ...c })),
       assignments: [{ clinician_id: 1, clinician_name: 'Dr Demo', started_at: '2026-10-01T09:00:00Z', ended_at: null, assigned_by_name: 'Dr Demo', reason: null }],
       disorderQuery: '', disorderId: 'ptsd',
       // Real PubMed articles found by the research watch (November 2026).
@@ -606,13 +612,14 @@
         evidence: state.evidence.filter((e) => e.status === 'approved' && e.disorder_id === state.disorderId) }));
       case 'evidence': return bodyOf(D.knowledgeViews.evidenceReviewPage({ clinician: viewer(),
         pending: state.evidence.filter((e) => e.status === 'pending'), reviewed: state.evidence.filter((e) => e.status !== 'pending').reverse(),
-        lastRun: { finished_at: '2026-11-15T10:00:00Z', found: 24, added: 24 }, canReview: !asSupervisor,
+        lastRun: { finished_at: '2026-11-15T10:00:00Z', found: 24, added: 24 }, canReview: viewer().reviewer,
+        reviewerNames: state.clinicians.filter((c) => c.evidence_reviewer === 1).map((c) => c.name),
         errors: state.evidenceErrors, values: state.evidenceValues, message: state.evidenceMessage }));
       case 'admin':
       case 'assign': {
         // Administration is for administrators only (src/server.js: requireAdmin).
         if (viewer().role !== 'admin') return bodyOf(V.messagePage({ title: 'Not found', message: 'This page does not exist.', clinician: viewer() }));
-        const counts = DEMO_CLINICIANS.map((c) => ({ ...c, patient_count: !state.deleted && c.id === state.ownerId ? 1 : 0 }));
+        const counts = state.clinicians.map((c) => ({ ...c, patient_count: !state.deleted && c.id === state.ownerId ? 1 : 0 }));
         if (view === 'assign') {
           const saved = state.assignSaved;
           state.assignSaved = false;
@@ -623,7 +630,9 @@
         const match = !state.deleted && (!state.adminFilter || state.adminFilter === state.ownerId)
           && (!q || D.personalNumberKey(q) === D.personalNumberKey(p.personal_number) || (p.first_name + ' ' + p.last_name).toLowerCase().includes(q));
         const rows = match ? [{ ...p, id: 1, clinician_id: state.ownerId, clinician_name: ownerNow().name, assigned_since: state.assignments[0].started_at }] : [];
-        return bodyOf(D.adminViews.adminPage({ clinician: viewer(), query: state.adminQuery, clinicianFilter: state.adminFilter, patients: rows, clinicians: counts }));
+        const message = state.adminMessage;
+        state.adminMessage = '';
+        return bodyOf(D.adminViews.adminPage({ clinician: viewer(), query: state.adminQuery, clinicianFilter: state.adminFilter, patients: rows, clinicians: counts, errors: state.errors, message }));
       }
       case 'audit': return bodyOf(V.auditPage({ clinician: viewer(), patient: p, entries: state.audit, actions: D.ACTIONS }));
       case 'deleted': return bodyOf(V.messagePage({ title: L('deletedTitle'), message: L('deleted'), clinician: viewer() }));
@@ -777,9 +786,26 @@
     }
     // Administration (the same rules as assignPatient() in src/access.js)
     if (path === '/clinician/admin') { state.adminQuery = String(data.q || '').trim(); state.adminFilter = Number(data.clinician) || null; return go('admin', stay); }
+    // Administrators and research reviewers (the same rules as changeAccount() in src/access.js)
+    if (path.startsWith('/clinician/admin/clinicians/')) {
+      if (viewer().role !== 'admin') return go('admin', stay);
+      const target = state.clinicians.find((c) => c.id === Number(path.split('/').pop()));
+      const change = data.change;
+      if (!target) return go('admin', stay);
+      if (change === 'remove_admin' && state.clinicians.filter((c) => c.role === 'admin').length <= 1) {
+        state.errors = ['There must always be at least one administrator. Make someone else administrator first.'];
+        return go('admin', stay);
+      }
+      if (change === 'make_admin') target.role = 'admin';
+      if (change === 'remove_admin') target.role = 'clinician';
+      if (change === 'add_reviewer') target.evidence_reviewer = 1;
+      if (change === 'remove_reviewer') target.evidence_reviewer = 0;
+      state.adminMessage = 'The change has been saved.';
+      return go(viewer().role === 'admin' ? 'admin' : 'patients', stay);
+    }
     if (path === '/clinician/admin/patients/1/assign') {
       if (viewer().role !== 'admin') return go('assign', stay);
-      const to = DEMO_CLINICIANS.find((c) => c.id === Number(data.clinician_id));
+      const to = state.clinicians.find((c) => c.id === Number(data.clinician_id));
       const reason = String(data.reason || '').trim();
       const error = !to ? 'Choose a clinician.' : to.id === state.ownerId ? 'The patient is already assigned to this clinician.' : !reason ? 'Write why the patient is assigned to another clinician.' : null;
       if (error) { state.errors = [error]; state.assignValues = data; return go('assign', stay); }
@@ -800,7 +826,7 @@
     // The research watch (the same rules as src/server.js and src/evidence-watch.js)
     if (path === '/clinician/evidence/run') { state.evidenceMessage = ''; render('evidence'); document.querySelector('#context p').textContent = L('evidenceRun'); return; }
     if (path.startsWith('/clinician/evidence/')) {
-      if (asSupervisor) return go('evidence', stay);
+      if (!viewer().reviewer) return go('evidence', stay);
       const item = state.evidence.find((e) => e.id === Number(path.split('/').pop()) && e.status === 'pending');
       if (!item) return go('evidence', stay);
       const { review, errors } = D.parseReview(data);

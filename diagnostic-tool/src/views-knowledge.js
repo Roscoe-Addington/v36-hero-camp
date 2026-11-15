@@ -97,7 +97,7 @@ const STATUS_LABELS = { pending: 'To review', approved: 'Approved', rejected: 'R
 // The research watch's review queue: articles found on PubMed, best study
 // designs first. Approving needs a short summary in both languages; the
 // article title stays in its original language (English), marked as such.
-export function evidenceReviewPage({ clinician, pending = [], reviewed = [], lastRun = null, running = false, canReview = true, errors = {}, values = {}, message = '' }) {
+export function evidenceReviewPage({ clinician, pending = [], reviewed = [], lastRun = null, running = false, canReview = true, reviewerNames = [], errors = {}, values = {}, message = '' }) {
   const t = translator(clinician?.language);
   const runText = lastRun
     ? t('Last search {date}: {found} articles found, {added} new.', { date: String(lastRun.finished_at ?? lastRun.started_at).slice(0, 16).replace('T', ' '), found: lastRun.found ?? 0, added: lastRun.added ?? 0 })
@@ -117,7 +117,11 @@ export function evidenceReviewPage({ clinician, pending = [], reviewed = [], las
             ? html`<form method="post" action="/clinician/evidence/run"><button class="secondary">${t('Search now')}</button></form>`
             : ''}
       </div>
-      ${canReview ? '' : html`<p class="note">${t('Only the clinicians named as research reviewers can approve or reject articles.')}</p>`}
+      ${canReview ? '' : html`<p class="note">${t('Only the clinicians named as research reviewers can approve or reject articles.')}
+        ${reviewerNames.length
+          ? t('Research reviewers: {names}.', { names: reviewerNames.join(', ') })
+          : t('No research reviewer has been named yet.')}
+        ${clinician?.role === 'admin' ? html`<a href="/clinician/admin#clinicians">${t('Name reviewers under Administration.')}</a>` : t('An administrator names them.')}</p>`}
 
       <h2>${t('To review')} (${pending.length})</h2>
       <p class="hint">${t('Ranked by study design: meta-analyses and systematic reviews first, then guidelines and randomized controlled trials, then other clinical trials. Open the article and read at least the abstract before deciding.')}</p>

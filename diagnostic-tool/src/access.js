@@ -158,3 +158,34 @@ export function revokeAccess({ patient, ownerId, grantId }) {
     .run(nowIso(), Number(grantId), patient.id).changes;
   return changed ? { ok: true } : { error: 'No such active access.' };
 }
+
+// ---------- Administrators and research reviewers ----------
+// An administrator makes other clinicians administrators or research
+// reviewers, and takes the roles away again. There is always at least one
+// administrator left. Returns { done, name } or { error }.
+export const ACCOUNT_CHANGES = {
+  make_admin: 'Made administrator',
+  remove_admin: 'Removed as administrator',
+  add_reviewer: 'Named research reviewer',
+  remove_reviewer: 'Removed as research reviewer',
+};
+
+export function changeAccount({ admin, clinicianId, change }) {
+  if (!isAdmin(admin)) return { error: 'Only an administrator can change roles.' };
+  if (!Object.hasOwn(ACCOUNT_CHANGES, change)) return { error: 'Choose a change.' };
+  const target = db.prepare('SELECT id, name, role, evidence_reviewer FROM clinicians WHERE id = ?').get(Number(clinicianId) || 0);
+  if (!target) return { error: 'No such clinician.' };
+  if (change === 'remove_admin') {
+    if (target.role !== 'admin') return { error: 'This clinician is not an administrator.' };
+    const admins = db.prepare("SELECT COUNT(*) AS n FROM clinicians WHERE role = 'admin'").get().n;
+    if (admins <= 1) return { error: 'There must always be at least one administrator. Make someone else administrator first.' };
+  }
+  const update = {
+    make_admin: "UPDATE clinicians SET role = 'admin' WHERE id = ?",
+    remove_admin: "UPDATE clinicians SET role = 'clinician' WHERE id = ?",
+    add_reviewer: 'UPDATE clinicians SET evidence_reviewer = 1 WHERE id = ?',
+    remove_reviewer: 'UPDATE clinicians SET evidence_reviewer = 0 WHERE id = ?',
+  }[change];
+  db.prepare(update).run(target.id);
+  return { done: change, name: target.name };
+}

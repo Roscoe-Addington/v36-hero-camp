@@ -819,6 +819,11 @@ test('research watch: search now, review queue ranked, approve needs both langua
   const get = async (path) => (await fetch(base + path, { headers: { cookie } })).text();
   db.prepare('DELETE FROM evidence_items').run();
 
+  // Not a research reviewer: can read the queue, cannot search or decide
+  assert.equal((await post('/clinician/evidence/run', {}, cookie)).status, 403);
+  assert.ok((await get('/clinician/evidence')).includes('No research reviewer has been named yet.'));
+  db.prepare("UPDATE clinicians SET evidence_reviewer = 1 WHERE email = 'dr@example.com'").run();
+
   // "Search now" runs in the background; wait for it here
   const { startEvidenceWatch } = await import('../src/server.js');
   const started = await post('/clinician/evidence/run', {}, cookie);
@@ -854,15 +859,14 @@ test('research watch: search now, review queue ranked, approve needs both langua
   assert.deepEqual(log.map((l) => l.action), ['run_evidence_watch', 'approve_evidence', 'reject_evidence']);
   assert.equal(log[1].detail, 'PMID 111 (ptsd)');
 
-  // With EVIDENCE_REVIEWERS set, other clinicians can read but not decide
-  process.env.EVIDENCE_REVIEWERS = 'someone.else@example.com';
+  // Without the reviewer role, decisions are refused
+  db.prepare("UPDATE clinicians SET evidence_reviewer = 0 WHERE email = 'dr@example.com'").run();
   try {
     const next = db.prepare("SELECT id FROM evidence_items WHERE status = 'pending' LIMIT 1").get();
     assert.equal((await post(`/clinician/evidence/${next.id}`, { action: 'reject' }, cookie)).status, 403);
     assert.equal((await post('/clinician/evidence/run', {}, cookie)).status, 403);
     assert.ok((await get('/clinician/evidence')).includes('Only the clinicians named as research reviewers'));
   } finally {
-    delete process.env.EVIDENCE_REVIEWERS;
     delete app.locals.evidenceOptions;
   }
 });
@@ -948,4 +952,44 @@ test('assignments: administrators read every file and reassign; clinicians see p
   // Deleting the patient removes the assignments too
   await post(`${patientPath}/delete`, { confirm_last_name: 'Holm', reason: 'Test' }, second);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_assignments WHERE patient_id = ?').get(id).n, 0);
+});
+
+test('administrators make other administrators and name research reviewers; never fewer than one administrator', async () => {
+  const login = async (email, password) => (await post('/login', { email, password })).headers.get('set-cookie').split(';')[0];
+  const admin = await login('admin@example.com', 'admin password long');
+  const second = await login('second@example.com', 'second password long');
+  const id = (email) => db.prepare('SELECT id FROM clinicians WHERE email = ?').get(email).id;
+  const row = (email) => db.prepare('SELECT role, evidence_reviewer FROM clinicians WHERE email = ?').get(email);
+  db.prepare("UPDATE clinicians SET role = 'clinician' WHERE email != 'admin@example.com'").run();
+
+  // A clinician cannot change roles, not even their own
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'make_admin' }, second)).status, 404);
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'add_reviewer' }, second)).status, 404);
+  assert.equal(row('second@example.com').role, 'clinician');
+
+  // The only administrator cannot remove themselves
+  const last = await post(`/clinician/admin/clinicians/${id('admin@example.com')}`, { change: 'remove_admin' }, admin);
+  assert.equal(last.status, 400);
+  assert.ok((await last.text()).includes('at least one administrator'));
+
+  // Make another administrator and a research reviewer
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'make_admin' }, admin)).status, 302);
+  assert.equal(row('second@example.com').role, 'admin');
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'add_reviewer' }, admin)).status, 302);
+  assert.equal(row('second@example.com').evidence_reviewer, 1);
+  const page = await (await fetch(`${base}/clinician/admin`, { headers: { cookie: second } })).text();
+  assert.ok(page.includes('Research reviewer'), 'the new administrator sees the page at once');
+  assert.ok(!(await (await fetch(`${base}/clinician/evidence`, { headers: { cookie: second } })).text()).includes('Only the clinicians named'), 'and may review');
+
+  // Now the first administrator may step down; the new one takes the roles away again
+  assert.equal((await post(`/clinician/admin/clinicians/${id('admin@example.com')}`, { change: 'remove_admin' }, admin)).status, 302);
+  assert.equal(row('admin@example.com').role, 'clinician');
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'remove_admin' }, second)).status, 400, 'the last one stays');
+  assert.equal((await post(`/clinician/admin/clinicians/${id('admin@example.com')}`, { change: 'make_admin' }, second)).status, 302);
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'remove_reviewer' }, admin)).status, 302);
+  assert.equal(row('second@example.com').evidence_reviewer, 0);
+  assert.equal((await post(`/clinician/admin/clinicians/${id('second@example.com')}`, { change: 'nonsense' }, admin)).status, 400);
+
+  const log = db.prepare("SELECT detail FROM audit_log WHERE action = 'change_roles' ORDER BY id").all().map((r) => r.detail);
+  assert.deepEqual(log, ['Dr Second: Made administrator', 'Dr Second: Named research reviewer', 'Ada Admin: Removed as administrator', 'Ada Admin: Made administrator', 'Dr Second: Removed as research reviewer']);
 });

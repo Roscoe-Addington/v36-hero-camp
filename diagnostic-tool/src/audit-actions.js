@@ -36,4 +36,5 @@ export const ACTIONS = {
   run_evidence_watch: 'Started a research search',
   assign_patient: 'Assigned the patient to a clinician',
   view_admin: 'Viewed the patient list (administration)',
+  change_roles: 'Changed administrators or research reviewers',
 };

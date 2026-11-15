@@ -160,6 +160,12 @@ if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'r
   db.exec("ALTER TABLE clinicians ADD COLUMN role TEXT NOT NULL DEFAULT 'clinician'");
 }
 
+// Research reviewers may approve or reject articles found by the research
+// watch. Only administrators name them (Administration page).
+if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'evidence_reviewer')) {
+  db.exec('ALTER TABLE clinicians ADD COLUMN evidence_reviewer INTEGER NOT NULL DEFAULT 0');
+}
+
 // Which clinician a patient is assigned to, and since when. The open row
 // (ended_at IS NULL) is the treating clinician now (also kept in
 // patients.clinician_id); ended rows are earlier treating clinicians, who

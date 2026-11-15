@@ -413,9 +413,10 @@ original title). Approved research appears on the disorder page with the
 reviewer's name and date. Decisions are final and in the audit log.
 "Search now" starts a search at once.
 
-- `EVIDENCE_REVIEWERS`: email addresses of the clinicians who may approve
-  or reject (comma-separated). Leave it empty only while testing: the
-  research is shared by every clinician, so name the reviewers.
+- **Research reviewers** are named by an administrator on the
+  Administration page. Only reviewers may approve, reject or start a
+  search; until one is named, nobody can. The research is shared by every
+  clinician, so keep the group small.
 - `NCBI_EMAIL`, `NCBI_API_KEY`: NCBI asks for a contact email and allows
   more requests with a free API key. Use a service mailbox, not a person's.
 - `EVIDENCE_WATCH=off` turns it off.
@@ -438,7 +439,7 @@ kept (`src/access.js`). Who may see a patient:
 | The clinician the patient is assigned to now (treating clinician) | Reads and changes the file; gets the "results ready" emails |
 | Clinicians the patient was assigned to before ("have worked with") | Read-only. With `FORMER_ACCESS_MONTHS` set, only for that many months after the assignment ended |
 | A supervisor or close colleague the treating clinician names | Read-only, with a reason and an optional end date |
-| Administrators (the highest access) | Read-only for every patient; assign and reassign patients |
+| Administrators (the highest access) | Read-only for every patient; assign and reassign patients; make other administrators; name research reviewers |
 | Everyone else | "Not found", as if the record did not exist |
 
 - A new patient is assigned to the clinician who registers them.
@@ -447,9 +448,12 @@ kept (`src/access.js`). Who may see a patient:
   filterable by clinician. "Assign" moves a patient to another clinician
   with a **reason**; the earlier clinician keeps read-only access. The
   start page still lists only the administrator's own patients.
-- An account becomes an administrator on the server:
-  `npm run create-clinician -- "Name" email --admin` (`--not-admin` takes
-  the role away).
+- Under **Clinicians** on the same page, an administrator makes other
+  clinicians administrators or research reviewers, and takes the roles away
+  again. There is always at least one administrator: the last one cannot
+  step down. Every change is in the audit log.
+- The first administrator is set up on the server:
+  `npm run create-clinician -- "Name" email --admin`.
 - Only the treating clinician can grant or revoke colleague access and
   delete the record. Assignments, grants, revocations and every view are in
   the audit log.
