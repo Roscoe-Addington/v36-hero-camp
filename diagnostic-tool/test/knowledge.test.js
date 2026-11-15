@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DISORDERS, findDisorder } from '../src/disorders.js';
 import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS, physicianRole, medicalCheck } from '../src/knowledge.js';
-import { rankedTreatments, otherTreatments, searchDisorders } from '../src/disorder-search.js';
+import { rankedTreatments, otherTreatments, medicalChecks, searchDisorders } from '../src/disorder-search.js';
 import { disorderInfoPage, disorderSearchPage, evidenceReviewPage } from '../src/views-knowledge.js';
 import { englishLeft } from './helpers.js';
 import { GUIDANCE_SOURCES } from '../src/guidance.js';
@@ -39,7 +39,8 @@ test('treatments: Socialstyrelsen priority first (1 = most important), then the 
     const rest = ranked.slice(firstOther < 0 ? ranked.length : firstOther).map((x) => EVIDENCE.indexOf(x.evidence));
     assert.deepEqual(rest, [...rest].sort((a, b) => a - b), `${d.id}: the rest by evidence`);
     const { research, advisedAgainst } = otherTreatments(d.id);
-    assert.equal(ranked.length + research.length + advisedAgainst.length, KNOWLEDGE[d.id].treatments.length, d.id);
+    assert.equal(ranked.length + research.length + advisedAgainst.length + medicalChecks(d.id).length, KNOWLEDGE[d.id].treatments.length, d.id);
+    assert.ok(!ranked.some((x) => medicalCheck(x)), `${d.id}: medical checks are not in the numbered list`);
   }
   assert.equal(rankedTreatments('ocd')[0].sos, 1, 'OCD: CBT with ERP, priority 1');
   assert.equal(rankedTreatments('gad')[0].sosId, '98', 'GAD: antidepressants priority 3 before CBT priority 5');
@@ -105,6 +106,12 @@ test('medical checks (blood tests, ECG, monitoring) are marked for a physician o
   const page = (language) => String(disorderInfoPage({ clinician: { id: 1, name: 'Dr Test', language }, disorder: findDisorder('bulimia') }));
   assert.ok(page('en').includes('Medical check (physician or nurse)'));
   assert.ok(page('sv').includes('Medicinsk kontroll (läkare eller sjuksköterska)'));
+  // Shown first, in their own box, before the numbered treatments
+  const bulimia = page('en');
+  assert.ok(bulimia.indexOf('Before and during treatment: medical checks') < bulimia.indexOf('<ol class="treatments">'));
+  assert.ok(bulimia.indexOf('Check electrolytes') < bulimia.indexOf('<ol class="treatments">'), 'the electrolyte check comes before the treatments');
+  assert.equal(medicalChecks('schizophrenia')[0].sos, 1, 'priority kept for checks Socialstyrelsen prioritises');
+  assert.ok(!page('en').includes('undefined'));
   let marked = 0;
   for (const k of Object.values(KNOWLEDGE)) for (const t of k.treatments) if (medicalCheck(t)) marked += 1;
   assert.ok(marked >= 9, `${marked} marked`);

@@ -7,7 +7,7 @@ import { translator } from './i18n-clinician.js';
 import { findDisorder, DISORDERS, CATEGORIES } from './disorders.js';
 import { DIFFERENTIALS } from './differential-lists.js';
 import { KNOWLEDGE, EVIDENCE_LABELS, physicianRole, medicalCheck } from './knowledge.js';
-import { rankedTreatments, otherTreatments, categoryOf } from './disorder-search.js';
+import { rankedTreatments, otherTreatments, medicalChecks, categoryOf } from './disorder-search.js';
 import { DESIGNS, SOURCES } from './evidence-watch.js';
 import { OUTCOMES } from './guidance.js';
 
@@ -54,7 +54,8 @@ export function disorderInfoPage({ clinician, disorder, evidence = [] }) {
   const info = KNOWLEDGE[disorder.id];
   const treatments = rankedTreatments(disorder.id);
   const other = otherTreatments(disorder.id);
-  const fromSos = treatments.some((x) => typeof x.sos === 'number');
+  const checks = medicalChecks(disorder.id);
+  const fromSos = [...treatments, ...checks].some((x) => typeof x.sos === 'number');
   const treatment = (x) => html`<li>
           <strong>${pick(x.what, lang)}</strong>
           ${typeof x.sos === 'number' ? html`<span class="badge ok">${t('Socialstyrelsen priority {n}', { n: x.sos })}</span>` : fromSos && !x.sos ? html`<span class="badge info">${t('Not prioritised by Socialstyrelsen')}</span>` : ''}
@@ -81,6 +82,11 @@ export function disorderInfoPage({ clinician, disorder, evidence = [] }) {
           ? t('In order of Socialstyrelsen’s priority (1 = most important), then the treatments the Swedish guideline does not cover, by strength of evidence. Socialstyrelsen’s priority weighs the severity of the condition, the effect, the evidence and cost-effectiveness.')
           : t('Most effective first: ordered by the strength of the evidence, then by guideline recommendation.')}</p>
         ${info.note ? html`<p class="hint">${pick(info.note, lang)}</p>` : ''}
+        ${checks.length ? html`<div class="medical-checks">
+          <h3>${t('Before and during treatment: medical checks')}</h3>
+          <p class="hint">${t('Done by a physician or nurse. Listed first because they concern the patient’s safety.')}</p>
+          <ul class="treatments">${checks.map(treatment)}</ul>
+        </div>` : ''}
         <ol class="treatments">${treatments.map(treatment)}</ol>
         ${other.research.length ? html`<h3>${t('Only within research and development (Socialstyrelsen: FoU)')}</h3><ul class="treatments">${other.research.map(treatment)}</ul>` : ''}
         ${other.advisedAgainst.length ? html`<h3>${t('Socialstyrelsen advises against (icke-göra)')}</h3><ul class="treatments">${other.advisedAgainst.map(treatment)}</ul>` : ''}

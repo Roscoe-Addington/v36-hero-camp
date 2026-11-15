@@ -713,3 +713,6 @@ button.danger {
 .treatments .badge { margin-left: 0.25rem; }
 .differs { display: inline-block; margin-top: 0.2rem; padding: 0.15rem 0.4rem; border-left: 3px solid var(--warn); background: var(--warn-bg); }
 .badge.physician { color: #6b3fa0; background: #f1eafb; }
+.medical-checks { margin: 0.75rem 0 1rem; padding: 0.5rem 0.9rem; border-left: 4px solid #6b3fa0; background: #f7f3fc; border-radius: 6px; }
+.medical-checks h3 { margin: 0.3rem 0; font-size: 1rem; }
+.medical-checks .hint { margin: 0 0 0.3rem; }

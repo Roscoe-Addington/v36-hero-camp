@@ -909,4 +909,6 @@ export const SV = {
   "Prescribed by a physician": "Ordineras av läkare",
   "The medicine part is prescribed by a physician": "Läkemedelsdelen ordineras av läkare",
   "Medical check (physician or nurse)": "Medicinsk kontroll (läkare eller sjuksköterska)",
+  "Before and during treatment: medical checks": "Före och under behandlingen: medicinska kontroller",
+  "Done by a physician or nurse. Listed first because they concern the patient’s safety.": "Görs av läkare eller sjuksköterska. Står först eftersom de gäller patientens säkerhet.",
 };

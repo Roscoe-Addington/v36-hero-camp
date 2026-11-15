@@ -3,7 +3,7 @@
 
 import { DISORDERS, CATEGORIES } from './disorders.js';
 import { translator } from './i18n-clinician.js';
-import { KNOWLEDGE, EVIDENCE } from './knowledge.js';
+import { KNOWLEDGE, EVIDENCE, medicalCheck } from './knowledge.js';
 
 // Abbreviations and other names people search for.
 const ALIASES = {
@@ -26,13 +26,14 @@ const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀
 // important), then the others by strength of evidence; within the same
 // level, the order of the guideline-based content. Treatments Socialstyrelsen
 // recommends only within research (FoU) or advises against (icke-göra) are
-// left out here; see otherTreatments().
+// left out here; see otherTreatments(). Medical checks are shown on their
+// own at the top (medicalChecks()), because they concern safety.
 const order = (t) => (typeof t.sos === 'number' ? t.sos : 100 + EVIDENCE.indexOf(t.evidence));
 export function rankedTreatments(id) {
   const list = KNOWLEDGE[id]?.treatments ?? [];
   return list
     .map((t, i) => ({ ...t, i }))
-    .filter((t) => t.sos !== 'fou' && t.sos !== 'dont')
+    .filter((t) => t.sos !== 'fou' && t.sos !== 'dont' && !medicalCheck(t))
     .sort((a, b) => order(a) - order(b) || EVIDENCE.indexOf(a.evidence) - EVIDENCE.indexOf(b.evidence) || a.i - b.i);
 }
 
@@ -62,3 +63,9 @@ export function searchDisorders(query) {
 }
 
 export const categoryOf = (d) => CATEGORIES.find((c) => c.id === d.category);
+
+// Medical checks (blood tests, ECG, weight and electrolyte monitoring,
+// medical work-up), done by a physician or nurse before and during treatment.
+export function medicalChecks(id) {
+  return (KNOWLEDGE[id]?.treatments ?? []).filter((t) => t.sos !== 'fou' && t.sos !== 'dont' && medicalCheck(t));
+}
