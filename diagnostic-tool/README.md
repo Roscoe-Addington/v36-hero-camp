@@ -395,7 +395,8 @@ disorder page has:
   monitoring and medical work-ups are marked **"Medical check (physician
   or nurse)"** and shown **first**, in a box of their own ("Before and
   during treatment: medical checks"), because they concern safety; the
-  numbered treatments below keep Socialstyrelsen's order. Where NICE differs
+  numbered treatments below keep Socialstyrelsen's order.
+  `npm run list:badges` prints every treatment with its badges, for review. Where NICE differs
   from Socialstyrelsen, the page says how ("Guidelines differ"). The
   sources are linked (`src/knowledge.js`, `src/disorder-search.js`);
 - **new research approved by a clinician** (below);

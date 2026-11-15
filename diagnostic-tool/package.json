@@ -13,7 +13,8 @@
     "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\"",
     "build:demo": "node demo/build.js",
     "check:devices": "node --no-warnings=ExperimentalWarning scripts/check-devices.js",
-    "retention": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/retention.js"
+    "retention": "node --no-warnings=ExperimentalWarning --env-file-if-exists=.env scripts/retention.js",
+    "list:badges": "node --no-warnings=ExperimentalWarning scripts/list-badges.js"
   },
   "dependencies": {
     "express": "^5.1.0",
