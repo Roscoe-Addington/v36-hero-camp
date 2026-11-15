@@ -387,7 +387,11 @@ disorder page has:
   2. then the treatments the Swedish guideline does not cover, by strength
      of evidence (strong, moderate, limited, expert consensus).
   Treatments Socialstyrelsen recommends only within research (FoU) or
-  advises against (icke-göra) are listed separately. Where NICE differs
+  advises against (icke-göra) are listed separately. Because Continuum
+  mainly supports psychologists, treatments with a medicine or a medical
+  procedure (ECT, rTMS) are marked **"Prescribed by a physician"**, and
+  combinations with psychological treatment **"The medicine part is
+  prescribed by a physician"**. Where NICE differs
   from Socialstyrelsen, the page says how ("Guidelines differ"). The
   sources are linked (`src/knowledge.js`, `src/disorder-search.js`);
 - **new research approved by a clinician** (below);

@@ -712,3 +712,4 @@ button.danger {
 .guidance-item h3 { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .treatments .badge { margin-left: 0.25rem; }
 .differs { display: inline-block; margin-top: 0.2rem; padding: 0.15rem 0.4rem; border-left: 3px solid var(--warn); background: var(--warn-bg); }
+.badge.physician { color: #6b3fa0; background: #f1eafb; }

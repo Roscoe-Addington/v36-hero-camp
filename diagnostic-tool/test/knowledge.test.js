@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DISORDERS, findDisorder } from '../src/disorders.js';
-import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS } from '../src/knowledge.js';
+import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS, physicianRole } from '../src/knowledge.js';
 import { rankedTreatments, otherTreatments, searchDisorders } from '../src/disorder-search.js';
 import { disorderInfoPage, disorderSearchPage, evidenceReviewPage } from '../src/views-knowledge.js';
 import { englishLeft } from './helpers.js';
@@ -70,6 +70,28 @@ test('every Socialstyrelsen priority has a recommendation id and a linked Social
     assert.ok(sosDisorders.includes(id), `${id} cites Socialstyrelsen`);
   }
   assert.equal(sosDisorders.length, 27);
+});
+
+test('treatments a physician prescribes are marked; psychological treatments and advice are not', () => {
+  const role = (en) => physicianRole({ what: { en } });
+  for (const en of ['Severe depression: antidepressant medicine', 'Severe depression: electroconvulsive therapy (ECT)', 'Treatment-resistant schizophrenia: clozapine', 'N-acetylcysteine', 'Lisdexamfetamine', 'Moderate to severe depression: repetitive transcranial magnetic stimulation (rTMS)']) {
+    assert.equal(role(en), 'rx', en);
+  }
+  for (const en of ['Sertraline combined with CBT', 'Antidepressant combined with CBT or IPT', 'Treat remaining symptoms as in OCD (ERP, SSRI)']) assert.equal(role(en), 'mixed', en);
+  for (const en of ['Mild to moderate depression: cognitive behavioural therapy (CBT)', 'EMDR', 'Avoid antidepressants without a mood stabiliser', 'Medicines are not a first choice', 'Review medicines that can cause or worsen the symptoms', 'Applied relaxation']) {
+    assert.equal(role(en), null, en);
+  }
+  // Every treatment that names a medicine is marked, unless it is advice
+  let marked = 0;
+  for (const k of Object.values(KNOWLEDGE)) for (const t of k.treatments) if (physicianRole(t)) marked += 1;
+  assert.ok(marked > 60, `${marked} marked`);
+  // Shown on the page in both languages, never on advised-against items
+  const page = (language, id) => String(disorderInfoPage({ clinician: { id: 1, name: 'Dr Test', language }, disorder: findDisorder(id) }));
+  assert.ok(page('en', 'gad').includes('Prescribed by a physician'));
+  assert.ok(page('sv', 'gad').includes('Ordineras av läkare'));
+  assert.ok(page('sv', 'social').includes('Läkemedelsdelen ordineras av läkare'));
+  const advised = page('en', 'gad').split('Socialstyrelsen advises against')[1];
+  assert.ok(!advised.split('Based on:')[0].includes('Prescribed by a physician'));
 });
 
 test('search by name, Swedish name, abbreviation and code', () => {

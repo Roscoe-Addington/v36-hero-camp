@@ -905,4 +905,7 @@ export const SV = {
   "In order of Socialstyrelsen’s priority (1 = most important), then the treatments the Swedish guideline does not cover, by strength of evidence. Socialstyrelsen’s priority weighs the severity of the condition, the effect, the evidence and cost-effectiveness.": "I ordning efter Socialstyrelsens prioritet (1 = mest angeläget), sedan de behandlingar som de svenska riktlinjerna inte omfattar, efter evidensstyrka. Socialstyrelsens prioritet väger samman tillståndets svårighetsgrad, effekt, evidens och kostnadseffektivitet.",
   "Only within research and development (Socialstyrelsen: FoU)": "Endast inom forskning och utveckling (Socialstyrelsen: FoU)",
   "Socialstyrelsen advises against (icke-göra)": "Socialstyrelsen avråder (icke-göra)",
+  // Treatments a physician prescribes
+  "Prescribed by a physician": "Ordineras av läkare",
+  "The medicine part is prescribed by a physician": "Läkemedelsdelen ordineras av läkare",
 };
