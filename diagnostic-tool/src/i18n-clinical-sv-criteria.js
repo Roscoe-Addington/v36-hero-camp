@@ -1,6 +1,6 @@
 // Swedish for the criteria of the disorders added before the eating
 // disorders. Unofficial translation written for this app (TRA-6): to be
-// reviewed by a Swedish-speaking psychiatrist.
+// reviewed by a Swedish-speaking psychiatrist or psychologist.
 export const CORE_CRITERIA_SV = {
   "Depressed mood most of the day, nearly every day": "Nedstämdhet större delen av dagen, nästan varje dag",
   "Markedly diminished interest or pleasure in (almost) all activities": "Påtagligt minskat intresse för eller glädje av (nästan) alla aktiviteter",

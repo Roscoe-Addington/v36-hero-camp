@@ -380,17 +380,41 @@ or ICD-10 code (F32, F50…). An empty search lists all 60 by group. Each
 disorder page has:
 
 - a short summary;
-- **treatments, most effective first**: ordered by the strength of the
-  evidence (strong, moderate, limited, expert consensus), then by the
-  order of the guideline recommendation (`src/knowledge.js`,
-  `src/disorder-search.js`), with the guidelines it is based on (NICE,
-  Socialstyrelsen, APA, WFSBP and others);
+- **treatments**, in two steps:
+  1. where a **Swedish national guideline** (Socialstyrelsen) covers the
+     disorder, in order of its **priority** (1 = most important), each
+     with the recommendation's id so it can be checked in the guideline;
+  2. then the treatments the Swedish guideline does not cover, by strength
+     of evidence (strong, moderate, limited, expert consensus).
+  Treatments Socialstyrelsen recommends only within research (FoU) or
+  advises against (icke-göra) are listed separately. Where NICE differs
+  from Socialstyrelsen, the page says how ("Guidelines differ"). The
+  sources are linked (`src/knowledge.js`, `src/disorder-search.js`);
 - **new research approved by a clinician** (below);
 - what to rule out, linked to those disorders' pages, and the criteria.
 
+**Swedish national guidelines used** (checked against the guideline
+documents on 2026-11-15; 27 of the 60 disorders):
+
+| Guideline | Disorders |
+| --- | --- |
+| Depression and anxiety disorders (2021) | Depression, persistent depressive disorder, separation anxiety (16–17), specific phobia, social anxiety, panic disorder, agoraphobia, GAD, PTSD, acute stress disorder, OCD |
+| Schizophrenia and schizophrenia-like conditions (2018) | Schizophrenia, schizophreniform, schizoaffective, delusional and brief psychotic disorder |
+| Eating disorders (2024) | Anorexia (and atypical anorexia), bulimia, binge-eating disorder, ARFID, other specified eating disorder |
+| Dementia (2017) | Major and mild neurocognitive disorder |
+| Substance use and dependence (2019) | The four substance-induced disorders |
+
+Socialstyrelsen's priority weighs the severity of the condition, the
+effect, the evidence and cost-effectiveness, so it is not simply "most
+effective first". Its recommendations on psychological treatment for adults
+also apply when the treatment is delivered via the internet. The
+depression/anxiety and schizophrenia guidelines will be replaced by one
+guideline on psychiatric conditions in 2028. The other 33 disorders have no
+Swedish national guideline.
+
 > **The treatment content was written for this app from published
-> guidelines and has not been reviewed by a clinician** (CON-6 in the
-> validation plan). It supports, and does not replace, clinical judgement;
+> guidelines and has not been reviewed by a psychiatrist or psychologist**
+> (CON-6 in the validation plan). It supports, and does not replace, clinical judgement;
 > doses and interactions are not given (check FASS). Treatment
 > recommendations make medical-device regulation (MDR) more likely to
 > apply; ask your regulatory adviser before use.

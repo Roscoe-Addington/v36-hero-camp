@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DISORDERS, findDisorder } from '../src/disorders.js';
 import { KNOWLEDGE, EVIDENCE, EVIDENCE_LABELS } from '../src/knowledge.js';
-import { rankedTreatments, searchDisorders } from '../src/disorder-search.js';
+import { rankedTreatments, otherTreatments, searchDisorders } from '../src/disorder-search.js';
 import { disorderInfoPage, disorderSearchPage, evidenceReviewPage } from '../src/views-knowledge.js';
 import { englishLeft } from './helpers.js';
 import { GUIDANCE_SOURCES } from '../src/guidance.js';
@@ -28,13 +28,48 @@ test('every disorder has information in English and Swedish', () => {
   for (const level of EVIDENCE) assert.ok(filled(EVIDENCE_LABELS[level]));
 });
 
-test('treatments are listed most effective first', () => {
+test('treatments: Socialstyrelsen priority first (1 = most important), then the rest by evidence; FoU and icke-göra shown apart', () => {
   for (const d of DISORDERS) {
-    const levels = rankedTreatments(d.id).map((x) => EVIDENCE.indexOf(x.evidence));
-    assert.deepEqual(levels, [...levels].sort((a, b) => a - b), d.id);
+    const ranked = rankedTreatments(d.id);
+    assert.ok(ranked.every((x) => x.sos !== 'fou' && x.sos !== 'dont'), d.id);
+    const sos = ranked.filter((x) => typeof x.sos === 'number').map((x) => x.sos);
+    assert.deepEqual(sos, [...sos].sort((a, b) => a - b), `${d.id}: priorities ascending`);
+    const firstOther = ranked.findIndex((x) => typeof x.sos !== 'number');
+    if (firstOther >= 0) assert.ok(ranked.slice(firstOther).every((x) => typeof x.sos !== 'number'), `${d.id}: prioritised treatments come first`);
+    const rest = ranked.slice(firstOther < 0 ? ranked.length : firstOther).map((x) => EVIDENCE.indexOf(x.evidence));
+    assert.deepEqual(rest, [...rest].sort((a, b) => a - b), `${d.id}: the rest by evidence`);
+    const { research, advisedAgainst } = otherTreatments(d.id);
+    assert.equal(ranked.length + research.length + advisedAgainst.length, KNOWLEDGE[d.id].treatments.length, d.id);
   }
-  assert.equal(rankedTreatments('ptsd')[0].evidence, 'strong');
-  assert.equal(rankedTreatments('anorexia')[0].evidence, 'strong');
+  assert.equal(rankedTreatments('ocd')[0].sos, 1, 'OCD: CBT with ERP, priority 1');
+  assert.equal(rankedTreatments('gad')[0].sosId, '98', 'GAD: antidepressants priority 3 before CBT priority 5');
+  assert.ok(otherTreatments('gad').advisedAgainst.some((x) => x.what.en === 'Benzodiazepines'));
+  const gad = String(disorderInfoPage({ clinician: { id: 1, name: 'Dr Test', language: 'en' }, disorder: findDisorder('gad') }));
+  const advised = gad.slice(gad.indexOf('Socialstyrelsen advises against'));
+  assert.ok(advised.includes('Benzodiazepines') && !advised.slice(0, advised.indexOf('Based on:')).includes('Not prioritised'), 'no "not prioritised" badge on icke-göra items');
+});
+
+test('every Socialstyrelsen priority has a recommendation id and a linked Socialstyrelsen source', () => {
+  const sosDisorders = [];
+  for (const d of DISORDERS) {
+    const k = KNOWLEDGE[d.id];
+    const fromSos = k.treatments.filter((x) => x.sos !== null && x.sos !== undefined);
+    for (const x of fromSos) {
+      assert.ok(typeof x.sos === 'number' ? x.sos >= 1 && x.sos <= 10 : ['fou', 'dont'].includes(x.sos), `${d.id}: priority`);
+      assert.ok(x.sosId, `${d.id}: recommendation id`);
+      if (x.differs) assert.ok(filled(x.differs), `${d.id}: differs in both languages`);
+    }
+    const sosSources = k.sources.filter((s) => typeof s === 'object');
+    for (const s of sosSources) assert.ok(filled(s.label) && s.url.startsWith('https://socialstyrelsen.se/'), d.id);
+    if (fromSos.length) assert.ok(sosSources.length, `${d.id}: cites the Socialstyrelsen guideline it uses`);
+    if (k.note) assert.ok(filled(k.note), `${d.id}: note in both languages`);
+    if (sosSources.length) sosDisorders.push(d.id);
+  }
+  // The guidelines that exist: depression and anxiety, schizophrenia-like, dementia, eating disorders, substance use
+  for (const id of ['mdd', 'gad', 'ptsd', 'ocd', 'schizophrenia', 'schizoaffective', 'delusional', 'brief_psychotic', 'major_ncd', 'anorexia', 'bulimia', 'bed', 'arfid', 'osfed', 'substance_mood']) {
+    assert.ok(sosDisorders.includes(id), `${id} cites Socialstyrelsen`);
+  }
+  assert.equal(sosDisorders.length, 27);
 });
 
 test('search by name, Swedish name, abbreviation and code', () => {

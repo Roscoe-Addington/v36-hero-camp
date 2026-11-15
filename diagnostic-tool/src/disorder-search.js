@@ -21,11 +21,25 @@ const ALIASES = {
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').trim();
 
-// Treatments with the most effective (best-supported) first; the order within
-// an evidence level is the order in the guideline-based content.
+// Treatments in the order shown on the disorder page: first those with a
+// priority in a Swedish national guideline (Socialstyrelsen, 1 = most
+// important), then the others by strength of evidence; within the same
+// level, the order of the guideline-based content. Treatments Socialstyrelsen
+// recommends only within research (FoU) or advises against (icke-göra) are
+// left out here; see otherTreatments().
+const order = (t) => (typeof t.sos === 'number' ? t.sos : 100 + EVIDENCE.indexOf(t.evidence));
 export function rankedTreatments(id) {
   const list = KNOWLEDGE[id]?.treatments ?? [];
-  return list.map((t, i) => ({ ...t, i })).sort((a, b) => EVIDENCE.indexOf(a.evidence) - EVIDENCE.indexOf(b.evidence) || a.i - b.i);
+  return list
+    .map((t, i) => ({ ...t, i }))
+    .filter((t) => t.sos !== 'fou' && t.sos !== 'dont')
+    .sort((a, b) => order(a) - order(b) || EVIDENCE.indexOf(a.evidence) - EVIDENCE.indexOf(b.evidence) || a.i - b.i);
+}
+
+// { research: only within research and development (FoU), advisedAgainst: icke-göra }
+export function otherTreatments(id) {
+  const list = KNOWLEDGE[id]?.treatments ?? [];
+  return { research: list.filter((t) => t.sos === 'fou'), advisedAgainst: list.filter((t) => t.sos === 'dont') };
 }
 
 export function searchDisorders(query) {

@@ -7,11 +7,17 @@ import { translator } from './i18n-clinician.js';
 import { findDisorder, DISORDERS, CATEGORIES } from './disorders.js';
 import { DIFFERENTIALS } from './differential-lists.js';
 import { KNOWLEDGE, EVIDENCE_LABELS } from './knowledge.js';
-import { rankedTreatments, categoryOf } from './disorder-search.js';
+import { rankedTreatments, otherTreatments, categoryOf } from './disorder-search.js';
 import { DESIGNS, SOURCES } from './evidence-watch.js';
 import { OUTCOMES } from './guidance.js';
 
 const pick = (both, lang) => (both ? both[lang] ?? both.en : '');
+// A source: a Socialstyrelsen guideline ({ label, url }) or a NICE code such as 'NICE NG222 (2022)'.
+function sourceLink(src, lang) {
+  if (typeof src === 'object') return html`<a href="${src.url}" rel="noopener noreferrer" target="_blank">${pick(src.label, lang)}</a>`;
+  const nice = String(src).match(/^NICE ([A-Z]+\d+)/);
+  return nice ? html`<a href="https://www.nice.org.uk/guidance/${nice[1].toLowerCase()}" rel="noopener noreferrer" target="_blank">${src}</a>` : String(src);
+}
 
 export function disorderSearchPage({ clinician, query = '', results = [] }) {
   const t = translator(clinician?.language);
@@ -47,6 +53,16 @@ export function disorderInfoPage({ clinician, disorder, evidence = [] }) {
   const lang = t.language;
   const info = KNOWLEDGE[disorder.id];
   const treatments = rankedTreatments(disorder.id);
+  const other = otherTreatments(disorder.id);
+  const fromSos = treatments.some((x) => typeof x.sos === 'number');
+  const treatment = (x) => html`<li>
+          <strong>${pick(x.what, lang)}</strong>
+          ${typeof x.sos === 'number' ? html`<span class="badge ok">${t('Socialstyrelsen priority {n}', { n: x.sos })}</span>` : fromSos && !x.sos ? html`<span class="badge info">${t('Not prioritised by Socialstyrelsen')}</span>` : ''}
+          ${x.sos === 'fou' || x.sos === 'dont' ? '' : html`<span class="badge ${x.evidence === 'strong' ? 'ok' : x.evidence === 'moderate' ? 'info' : 'warn'}">${pick(EVIDENCE_LABELS[x.evidence], lang)}</span>`}
+          ${x.sosId ? html` <span class="hint">(${t('id {id}', { id: x.sosId })})</span>` : ''}
+          ${x.note ? html`<br /><span class="hint">${pick(x.note, lang)}</span>` : ''}
+          ${x.differs ? html`<br /><span class="differs"><strong>${t('Guidelines differ:')}</strong> ${pick(x.differs, lang)}</span>` : ''}
+        </li>`;
   const rules = DIFFERENTIALS[disorder.id] ?? [];
   return layout({
     title: t(disorder.name),
@@ -59,12 +75,16 @@ export function disorderInfoPage({ clinician, disorder, evidence = [] }) {
 
       <section class="card">
         <h2>${t('Treatment')}</h2>
-        <p class="hint">${t('Most effective first: ordered by the strength of the evidence, then by guideline recommendation.')}</p>
-        <ol class="treatments">${treatments.map((x) => html`<li>
-          <strong>${pick(x.what, lang)}</strong> <span class="badge ${x.evidence === 'strong' ? 'ok' : x.evidence === 'moderate' ? 'info' : 'warn'}">${pick(EVIDENCE_LABELS[x.evidence], lang)}</span>
-          ${x.note ? html`<br /><span class="hint">${pick(x.note, lang)}</span>` : ''}
-        </li>`)}</ol>
-        ${info.sources.length ? html`<p class="hint">${t('Based on:')} ${info.sources.join('; ')}</p>` : html`<p class="hint">${t('No national guideline covers this disorder; based on smaller studies and expert consensus.')}</p>`}
+        <p class="hint">${fromSos
+          ? t('In order of Socialstyrelsen’s priority (1 = most important), then the treatments the Swedish guideline does not cover, by strength of evidence. Socialstyrelsen’s priority weighs the severity of the condition, the effect, the evidence and cost-effectiveness.')
+          : t('Most effective first: ordered by the strength of the evidence, then by guideline recommendation.')}</p>
+        ${info.note ? html`<p class="hint">${pick(info.note, lang)}</p>` : ''}
+        <ol class="treatments">${treatments.map(treatment)}</ol>
+        ${other.research.length ? html`<h3>${t('Only within research and development (Socialstyrelsen: FoU)')}</h3><ul class="treatments">${other.research.map(treatment)}</ul>` : ''}
+        ${other.advisedAgainst.length ? html`<h3>${t('Socialstyrelsen advises against (icke-göra)')}</h3><ul class="treatments">${other.advisedAgainst.map(treatment)}</ul>` : ''}
+        ${info.sources.length
+          ? html`<p class="hint">${t('Based on:')} ${info.sources.map((src, i) => html`${i ? '; ' : ''}${sourceLink(src, lang)}`)}</p>`
+          : html`<p class="hint">${t('No national guideline covers this disorder; based on smaller studies and expert consensus.')}</p>`}
         <p class="note">${t('Treatment information supports, but does not replace, clinical judgement and current national guidelines. Check doses, contraindications and interactions in FASS or the product information.')}</p>
       </section>
 

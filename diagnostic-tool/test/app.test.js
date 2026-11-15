@@ -803,12 +803,14 @@ test('disorder information: search from the top bar, ranked treatments, Swedish'
   const found = await get('/clinician/disorders?q=PTSD');
   assert.ok(found.includes('/clinician/disorders/ptsd'));
   const page = await get('/clinician/disorders/ptsd');
-  assert.ok(page.includes('Most effective first') && page.includes('Strong evidence'));
+  assert.ok(page.includes('In order of Socialstyrelsen’s priority') && page.includes('Socialstyrelsen priority 3') && page.includes('Guidelines differ:'));
+  assert.ok(page.includes('Socialstyrelsen advises against (icke-göra)') && page.includes('href="https://socialstyrelsen.se/'));
+  assert.ok((await get('/clinician/disorders/pica')).includes('Most effective first'), 'no Swedish guideline: ordered by evidence');
   assert.equal((await fetch(`${base}/clinician/disorders/nope`, { headers: { cookie } })).status, 404);
 
   await post('/clinician/language', { language: 'sv' }, cookie);
   const sv = await get('/clinician/disorders/ptsd');
-  assert.ok(sv.includes('Mest effektiv först') && sv.includes('Behandling'));
+  assert.ok(sv.includes('I ordning efter Socialstyrelsens prioritet') && sv.includes('Socialstyrelsen prioritet 3') && sv.includes('Behandling'));
   await post('/clinician/language', { language: 'en' }, cookie);
 });
 

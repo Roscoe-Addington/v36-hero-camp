@@ -23,7 +23,7 @@ const ENGLISH = /(?<![\p{L}\d])(the|and|with|not|only|are|of|to|from|this|that|h
 
 // Allowed: proper names, instrument names and author citations.
 const ALLOWED = [
-  /Mind Självmordslinjen/g, /et al\.?/g, /FT-AN/g, /US National Center for PTSD/g, /Pfizer Inc\./g,
+  /Mind Självmordslinjen/g, /et al\.?/g, /FT-AN/g, /acceptance and commitment therapy/gi, /US National Center for PTSD/g, /Pfizer Inc\./g,
 ];
 
 export function englishLeft(page) {

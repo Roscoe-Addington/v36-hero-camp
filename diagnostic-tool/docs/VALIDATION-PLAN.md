@@ -329,7 +329,7 @@ These are not questions, but they decide what the clinician sees.
 | --- | --- | --- | --- | --- |
 | ALG-1 | Suggestions for in-depth assessment | `src/suggestions.js` | In the gold-standard study: compare each *Suggested* / *Consider* with the reference diagnoses (sensitivity, specificity per disorder). | Open |
 | ALG-2 | Differential screening for MDD and GAD | `src/differential.js` | Same study; expert review of each rule. | Open |
-| ALG-3 | Rule-out lists (60 disorders) | `src/differential-lists.js` | Expert review against DSM-5-TR by two psychiatrists independently; resolve disagreements. | Open |
+| ALG-3 | Rule-out lists (60 disorders) | `src/differential-lists.js` | Expert review against DSM-5-TR by two psychiatrists or psychologists independently; resolve disagreements. | Open |
 | ALG-4 | Conflict rules for diagnoses | `src/conflicts.js` | Expert review against DSM-5-TR and ICD-10 coding rules. | Open |
 | ALG-5 | Response-quality thresholds (2 s per question; tiredness 7/10) | `src/response-quality.js` | Compare flagged and unflagged patients for test-retest agreement and agreement with the interview; adjust thresholds. | Open |
 | ALG-6 | Personality screen cut-off (3 of 8) and borderline count (5 of 8) | `src/suggestions.js` | Replaced by the cut-offs of the chosen instruments (route R), or set from the study. | Open |
@@ -342,7 +342,7 @@ These are not questions, but they decide what the clinician sees.
 | CON-3 | Intake interview and mental status examination form | `src/clinical-forms.js` | Expert review against local intake routines. | Open |
 | CON-4 | Suicide risk assessment and safety plan form | `src/clinical-forms.js` | Expert review against national guidance; by design it gives no risk score, so no predictive validation is planned. | Open |
 | CON-5 | Red-flag neurological prompts | `src/suggestions.js` | Neurologist review; audit of referrals. | Open |
-| CON-6 | Disorder summaries and treatments with evidence levels for 60 disorders (the order shown is "most effective first") | `src/knowledge.js` | Review by two psychiatrists against current NICE, Socialstyrelsen and other cited guidelines; re-check yearly and when a guideline changes. A regulatory review (MDR) is needed because treatment suggestions are shown. | Open |
+| CON-6 | Disorder summaries and treatments for 60 disorders. For the 27 disorders covered by a Swedish national guideline, treatments follow Socialstyrelsen's priorities with the recommendation id (depression and anxiety 2021, schizophrenia 2018, dementia 2017, eating disorders 2024, substance use 2019; checked against the guideline documents 2026-11-15); the rest are ordered by evidence level. Differences from NICE are shown | `src/knowledge.js` | Review by two psychiatrists or psychologists: every priority and id against the guideline's list of recommendations, and the treatments not in a Swedish guideline against NICE and other sources. Re-check yearly (ALG-10) and when a guideline changes: Socialstyrelsen will replace the depression/anxiety and schizophrenia guidelines with one guideline on psychiatric conditions in 2028. A regulatory review (MDR) is needed because treatment suggestions are shown. | Open |
 
 ## 7. Translations
 
@@ -353,7 +353,7 @@ These are not questions, but they decide what the clinician sees.
 | TRA-3 | Official Swedish clinical terms | All clinical content now has an unofficial Swedish translation (TRA-6). If a licence for the official Swedish DSM-5-TR text is obtained, replace the unofficial terms with it; check disorder names against ICD-10-SE. | Open |
 | TRA-5 | Swedish interface text on the clinician pages and in the emails to clinicians; the Swedish copyright footer on the patient pages | Review by a Swedish-speaking clinician (written for this app). | Open |
 | TRA-4 | Patient information text (consent page) | Written by the data protection officer in both languages. | Open |
-| TRA-6 | Swedish clinical content for all 60 disorders (unofficial translation in `src/i18n-clinical-sv*.js`): names, criteria, specifiers, notes, rule-out reasons, combination rules, suggestion reasons, the differential screening report, response-quality notes, follow-up summaries, medical warnings, disorder summaries and treatments, the research review pages | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
+| TRA-6 | Swedish clinical content for all 60 disorders (unofficial translation in `src/i18n-clinical-sv*.js`): names, criteria, specifiers, notes, rule-out reasons, combination rules, suggestion reasons, the differential screening report, response-quality notes, follow-up summaries, medical warnings, disorder summaries and treatments, the research review pages | Review by a Swedish-speaking psychiatrist or psychologist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
 
 ## 8. Order of work
 
@@ -387,3 +387,4 @@ These are not questions, but they decide what the clinician sees.
 | 2026-11-15 | Feeding and eating disorders added (8 disorders, now 60). New Part 11 "Eating and weight": SCOFF (4 validated items, 1 adapted) and 5 own items, with rows in 3.9 and candidates in section 4. ALG-8 added (BMI limits and medical warnings). TRA-6 added: from now on all new content is in Swedish and English, with an unofficial Swedish clinical translation to review. |
 | 2026-11-15 | All older clinical content translated to Swedish (TRA-6 now covers everything). Patient records, disorder information with ranked treatments (CON-6) and the PubMed research watch with clinician review (ALG-9) added; TRA-6 extended to the treatment content. |
 | 2026-11-15 | Research sources approved by the clinic: Europe PMC and ClinicalTrials.gov added to PubMed, 22 priority journals, and a yearly manual check of SBU, Socialstyrelsen, Kunskapsstyrning vård and Läkemedelsverket. ALG-9 extended, ALG-10 added. |
+| 2026-11-15 | Treatments aligned with Socialstyrelsen's national guidelines (priorities and recommendation ids; 27 disorders, up from 11), including the 2024 eating-disorder guideline. CON-6 rewritten. Reviews are by a psychiatrist or psychologist: the app primarily supports psychologists. |

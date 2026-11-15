@@ -5,7 +5,7 @@
 //
 // IMPORTANT: an UNOFFICIAL translation written for this app, like the rest
 // of CLINICAL_SV. The official Swedish DSM-5-TR text is licensed and is not
-// used. To be reviewed by a Swedish-speaking psychiatrist (TRA-6).
+// used. To be reviewed by a Swedish-speaking psychiatrist or psychologist (TRA-6).
 
 export const CORE_SV = {
   // ----- Categories -----

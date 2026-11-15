@@ -710,3 +710,5 @@ button.danger {
 .role-form { display: inline-flex; gap: 0.5rem; align-items: center; margin: 0; }
 .guidance-item { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.75rem; }
 .guidance-item h3 { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.treatments .badge { margin-left: 0.25rem; }
+.differs { display: inline-block; margin-top: 0.2rem; padding: 0.15rem 0.4rem; border-left: 3px solid var(--warn); background: var(--warn-bg); }

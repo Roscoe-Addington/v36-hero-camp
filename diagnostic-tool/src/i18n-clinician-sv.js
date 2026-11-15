@@ -897,4 +897,12 @@ export const SV = {
   "National guidelines (nationella riktlinjer), e.g. depression and anxiety, schizophrenia and eating disorders: new or revised recommendations.": "Nationella riktlinjer, t.ex. depression och ångest, schizofreni och ätstörningar: nya eller reviderade rekommendationer.",
   "Care pathways (vårdförlopp) and knowledge support from the national programme area for mental health.": "Vårdförlopp och kunskapsstöd från nationellt programområde psykisk hälsa.",
   "Treatment recommendations (behandlingsrekommendationer) and new safety information for psychiatric medicines.": "Behandlingsrekommendationer och ny säkerhetsinformation om psykiatriska läkemedel.",
+  // Socialstyrelsen priorities on the disorder page
+  "Socialstyrelsen priority {n}": "Socialstyrelsen prioritet {n}",
+  "Not prioritised by Socialstyrelsen": "Inte prioriterad av Socialstyrelsen",
+  "id {id}": "id {id}",
+  "Guidelines differ:": "Riktlinjerna skiljer sig åt:",
+  "In order of Socialstyrelsen’s priority (1 = most important), then the treatments the Swedish guideline does not cover, by strength of evidence. Socialstyrelsen’s priority weighs the severity of the condition, the effect, the evidence and cost-effectiveness.": "I ordning efter Socialstyrelsens prioritet (1 = mest angeläget), sedan de behandlingar som de svenska riktlinjerna inte omfattar, efter evidensstyrka. Socialstyrelsens prioritet väger samman tillståndets svårighetsgrad, effekt, evidens och kostnadseffektivitet.",
+  "Only within research and development (Socialstyrelsen: FoU)": "Endast inom forskning och utveckling (Socialstyrelsen: FoU)",
+  "Socialstyrelsen advises against (icke-göra)": "Socialstyrelsen avråder (icke-göra)",
 };

@@ -4,7 +4,7 @@
 //
 // IMPORTANT: this is an UNOFFICIAL translation written for this app. The
 // official Swedish DSM-5-TR wording is licensed and is not used here. Have a
-// Swedish-speaking psychiatrist review it (TRA-6 in docs/VALIDATION-PLAN.md),
+// Swedish-speaking psychiatrist or psychologist review it (TRA-6 in docs/VALIDATION-PLAN.md),
 // and replace it with the official terms if a licence is obtained.
 //
 // The older disorders' content is in i18n-clinical-sv-core.js (names,
