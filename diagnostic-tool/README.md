@@ -320,7 +320,8 @@ src/audit.js           the audit log
 src/item-sources.js    where each question comes from (validated / adapted / own)
 src/pdf-report.js      the final report as a PDF
 docs/VALIDATION-PLAN.md  what needs validating, and how (living document)
-src/access.js          who may see a patient (treating clinician + named colleagues)
+src/access.js          who may see a patient, and assigning patients to clinicians
+src/views-admin.js     the administration pages
 src/retention.js       how long data is kept, and automatic cleanup
 src/records.js         patient record entries and personal-number search
 src/views-records.js   record search and the record timeline
@@ -427,17 +428,41 @@ size or relevance of a study: that is the reviewer's job.
 
 ## Who can see a patient
 
-Only the **treating clinician** (who created the patient) and the
-**supervisors or close colleagues they name** can see a patient
-(`src/access.js`). Everyone else gets "not found", as if the record did
-not exist.
+Every clinician page, the patient records included, needs a login.
+Patients are **assigned to a clinician**: the clinician's name is linked to
+the patient (and so to the personal number), and the assignment history is
+kept (`src/access.js`). Who may see a patient:
 
-- A grant needs the colleague's clinician account, a role (supervisor or
-  close colleague), a **reason**, and optionally an **end date**.
-- Only the treating clinician can grant or revoke access and delete the
-  record. Grants, revocations and every view are in the audit log.
+| Who | Access |
+| --- | --- |
+| The clinician the patient is assigned to now (treating clinician) | Reads and changes the file; gets the "results ready" emails |
+| Clinicians the patient was assigned to before ("have worked with") | Read-only. With `FORMER_ACCESS_MONTHS` set, only for that many months after the assignment ended |
+| A supervisor or close colleague the treating clinician names | Read-only, with a reason and an optional end date |
+| Administrators (the highest access) | Read-only for every patient; assign and reassign patients |
+| Everyone else | "Not found", as if the record did not exist |
+
+- A new patient is assigned to the clinician who registers them.
+- **Administration** (top bar, administrators only) lists every patient
+  with their treating clinician, searchable by personal number or name and
+  filterable by clinician. "Assign" moves a patient to another clinician
+  with a **reason**; the earlier clinician keeps read-only access. The
+  start page still lists only the administrator's own patients.
+- An account becomes an administrator on the server:
+  `npm run create-clinician -- "Name" email --admin` (`--not-admin` takes
+  the role away).
+- Only the treating clinician can grant or revoke colleague access and
+  delete the record. Assignments, grants, revocations and every view are in
+  the audit log.
 - One shared access condition is used in every query that loads patient
   data, so no page can forget the check.
+
+> **Wide access needs a decision by the care provider.** Patientdatalagen
+> allows access to a patient's record only for those who take part in the
+> patient's care or otherwise need it for their work, and the care
+> provider must decide who gets which access (a needs analysis) and check
+> the access logs regularly. Before real use, decide who should be an
+> administrator, and whether former clinicians should keep access without
+> a limit (`FORMER_ACCESS_MONTHS`).
 
 ## How long data is kept
 

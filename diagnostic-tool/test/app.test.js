@@ -866,3 +866,86 @@ test('research watch: search now, review queue ranked, approve needs both langua
     delete app.locals.evidenceOptions;
   }
 });
+
+test('patient records and administration are behind login', async () => {
+  for (const path of ['/clinician/records', '/clinician/records?pn=19800101-1234', '/clinician/patients/1/record', '/clinician/admin', '/clinician/admin/patients/1']) {
+    const res = await fetch(base + path, { redirect: 'manual' });
+    assert.equal(res.status, 302, path);
+    assert.equal(res.headers.get('location'), '/login', path);
+  }
+  const res = await post('/clinician/patients/1/record', { kind: 'note', title: 'x', text: 'y' });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/login');
+});
+
+test('assignments: administrators read every file and reassign; clinicians see patients assigned to them now or before', async () => {
+  const login = async (email, password) => (await post('/login', { email, password })).headers.get('set-cookie').split(';')[0];
+  db.prepare('INSERT INTO clinicians (name, email, password_hash) VALUES (?, ?, ?)').run('Dr Second', 'second@example.com', hashPassword('second password long'));
+  db.prepare("INSERT INTO clinicians (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')").run('Ada Admin', 'admin@example.com', hashPassword('admin password long'));
+  const first = await login('dr@example.com', 'correct horse battery');
+  const second = await login('second@example.com', 'second password long');
+  const admin = await login('admin@example.com', 'admin password long');
+  const status = async (path, cookie) => (await fetch(base + path, { headers: { cookie }, redirect: 'manual' })).status;
+  const text = async (path, cookie) => (await fetch(base + path, { headers: { cookie } })).text();
+
+  const pn = pnForAge(52);
+  const patientPath = (await post('/clinician/patients', { first_name: 'Sten', last_name: 'Holm', personal_number: pn, gender: 'Male', age: '52', education: 'Upper secondary school', employed: '1', preferred_language: 'en' }, first)).headers.get('location');
+  const id = Number(patientPath.split('/').pop());
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_assignments WHERE patient_id = ? AND clinician_id = (SELECT id FROM clinicians WHERE email = ?) AND ended_at IS NULL').get(id, 'dr@example.com').n, 1, 'assigned to the clinician who registered the patient');
+
+  // Another clinician: not assigned, so nothing
+  assert.equal(await status(patientPath, second), 404);
+  assert.ok((await text(`/clinician/records?pn=${pn}`, second)).includes('No patient record you have access to'));
+  assert.equal(await status('/clinician/admin', second), 404, 'administration is for administrators only');
+  assert.equal((await post(`/clinician/admin/patients/${id}/assign`, { clinician_id: '1', reason: 'x' }, second)).status, 404);
+
+  // Administrator: finds and reads every file, read-only; not on their own start page
+  const found = await text(`/clinician/records?pn=${pn}`, admin);
+  assert.ok(found.includes(`/clinician/patients/${id}/record`) && found.includes('Dr Test'), 'found, with the treating clinician');
+  const adminView = await text(patientPath, admin);
+  assert.ok(adminView.includes('read-only access as administrator'));
+  assert.equal((await post(`${patientPath}/record`, { kind: 'note', title: 'x', text: 'y' }, admin)).status, 403);
+  assert.ok(!(await text('/clinician', admin)).includes('Holm'));
+  const list = await text(`/clinician/admin?q=${pn}`, admin);
+  assert.ok(list.includes('Holm, Sten') && list.includes('Dr Test'));
+  assert.ok((await text('/clinician', admin)).includes('href="/clinician/admin"'), 'Administration link for administrators');
+  assert.ok(!(await text('/clinician', first)).includes('href="/clinician/admin"'), 'no link for clinicians');
+
+  // Reassign: needs a clinician and a reason
+  const secondId = db.prepare("SELECT id FROM clinicians WHERE email = 'second@example.com'").get().id;
+  assert.equal((await post(`/clinician/admin/patients/${id}/assign`, { clinician_id: String(secondId), reason: '' }, admin)).status, 400);
+  assert.equal((await post(`/clinician/admin/patients/${id}/assign`, { clinician_id: '1', reason: 'Same' }, admin)).status, 400, 'already assigned');
+  const moved = await post(`/clinician/admin/patients/${id}/assign`, { clinician_id: String(secondId), reason: 'Dr Test is on leave' }, admin);
+  assert.equal(moved.status, 302);
+  assert.equal(db.prepare('SELECT clinician_id FROM patients WHERE id = ?').get(id).clinician_id, secondId);
+  const history = await text(`/clinician/admin/patients/${id}`, admin);
+  assert.ok(history.includes('Dr Test is on leave') && history.includes('Dr Second'));
+
+  // The new clinician: full access. The earlier one: read-only.
+  assert.ok((await text(`/clinician/records?pn=${pn}`, second)).includes(`/clinician/patients/${id}/record`));
+  assert.equal((await post(`${patientPath}/record`, { kind: 'treatment', title: 'Session 1', text: 'Started CBT.' }, second)).status, 302);
+  const former = await text(patientPath, first);
+  assert.ok(former.includes('you were the treating clinician until') && former.includes('Dr Second'));
+  assert.equal((await post(`${patientPath}/record`, { kind: 'note', title: 'x', text: 'y' }, first)).status, 403);
+  assert.ok((await text(`/clinician/records?pn=${pn}`, first)).includes(`/clinician/patients/${id}/record`), 'former patients are still found');
+
+  // The assignment is in the patient's audit log
+  const log = db.prepare("SELECT detail FROM audit_log WHERE action = 'assign_patient' AND patient_id = ?").get(id);
+  assert.equal(log.detail, 'Dr Test → Dr Second: Dr Test is on leave');
+
+  // FORMER_ACCESS_MONTHS limits how long earlier clinicians keep access
+  process.env.FORMER_ACCESS_MONTHS = '1';
+  try {
+    assert.equal(await status(patientPath, first), 200, 'ended today: still within a month');
+    db.prepare("UPDATE patient_assignments SET ended_at = '2020-01-01T00:00:00.000Z' WHERE patient_id = ? AND ended_at IS NOT NULL").run(id);
+    assert.equal(await status(patientPath, first), 404);
+    assert.ok((await text(`/clinician/records?pn=${pn}`, first)).includes('No patient record you have access to'));
+  } finally {
+    delete process.env.FORMER_ACCESS_MONTHS;
+  }
+  assert.equal(await status(patientPath, first), 200, 'without the setting there is no limit');
+
+  // Deleting the patient removes the assignments too
+  await post(`${patientPath}/delete`, { confirm_last_name: 'Holm', reason: 'Test' }, second);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM patient_assignments WHERE patient_id = ?').get(id).n, 0);
+});

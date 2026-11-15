@@ -65,7 +65,9 @@ const { hashPassword } = await import('../src/auth.js');
 const { ALL_FIELDS } = await import('../src/questionnaire.js');
 const { DISORDERS } = await import('../src/disorders.js');
 
-db.prepare('INSERT INTO clinicians (name, email, password_hash) VALUES (?, ?, ?)').run('Dr Device', 'device@example.com', hashPassword('device check password'));
+// An administrator, so the administration pages are checked too.
+db.prepare("INSERT INTO clinicians (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')").run('Dr Device', 'device@example.com', hashPassword('device check password'));
+db.prepare('INSERT INTO clinicians (name, email, password_hash) VALUES (?, ?, ?)').run('Dr Other', 'other@example.com', hashPassword('other check password'));
 const server = await new Promise((resolve) => {
   const s = app.listen(port, () => resolve(s));
 });
@@ -133,6 +135,8 @@ const PAGES = [
   ['disorders', '/clinician/disorders'],
   ['disorder', '/clinician/disorders/anorexia'],
   ['evidence', '/clinician/evidence'],
+  ['admin', '/clinician/admin'],
+  ['assign', `/clinician/admin/patients/${patientPath.split('/').pop()}`],
 ];
 
 // ---------- Checks run inside the page ----------

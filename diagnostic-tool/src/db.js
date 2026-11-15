@@ -154,6 +154,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS record_patient ON record_entries (patient_id);
 `);
 
+// Account role: 'admin' (the highest access: may read every patient file and
+// assign patients to clinicians) or 'clinician'.
+if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'role')) {
+  db.exec("ALTER TABLE clinicians ADD COLUMN role TEXT NOT NULL DEFAULT 'clinician'");
+}
+
+// Which clinician a patient is assigned to, and since when. The open row
+// (ended_at IS NULL) is the treating clinician now (also kept in
+// patients.clinician_id); ended rows are earlier treating clinicians, who
+// keep read-only access (access.js). Never deleted except with the patient.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS patient_assignments (
+    id           INTEGER PRIMARY KEY,
+    patient_id   INTEGER NOT NULL REFERENCES patients(id),
+    clinician_id INTEGER NOT NULL REFERENCES clinicians(id),
+    started_at   TEXT NOT NULL,
+    ended_at     TEXT,
+    assigned_by  INTEGER REFERENCES clinicians(id),
+    ended_by     INTEGER REFERENCES clinicians(id),
+    reason       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS assignments_patient ON patient_assignments (patient_id);
+  CREATE INDEX IF NOT EXISTS assignments_clinician ON patient_assignments (clinician_id, patient_id);
+`);
+// Patients from before assignments existed: assigned to their creator.
+db.exec(`INSERT INTO patient_assignments (patient_id, clinician_id, started_at)
+         SELECT p.id, p.clinician_id, replace(p.created_at, ' ', 'T') || 'Z' FROM patients p
+          WHERE NOT EXISTS (SELECT 1 FROM patient_assignments a WHERE a.patient_id = p.id)`);
+
 // The research watch (evidence-watch.js): articles found on PubMed, waiting
 // for a clinician to approve (with a summary in both languages) or reject.
 db.exec(`

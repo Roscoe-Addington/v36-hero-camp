@@ -21,18 +21,21 @@ export function recordSearchPage({ clinician, query = '', results = null }) {
           <input name="pn" type="search" required maxlength="20" value="${query}" placeholder="${t('e.g. YYYYMMDD-XXXX')}" autocomplete="off" inputmode="numeric" />
         </label>
         <button>${t('Search')}</button>
-        <p class="hint">${t('Finds the records you have access to: your own patients and those shared with you. With or without the dash, and with 10 or 12 digits.')}</p>
+        <p class="hint">${t(clinician?.role === 'admin'
+          ? 'As administrator you find every patient record (read-only unless the patient is assigned to you). With or without the dash, and with 10 or 12 digits.'
+          : 'Finds the patients assigned to you now or before, and those shared with you. With or without the dash, and with 10 or 12 digits.')}</p>
       </form>
       ${results === null
         ? ''
         : results.length === 0
           ? html`<p class="note">${t('No patient record you have access to matches this personal number.')}</p>`
           : html`<div class="table-scroll"><table>
-              <thead><tr><th>${t('Name')}</th><th>${t('Personal number')}</th><th>${t('Age')}</th><th>${t('Assessments')}</th><th>${t('Last entry')}</th><th></th></tr></thead>
+              <thead><tr><th>${t('Name')}</th><th>${t('Personal number')}</th><th>${t('Age')}</th><th>${t('Treating clinician')}</th><th>${t('Assessments')}</th><th>${t('Last entry')}</th><th></th></tr></thead>
               <tbody>${results.map((p) => html`<tr>
                 <td>${p.last_name}, ${p.first_name}</td>
                 <td class="code">${p.personal_number}</td>
                 <td>${p.age}</td>
+                <td>${p.clinician_name ?? ''}</td>
                 <td>${p.assessment_count}</td>
                 <td>${p.lastEntry ? p.lastEntry.toISOString().slice(0, 10) : '–'}</td>
                 <td><a class="button" href="/clinician/patients/${p.id}/record">${t('Open record')}</a></td>

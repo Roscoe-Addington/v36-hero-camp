@@ -95,6 +95,7 @@ export function layout({ title, clinician, body, language = 'en', patientLanguag
             <a href="/clinician/records">${t('Records')}</a>
             <a href="/clinician/disorders">${t('Disorders')}</a>
             <a href="/clinician/evidence">${t('Research')}</a>
+            ${clinician.role === 'admin' ? html`<a href="/clinician/admin">${t('Administration')}</a>` : ''}
             <a href="/clinician/retention">${t('Retention')}</a>
             ${patientLanguage ? '' : html`<form method="get" action="/clinician/disorders" class="inline topsearch" role="search">
               <input name="q" type="search" maxlength="80" aria-label="${t('Search for a disorder')}" placeholder="${t('Search disorders')}" />
@@ -258,13 +259,10 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
       ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : ''}
       <p class="record-links"><a href="/clinician/patients/${patient.id}/record">${t('Patient record')}</a> · ${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">${t('Edit details')}</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">${t('Audit log')}</a>
         ${keptUntil ? html`<br /><span class="hint">${t('Record kept until at least {date} ({years} years after the last entry).', { date: keptUntil.toISOString().slice(0, 10), years: retentionYears })}</span>` : ''}</p>
-      ${access.owner
-        ? ''
-        : html`<p class="note">${t('You have read-only access as {role}, granted by {by} (treating clinician{owner}) for: {reason}.', {
-            role: t(ROLE_NAMES[access.role] ?? access.role), by: access.grant.granted_by_name, owner: owner ? `: ${owner.name}` : '', reason: access.grant.reason,
-          })}${access.grant.expires_at ? ` ${t('Access ends {date}.', { date: access.grant.expires_at.slice(0, 10) })}` : ''}</p>`}
+      ${access.owner ? '' : readOnlyNote(t, access, owner)}
       <dl class="card details">
         <dt>${t('Personal number')}</dt><dd>${patient.personal_number}</dd>
+        <dt>${t('Treating clinician')}</dt><dd>${owner?.name ?? ''}</dd>
         <dt>${t('Gender')}</dt><dd>${t(patient.gender)}</dd>
         <dt>${t('Age')}</dt><dd>${patient.age}</dd>
         <dt>${t('Education')}</dt><dd>${t(patient.education)}</dd>
@@ -686,6 +684,19 @@ export function auditDetail(t, detail) {
 // ---------- Who has access (treating clinician only) ----------
 
 const ROLE_NAMES = { supervisor: 'Supervisor', colleague: 'Close colleague', owner: 'Treating clinician' };
+
+// Why someone who is not the treating clinician can read this patient.
+function readOnlyNote(t, access, owner) {
+  if (access.role === 'former') {
+    return html`<p class="note">${t('You have read-only access: you were the treating clinician until {date}. The treating clinician now is {owner}.', { date: access.assignment.ended_at.slice(0, 10), owner: owner?.name ?? '' })}</p>`;
+  }
+  if (access.role === 'admin') {
+    return html`<p class="note">${t('You have read-only access as administrator. The treating clinician is {owner}. Your views are in the audit log.', { owner: owner?.name ?? '' })}</p>`;
+  }
+  return html`<p class="note">${t('You have read-only access as {role}, granted by {by} (treating clinician{owner}) for: {reason}.', {
+    role: t(ROLE_NAMES[access.role] ?? access.role), by: access.grant.granted_by_name, owner: owner ? `: ${owner.name}` : '', reason: access.grant.reason,
+  })}${access.grant.expires_at ? ` ${t('Access ends {date}.', { date: access.grant.expires_at.slice(0, 10) })}` : ''}</p>`;
+}
 
 function grantStatus(t, g) {
   if (g.revoked_at) return html`<span class="badge ok">${t('Revoked {date}', { date: g.revoked_at.slice(0, 10) })}</span>`;

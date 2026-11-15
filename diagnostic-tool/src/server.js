@@ -31,6 +31,7 @@ import { parseFollowupAnswers, scoreFollowup } from './followup.js';
 import * as views from './views.js';
 import * as recordViews from './views-records.js';
 import * as knowledgeViews from './views-knowledge.js';
+import * as adminViews from './views-admin.js';
 import { searchDisorders } from './disorder-search.js';
 import { runEvidenceWatch, parseReview } from './evidence-watch.js';
 import * as workflow from './views-workflow.js';
@@ -45,7 +46,7 @@ import { clinicianLanguage, translator } from './i18n-clinician.js';
 import { ageFromPersonalNumber } from '../public/personal-number.js';
 import { cleanup, recordsDue, keptUntil, lastEntry, policy as retentionPolicy } from './retention.js';
 import { personalNumberKey, parseEntry } from './records.js';
-import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
+import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES, isAdmin, startAssignment, assignmentsFor, assignPatient } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -173,7 +174,7 @@ clinician.use((req, res, next) => {
   const patientId = patientIdForPath(req.path);
   if (patientId === null) return next();
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
-  const access = accessOf(req.clinician.id, patient);
+  const access = accessOf(req.clinician, patient);
   if (access && !access.owner) {
     return send(res, views.messagePage({ title: 'Read-only access', message: 'You have read-only access to this patient. Only the treating clinician can make changes.', clinician: req.clinician }), 403);
   }
@@ -186,8 +187,8 @@ clinician.use((req, res, next) => {
 function accessiblePatient(req) {
   const patient = db
     .prepare(`SELECT p.* FROM patients p WHERE p.id = :id AND ${ACCESS_SQL}`)
-    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
-  if (patient) req.access = accessOf(req.clinician.id, patient);
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician) });
+  if (patient) req.access = accessOf(req.clinician, patient);
   return patient;
 }
 
@@ -226,7 +227,7 @@ clinician.get('/', (req, res) => {
         WHERE ${ACCESS_SQL}
         ORDER BY p.last_name, p.first_name`
     )
-    .all(accessParams(req.clinician.id));
+    .all(accessParams(req.clinician, { asAdmin: false })); // the start page lists my patients, also for administrators
   send(res, views.dashboardPage({ clinician: req.clinician, patients }));
 });
 
@@ -272,6 +273,7 @@ clinician.post('/patients', (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(req.clinician.id, ...record);
+  startAssignment(Number(result.lastInsertRowid), req.clinician.id);
   audit(req.clinician.id, 'create_patient', { patientId: Number(result.lastInsertRowid) });
   res.redirect(`/clinician/patients/${result.lastInsertRowid}`);
 });
@@ -309,6 +311,7 @@ clinician.post('/patients/:id/delete', (req, res) => {
   db.prepare('DELETE FROM record_entries WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM assessments WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM patient_access WHERE patient_id = ?').run(patient.id);
+  db.prepare('DELETE FROM patient_assignments WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM patients WHERE id = ? AND clinician_id = ?').run(patient.id, req.clinician.id);
   audit(req.clinician.id, 'delete_patient', { patientId: patient.id, detail: clean(req.body.reason, 300) || null });
   send(res, views.messagePage({ title: 'Patient deleted', message: 'The patient record and all assessments were deleted. The deletion is kept in the audit log.', clinician: req.clinician }));
@@ -366,8 +369,9 @@ function showPatient(req, res, { newLink = null, followupLink = null, errors = [
 clinician.get('/patients/:id', (req, res) => showPatient(req, res));
 
 // ---------- Patient records ----------
-// Search by personal number among the patients this clinician may see (the
-// treating clinician's own, and those shared with them), and the full record
+// Search by personal number among the patients this clinician may see
+// (access.js: assigned now or before, shared with them, or every patient for
+// an administrator), and the full record
 // of one patient: assessments, interviews, follow-ups, clinical notes and
 // treatment reports.
 
@@ -377,9 +381,10 @@ clinician.get('/records', (req, res) => {
   if (query) {
     const key = personalNumberKey(query);
     results = db
-      .prepare(`SELECT p.*, (SELECT COUNT(*) FROM assessments a WHERE a.patient_id = p.id) AS assessment_count
+      .prepare(`SELECT p.*, (SELECT COUNT(*) FROM assessments a WHERE a.patient_id = p.id) AS assessment_count,
+                       (SELECT name FROM clinicians c WHERE c.id = p.clinician_id) AS clinician_name
                   FROM patients p WHERE ${ACCESS_SQL} ORDER BY p.last_name, p.first_name`)
-      .all(accessParams(req.clinician.id))
+      .all(accessParams(req.clinician))
       .filter((p) => personalNumberKey(p.personal_number) === key)
       .map((p) => ({ ...p, lastEntry: lastEntry(p.id) }));
     // The number itself is not written to the log, only that a search was made.
@@ -414,6 +419,57 @@ clinician.post('/patients/:id/record', (req, res) => {
     .run(patient.id, req.clinician.id, entry.kind, entry.title, entry.text, now());
   audit(req.clinician.id, 'add_record_entry', { patientId: patient.id, detail: entry.kind });
   res.redirect(`/clinician/patients/${patient.id}/record`);
+});
+
+// ---------- Administration: assigning patients to clinicians ----------
+// Only for accounts with the administrator role (npm run create-clinician --
+// ... --admin). Everyone else gets "not found".
+
+function requireAdmin(req, res, next) {
+  if (!isAdmin(req.clinician)) return send(res, views.messagePage({ title: 'Not found', message: 'This page does not exist.', clinician: req.clinician }), 404);
+  next();
+}
+
+const cliniciansWithCounts = () => db
+  .prepare(`SELECT c.id, c.name, c.email, c.role, (SELECT COUNT(*) FROM patients p WHERE p.clinician_id = c.id) AS patient_count
+              FROM clinicians c ORDER BY c.name`)
+  .all();
+
+clinician.get('/admin', requireAdmin, (req, res) => {
+  const query = clean(req.query.q, 80);
+  const clinicianFilter = Number(req.query.clinician) || null;
+  let patients = db
+    .prepare(`SELECT p.id, p.first_name, p.last_name, p.personal_number, p.age, p.clinician_id, c.name AS clinician_name,
+                     (SELECT MAX(a.started_at) FROM patient_assignments a WHERE a.patient_id = p.id AND a.ended_at IS NULL) AS assigned_since
+                FROM patients p JOIN clinicians c ON c.id = p.clinician_id ORDER BY p.last_name, p.first_name`)
+    .all();
+  if (clinicianFilter) patients = patients.filter((p) => p.clinician_id === clinicianFilter);
+  if (query) {
+    const key = personalNumberKey(query);
+    const words = query.toLowerCase();
+    patients = patients.filter((p) => personalNumberKey(p.personal_number) === key || `${p.first_name} ${p.last_name}`.toLowerCase().includes(words));
+  }
+  audit(req.clinician.id, 'view_admin', { detail: `${patients.length}` });
+  send(res, adminViews.adminPage({ clinician: req.clinician, query, clinicianFilter, patients: patients.slice(0, 500), total: patients.length, clinicians: cliniciansWithCounts() }));
+});
+
+function showAssign(req, res, { errors = [], values = {}, saved = false, status = 200 } = {}) {
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
+  if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
+  send(res, adminViews.assignPage({
+    clinician: req.clinician, patient, owner: ownerOf(patient), history: assignmentsFor(patient.id), clinicians: cliniciansWithCounts(), errors, values, saved,
+  }), status);
+}
+
+clinician.get('/admin/patients/:id', requireAdmin, (req, res) => showAssign(req, res, { saved: Boolean(req.query.saved) }));
+
+clinician.post('/admin/patients/:id/assign', requireAdmin, (req, res) => {
+  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
+  if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
+  const result = assignPatient({ patient, admin: req.clinician, toClinicianId: req.body.clinician_id, reason: req.body.reason });
+  if (result.error) return showAssign(req, res, { errors: [result.error], values: req.body, status: 400 });
+  audit(req.clinician.id, 'assign_patient', { patientId: patient.id, detail: `${result.from?.name ?? '?'} → ${result.to.name}: ${result.reason}` });
+  res.redirect(`/clinician/admin/patients/${patient.id}?saved=1`);
 });
 
 // ---------- Disorder information and the research watch ----------
@@ -535,14 +591,14 @@ function loadCase(req) {
       `SELECT a.* FROM assessments a JOIN patients p ON p.id = a.patient_id
         WHERE a.id = :id AND a.revoked = 0 AND ${ACCESS_SQL}`
     )
-    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician) });
   if (!assessment) return null;
   const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(assessment.patient_id);
   return {
     assessment,
     patient,
     // Supervisors and colleagues see the assessment but cannot change it.
-    readOnly: !accessOf(req.clinician.id, patient)?.owner,
+    readOnly: !accessOf(req.clinician, patient)?.owner,
     // The treating clinician, named in reports (not whoever is viewing).
     ownerName: ownerOf(patient).name,
     answers: parseJson(assessment.answers_json, null),
@@ -963,7 +1019,7 @@ function ownFollowup(req) {
       `SELECT f.* FROM followups f JOIN patients p ON p.id = f.patient_id
         WHERE f.id = :id AND f.revoked = 0 AND ${ACCESS_SQL}`
     )
-    .get({ id: Number(req.params.id), ...accessParams(req.clinician.id) });
+    .get({ id: Number(req.params.id), ...accessParams(req.clinician) });
 }
 
 // Scores and saves a follow-up once; emails the clinician in the background.

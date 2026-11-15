@@ -21,12 +21,13 @@ import { lang, STRINGS } from '../src/i18n.js';
 import { translator } from '../src/i18n-clinician.js';
 import * as knowledgeViews from '../src/views-knowledge.js';
 import * as recordViews from '../src/views-records.js';
+import * as adminViews from '../src/views-admin.js';
 import { searchDisorders } from '../src/disorder-search.js';
 import { parseReview } from '../src/evidence-watch.js';
 import { parseEntry, personalNumberKey } from '../src/records.js';
 import appCss from '../public/style.css';
 window.Demo = {
-  views, workflow, knowledgeViews, recordViews, searchDisorders, parseReview, parseEntry, personalNumberKey, scoreAll, runDifferential, parseAnswers, parsePartialAnswers, buildSuggestions, defaultLowEducation,
+  views, workflow, knowledgeViews, recordViews, adminViews, searchDisorders, parseReview, parseEntry, personalNumberKey, scoreAll, runDifferential, parseAnswers, parsePartialAnswers, buildSuggestions, defaultLowEducation,
   findDisorder, criterionIds, RATINGS, readyEmail, isUrgent, applyDiagnosis, parseIntake,
   parseInterview, parseRisk, parseInformant, finalizeBlocker, parseFollowupAnswers, scoreFollowup, ACTIONS, lang, STRINGS, appCss,
   PAGES, parsePage, applySkips, firstOpenPage, isShown, TIREDNESS_BREAK_AT, responseQuality, enableSkipLogic, translator, ageFromPersonalNumber, enableAgeFromPersonalNumber,

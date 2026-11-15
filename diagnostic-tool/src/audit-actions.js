@@ -34,4 +34,6 @@ export const ACTIONS = {
   approve_evidence: 'Approved research for the disorder information',
   reject_evidence: 'Rejected research',
   run_evidence_watch: 'Started a research search',
+  assign_patient: 'Assigned the patient to a clinician',
+  view_admin: 'Viewed the patient list (administration)',
 };
