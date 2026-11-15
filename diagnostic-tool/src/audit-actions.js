@@ -28,4 +28,7 @@ export const ACTIONS = {
   view_followup: 'Viewed follow-up',
   grant_access: 'Granted access',
   revoke_access: 'Revoked access',
+  search_records: 'Searched patient records',
+  view_record: 'Viewed patient record',
+  add_record_entry: 'Added record entry',
 };

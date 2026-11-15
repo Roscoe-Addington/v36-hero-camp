@@ -53,6 +53,7 @@ export function lastEntry(patientId) {
     db.prepare('SELECT created_at FROM patients WHERE id = ?').get(patientId)?.created_at,
     ...db.prepare('SELECT created_at, completed_at, finalized_at FROM assessments WHERE patient_id = ?').all(patientId)
       .flatMap((a) => [a.created_at, a.completed_at, a.finalized_at]),
+    ...db.prepare('SELECT created_at FROM record_entries WHERE patient_id = ?').all(patientId).map((r) => r.created_at),
     ...db.prepare('SELECT created_at, completed_at FROM followups WHERE patient_id = ?').all(patientId)
       .flatMap((f) => [f.created_at, f.completed_at]),
   ].map(parseDate).filter(Boolean);

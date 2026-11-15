@@ -92,6 +92,7 @@ export function layout({ title, clinician, body, language = 'en', patientLanguag
         ? html`<nav>
             <a href="/clinician">${t('Patients')}</a>
             <a href="/clinician/patients/new">${t('New patient')}</a>
+            <a href="/clinician/records">${t('Records')}</a>
             <a href="/clinician/retention">${t('Retention')}</a>
             ${patientLanguage ? '' : clinicianLanguageSwitch(t, clinician)}
             <form method="post" action="/logout" class="inline"><button class="link">${t('Log out ({name})', { name: clinician.name })}</button></form>
@@ -250,7 +251,7 @@ export function patientPage({ clinician, patient, assessments, newLink, followup
     body: html`
       <h1>${patient.first_name} ${patient.last_name}</h1>
       ${errors.length ? html`<div class="error" role="alert"><ul>${errors.map((e) => html`<li>${t(e)}</li>`)}</ul></div>` : ''}
-      <p class="record-links">${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">${t('Edit details')}</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">${t('Audit log')}</a>
+      <p class="record-links"><a href="/clinician/patients/${patient.id}/record">${t('Patient record')}</a> · ${access.owner ? html`<a href="/clinician/patients/${patient.id}/edit">${t('Edit details')}</a> · ` : ''}<a href="/clinician/patients/${patient.id}/audit">${t('Audit log')}</a>
         ${keptUntil ? html`<br /><span class="hint">${t('Record kept until at least {date} ({years} years after the last entry).', { date: keptUntil.toISOString().slice(0, 10), years: retentionYears })}</span>` : ''}</p>
       ${access.owner
         ? ''
@@ -664,6 +665,7 @@ export function auditDetail(t, detail) {
   if (m) return `${t(m[1] === 'onsite' ? 'On site' : 'Link')}, ${LANGUAGES[m[2]]}`;
   m = detail.match(/^Access #(\d+)$/);
   if (m) return t('Access #{n}', { n: m[1] });
+  if (detail === 'note' || detail === 'treatment') return t(detail === 'note' ? 'Clinical note' : 'Treatment report');
   m = detail.match(/^(.+?) as (Supervisor|Close colleague)(?: until (\d{4}-\d{2}-\d{2}))?: ([\s\S]*)$/);
   if (m) {
     const [, name, role, until, reason] = m;

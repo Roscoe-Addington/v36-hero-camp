@@ -29,6 +29,7 @@ import { runDifferential } from './differential.js';
 import { sendResultsEmail, sendFollowupEmail } from './email.js';
 import { parseFollowupAnswers, scoreFollowup } from './followup.js';
 import * as views from './views.js';
+import * as recordViews from './views-records.js';
 import * as workflow from './views-workflow.js';
 import { buildSuggestions } from './suggestions.js';
 import { findDisorder, criterionIds } from './disorders.js';
@@ -39,7 +40,8 @@ import { parseIntake } from './intake.js';
 import { audit, auditForPatient, ACTIONS } from './audit.js';
 import { clinicianLanguage, translator } from './i18n-clinician.js';
 import { ageFromPersonalNumber } from '../public/personal-number.js';
-import { cleanup, recordsDue, keptUntil, policy as retentionPolicy } from './retention.js';
+import { cleanup, recordsDue, keptUntil, lastEntry, policy as retentionPolicy } from './retention.js';
+import { personalNumberKey, parseEntry } from './records.js';
 import { ACCESS_SQL, accessParams, accessOf, grantsFor, grantAccess, revokeAccess, ROLES } from './access.js';
 import { parseInterview, parseRisk, parseInformant, finalizeBlocker } from './clinical-forms.js';
 
@@ -301,6 +303,7 @@ clinician.post('/patients/:id/delete', (req, res) => {
     return showPatient(req, res, { errors: ['To delete, type the patient\u2019s last name exactly.'], status: 400 });
   }
   db.prepare('DELETE FROM followups WHERE patient_id = ?').run(patient.id);
+  db.prepare('DELETE FROM record_entries WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM assessments WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM patient_access WHERE patient_id = ?').run(patient.id);
   db.prepare('DELETE FROM patients WHERE id = ? AND clinician_id = ?').run(patient.id, req.clinician.id);
@@ -358,6 +361,57 @@ function showPatient(req, res, { newLink = null, followupLink = null, errors = [
 }
 
 clinician.get('/patients/:id', (req, res) => showPatient(req, res));
+
+// ---------- Patient records ----------
+// Search by personal number among the patients this clinician may see (the
+// treating clinician's own, and those shared with them), and the full record
+// of one patient: assessments, interviews, follow-ups, clinical notes and
+// treatment reports.
+
+clinician.get('/records', (req, res) => {
+  const query = clean(req.query.pn, 20);
+  let results = null;
+  if (query) {
+    const key = personalNumberKey(query);
+    results = db
+      .prepare(`SELECT p.*, (SELECT COUNT(*) FROM assessments a WHERE a.patient_id = p.id) AS assessment_count
+                  FROM patients p WHERE ${ACCESS_SQL} ORDER BY p.last_name, p.first_name`)
+      .all(accessParams(req.clinician.id))
+      .filter((p) => personalNumberKey(p.personal_number) === key)
+      .map((p) => ({ ...p, lastEntry: lastEntry(p.id) }));
+    // The number itself is not written to the log, only that a search was made.
+    audit(req.clinician.id, 'search_records', { detail: `${results.length}` });
+  }
+  send(res, recordViews.recordSearchPage({ clinician: req.clinician, query, results }));
+});
+
+function showRecord(req, res, { errors = [], values = {}, status = 200 } = {}) {
+  const patient = accessiblePatient(req);
+  if (!patient) return send(res, views.messagePage({ title: 'Not found', message: 'No such patient.', clinician: req.clinician }), 404);
+  const assessments = db.prepare('SELECT * FROM assessments WHERE patient_id = ? ORDER BY created_at DESC, id DESC').all(patient.id);
+  const entries = db
+    .prepare(`SELECT e.*, c.name AS clinician_name FROM record_entries e JOIN clinicians c ON c.id = e.clinician_id
+               WHERE e.patient_id = ? ORDER BY e.created_at DESC, e.id DESC`)
+    .all(patient.id);
+  audit(req.clinician.id, 'view_record', { patientId: patient.id });
+  send(res, recordViews.recordPage({
+    clinician: req.clinician, patient, access: req.access, assessments, followups: followupsOf(patient.id), entries,
+    show: clean(req.query.show, 20), errors, values,
+  }), status);
+}
+
+clinician.get('/patients/:id/record', (req, res) => showRecord(req, res));
+
+clinician.post('/patients/:id/record', (req, res) => {
+  const patient = accessiblePatient(req);
+  if (!patient) return res.status(404).send('Not found');
+  const { entry, errors } = parseEntry(req.body);
+  if (errors) return showRecord(req, res, { errors, values: req.body, status: 400 });
+  db.prepare('INSERT INTO record_entries (patient_id, clinician_id, kind, title, text, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(patient.id, req.clinician.id, entry.kind, entry.title, entry.text, now());
+  audit(req.clinician.id, 'add_record_entry', { patientId: patient.id, detail: entry.kind });
+  res.redirect(`/clinician/patients/${patient.id}/record`);
+});
 
 // ---------- Starting an assessment: link or on site ----------
 

@@ -751,3 +751,45 @@ test('eating disorders end to end: screening page 11, BMI from the intake, urgen
   assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bulimia', action: 'confirm' }, cookie)).status, 400);
   assert.ok((await (await fetch(base + casePath, { headers: { cookie } })).text()).includes('<td class="code">F50.0</td>'));
 });
+
+test('patient records: search by personal number within access, notes and treatment reports, read-only colleagues', async () => {
+  const owner = (await post('/login', { email: 'dr@example.com', password: 'correct horse battery' })).headers.get('set-cookie').split(';')[0];
+  const pn = pnForAge(40);
+  const created = await post('/clinician/patients', { first_name: 'Rut', last_name: 'Berg', personal_number: pn, gender: 'Female', age: '40', education: 'Upper secondary school', employed: '1', preferred_language: 'sv' }, owner);
+  const patientPath = created.headers.get('location');
+  const casePath = (await post(`${patientPath}/assessments`, { mode: 'onsite' }, owner)).headers.get('location');
+  await post(`${casePath}/interview`, { reason: 'Nedstämdhet sedan våren' }, owner);
+
+  // Search: with or without the dash and century
+  const short = pn.slice(2).replace('-', '');
+  const found = await (await fetch(`${base}/clinician/records?pn=${short}`, { headers: { cookie: owner } })).text();
+  assert.ok(found.includes(`href="${patientPath}/record"`));
+  assert.ok((await (await fetch(`${base}/clinician/records?pn=19000101-0000`, { headers: { cookie: owner } })).text()).includes('No patient record you have access to'));
+
+  // Entries: refused without a heading, saved with one, shown in the record
+  assert.equal((await post(`${patientPath}/record`, { kind: 'treatment', title: '', text: 'x' }, owner)).status, 400);
+  assert.equal((await post(`${patientPath}/record`, { kind: 'treatment', title: 'Session 1, behavioural activation', text: 'Activity plan agreed.' }, owner)).status, 302);
+  assert.equal((await post(`${patientPath}/record`, { kind: 'note', title: 'Phone call', text: 'Feels a little better.' }, owner)).status, 302);
+  const record = await (await fetch(`${base}${patientPath}/record`, { headers: { cookie: owner } })).text();
+  for (const text of ['Session 1, behavioural activation', 'Activity plan agreed.', 'Phone call', 'Nedstämdhet sedan våren', `Assessment #${casePath.split('/').pop()}`]) assert.ok(record.includes(text), text);
+  const onlyTreatment = await (await fetch(`${base}${patientPath}/record?show=treatment`, { headers: { cookie: owner } })).text();
+  assert.ok(onlyTreatment.includes('Session 1') && !onlyTreatment.includes('Phone call'));
+  const log = db.prepare("SELECT action, detail FROM audit_log WHERE action IN ('view_record', 'add_record_entry', 'search_records') ORDER BY id").all();
+  assert.ok(log.some((l) => l.action === 'add_record_entry' && l.detail === 'treatment'));
+  assert.ok(!log.some((l) => String(l.detail).includes(short)), 'the searched number is not logged');
+
+  // Another clinician: not found without access; read-only with access
+  db.prepare('INSERT INTO clinicians (name, email, password_hash) VALUES (?, ?, ?)').run('Dr Records', 'records@example.com', hashPassword('records password long'));
+  const other = (await post('/login', { email: 'records@example.com', password: 'records password long' })).headers.get('set-cookie').split(';')[0];
+  assert.ok((await (await fetch(`${base}/clinician/records?pn=${pn}`, { headers: { cookie: other } })).text()).includes('No patient record you have access to'));
+  assert.equal((await fetch(`${base}${patientPath}/record`, { headers: { cookie: other } })).status, 404);
+  await post(`${patientPath}/access`, { action: 'grant', email: 'records@example.com', role: 'colleague', reason: 'Covering during leave' }, owner);
+  assert.ok((await (await fetch(`${base}/clinician/records?pn=${pn}`, { headers: { cookie: other } })).text()).includes(`${patientPath}/record`));
+  const readOnly = await (await fetch(`${base}${patientPath}/record`, { headers: { cookie: other } })).text();
+  assert.ok(readOnly.includes('Read-only access.') && !readOnly.includes('name="title"'));
+  assert.equal((await post(`${patientPath}/record`, { kind: 'note', title: 'x', text: 'y' }, other)).status, 403);
+
+  // Deleting the patient removes the entries too
+  await post(`${patientPath}/delete`, { confirm_last_name: 'Berg', reason: 'Test' }, owner);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM record_entries WHERE patient_id = ?').get(Number(patientPath.split('/').pop())).n, 0);
+});

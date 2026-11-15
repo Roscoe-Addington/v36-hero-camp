@@ -139,6 +139,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS access_clinician ON patient_access (clinician_id);
 `);
 
+// The patient record: clinical notes and treatment reports written by the
+// clinician (records.js). Never changed once saved; corrections are new entries.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS record_entries (
+    id           INTEGER PRIMARY KEY,
+    patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    clinician_id INTEGER NOT NULL REFERENCES clinicians(id),
+    kind         TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS record_patient ON record_entries (patient_id);
+`);
+
 // Each clinician chooses the language of the clinician pages ('en' or 'sv').
 if (!db.prepare('PRAGMA table_info(clinicians)').all().some((c) => c.name === 'language')) {
   db.exec("ALTER TABLE clinicians ADD COLUMN language TEXT NOT NULL DEFAULT 'en'");

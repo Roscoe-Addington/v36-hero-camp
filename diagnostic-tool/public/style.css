@@ -657,3 +657,34 @@ button.danger {
     flex: 1 1 100%;
   }
 }
+
+/* Patient records */
+.search { display: grid; gap: 0.5rem; }
+.search label { margin: 0; }
+.search button { justify-self: start; }
+.record-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+.record-filter a,
+.record-filter .current {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  text-decoration: none;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+.record-filter .current {
+  border-color: var(--accent);
+  background: var(--info-bg);
+  font-weight: 600;
+}
+.record-item h3 { margin: 0.2rem 0 0.4rem; }
+.record-item > p { margin: 0.3rem 0; }
+.record-item.entry-treatment { box-shadow: inset 4px 0 0 var(--ok); }
+.record-item.entry-note { box-shadow: inset 4px 0 0 var(--accent); }
