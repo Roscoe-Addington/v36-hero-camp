@@ -1,6 +1,6 @@
 // Prints every treatment with the badges it gets on the disorder page, for
 // the review in CON-6 (docs/VALIDATION-PLAN.md): check that no treatment a
-// psychologist gives is marked as a physician's, and that no medicine or
+// psychologist (or anyone the psychologist sees fit) gives is marked as a physician's, and that no medicine or
 // medical check is left unmarked.
 //
 // Usage: npm run list:badges
@@ -24,7 +24,7 @@ const titles = {
   rx: 'Prescribed by a physician',
   mixed: 'The medicine part is prescribed by a physician',
   check: 'Medical check (physician or nurse), shown first',
-  none: 'No badge (given by the psychologist or the team)',
+  none: 'No badge (given by the psychologist or anyone the psychologist sees fit to perform the task)',
 };
 for (const [group, list] of Object.entries(groups)) {
   console.log(`\n${titles[group]} (${list.length})`);

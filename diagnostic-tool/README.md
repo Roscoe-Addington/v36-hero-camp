@@ -396,6 +396,8 @@ disorder page has:
   or nurse)"** and shown **first**, in a box of their own ("Before and
   during treatment: medical checks"), because they concern safety; the
   numbered treatments below keep Socialstyrelsen's order.
+  Treatments without a badge are given by the psychologist or by anyone
+  the psychologist sees fit to perform the task.
   `npm run list:badges` prints every treatment with its badges, for review. Where NICE differs
   from Socialstyrelsen, the page says how ("Guidelines differ"). The
   sources are linked (`src/knowledge.js`, `src/disorder-search.js`);

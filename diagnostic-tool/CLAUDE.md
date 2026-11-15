@@ -2,6 +2,11 @@
 
 - **Users:** Continuum primarily supports psychologists in their clinical
   work (patients 16 and older). Medicines are prescribed by a physician.
+- **Who performs a treatment:** medicines and medical procedures are marked
+  "Prescribed by a physician"; blood tests, ECG and monitoring "Medical
+  check (physician or nurse)". Everything without a badge is performed by
+  the psychologist or by anyone the psychologist sees fit to perform the
+  task. Use this wording.
 - **Reviews:** wherever content needs expert review, write "psychiatrist or
   psychologist", never only "psychiatrist".
 - **Languages:** everything added is in both Swedish and English. In
