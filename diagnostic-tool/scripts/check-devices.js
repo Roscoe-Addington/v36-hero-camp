@@ -95,7 +95,8 @@ const answers = Object.fromEntries(ALL_FIELDS.map((f) => [f.id, '0']));
 Object.assign(answers, { phq1: '2', phq2: '3', phq3: '2', phq4: '2', phq7: '2', gad1: '2', gad2: '2', gad3: '2', consent_given: 'yes' });
 const start = await post(`${patientPath}/assessments`, { mode: 'onsite' }, cookie);
 const casePath = start.headers.get('location').replace('/screening', '');
-for (let page = 0; page < 10; page++) await post(`${casePath}/screening?page=${page}`, answers, cookie);
+const { PAGES: QUESTIONNAIRE_PAGES } = await import('../src/questionnaire.js');
+for (let page = 0; page < QUESTIONNAIRE_PAGES.length; page++) await post(`${casePath}/screening?page=${page}`, answers, cookie);
 await post(`${casePath}/interview`, { reason: 'Low mood and worry for several months' }, cookie);
 await post(`${casePath}/finalize`, {}, cookie);
 

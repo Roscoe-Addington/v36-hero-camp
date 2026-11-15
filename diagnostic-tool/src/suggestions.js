@@ -14,6 +14,7 @@
 import { findDisorder } from './disorders.js';
 import { scoreMoca } from './moca.js';
 import { STATUS as DIFF } from './differential.js';
+import { medicalWarnings } from './body.js';
 
 export const STRENGTH = { SUGGESTED: 'Suggested', CONSIDER: 'Consider' };
 
@@ -207,6 +208,43 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
     add('medical_ocrd', STRENGTH.CONSIDER, 'Obsessive-compulsive or related symptoms together with a medical condition.');
   }
 
+  // ----- Feeding and eating disorders -----
+  // SCOFF: 2 or more "Yes" suggests an eating disorder. A reason with a
+  // number in it is { text, vars }, so it can be translated.
+  const scoff = ['scoff1', 'scoff2', 'scoff3', 'scoff4', 'scoff5'].filter((id) => a[id] === YES).length;
+  const bmiValue = intake?.body?.bmi;
+  const lowBmi = bmiValue !== undefined && bmiValue !== null && bmiValue < 18.5;
+  const scoffReason = { text: 'SCOFF {score} of 5 (2 or more suggests an eating disorder).', vars: { score: scoff } };
+  const bmiReason = { text: 'BMI {bmi}: below 18.5.', vars: { bmi: bmiValue } };
+  const purging = a.scoff1 === YES || a.ed_comp === YES;
+  if ((scoff >= 2 && (a.scoff3 === YES || a.scoff4 === YES)) || (lowBmi && (scoff >= 2 || a.scoff4 === YES || a.scoff5 === YES))) {
+    add('anorexia', STRENGTH.SUGGESTED, scoffReason);
+    if (lowBmi) add('anorexia', STRENGTH.SUGGESTED, bmiReason);
+    if (a.scoff4 === YES) add('anorexia', STRENGTH.SUGGESTED, 'Believes they are fat when others say they are too thin.');
+  } else if (scoff >= 2 || lowBmi || a.scoff4 === YES) {
+    add('anorexia', STRENGTH.CONSIDER, lowBmi ? bmiReason : scoffReason);
+  }
+  if (a.scoff3 === YES && a.scoff4 === YES && bmiValue >= 18.5) {
+    add('osfed', STRENGTH.CONSIDER, 'Weight loss and feeling fat at a normal weight: consider atypical anorexia nervosa.');
+  }
+  if (a.ed_binge === YES && purging) {
+    add('bulimia', STRENGTH.SUGGESTED, 'Binge eating with compensatory behaviour (vomiting, laxatives, water tablets, fasting or hard exercise).');
+  } else if (purging) {
+    add('bulimia', STRENGTH.CONSIDER, 'Compensatory behaviour without reported binge eating.');
+    add('osfed', STRENGTH.CONSIDER, 'Purging without reported binge eating: consider purging disorder.');
+  }
+  if (a.ed_binge === YES && !purging) {
+    add('bed', STRENGTH.SUGGESTED, 'Binge eating with loss of control, without reported compensatory behaviour.');
+  } else if (a.scoff2 === YES && a.ed_binge !== YES) {
+    add('bed', STRENGTH.CONSIDER, 'Worries about having lost control over how much they eat.');
+  }
+  if (a.ed_arfid === YES) {
+    add('arfid', STRENGTH.SUGGESTED, 'Eats too little or too few kinds of food, for reasons other than weight or body shape.');
+    if (lowBmi) add('arfid', STRENGTH.SUGGESTED, bmiReason);
+  }
+  if (a.ed_pica === YES) add('pica', STRENGTH.SUGGESTED, 'Regularly eats things that are not food.');
+  if (a.ed_rum === YES) add('rumination', STRENGTH.SUGGESTED, 'Food often comes back up into the mouth after eating, without nausea.');
+
   // ----- From the intake interview and the informant -----
   const iv = interview ?? {};
   const inf = informant ?? {};
@@ -277,5 +315,7 @@ export function buildSuggestions({ answers: a, results, patient, intake, intervi
     .map((s) => ({ ...s, name: findDisorder(s.disorderId).name, category: findDisorder(s.disorderId).category }))
     .sort((x, y) => order(x) - order(y));
 
-  return { suggestions, neuroReferral, outOfScope, personality: { ...pd, borderlineTraits: bpd }, moca, delirium };
+  const medical = medicalWarnings({ answers: a, body: intake?.body, patient });
+
+  return { suggestions, neuroReferral, medical, outOfScope, personality: { ...pd, borderlineTraits: bpd }, moca, delirium, scoff };
 }

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { answers as makeAnswers, pnForAge } from './helpers.js';
 import { findDisorder, criterionIds } from '../src/disorders.js';
+import { PAGES } from '../src/questionnaire.js';
 
 process.env.DB_PATH = ':memory:';
 process.env.NODE_ENV = 'test';
@@ -42,11 +43,11 @@ const post = (path, fields, cookie) =>
     body: new URLSearchParams(Object.entries(fields).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : [[k, v]]))),
   });
 
-// Answers the questionnaire one page at a time (10 pages), like a patient
-// clicking "Next". Each page only takes its own questions from `fields`.
+// Answers the questionnaire one page at a time, like a patient clicking
+// "Next". Each page only takes its own questions from `fields`.
 async function answerPages(path, fields, cookie) {
   let res;
-  for (let page = 0; page < 10; page++) res = await post(`${path}?page=${page}`, fields, cookie);
+  for (let page = 0; page < PAGES.length; page++) res = await post(`${path}?page=${page}`, fields, cookie);
   return res;
 }
 
@@ -471,9 +472,9 @@ test('patient link page by page: skip logic, tiredness break, response-quality b
   const fields = makeAnswers({ auditc1: 0, auditc2: 2, psy1: 0, psy2: 1, tired: 8 });
   let breakSeen = false;
   let last;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < PAGES.length; i++) {
     const form = await (await fetch(`${base}${qPath}?page=${i}`)).text();
-    assert.ok(form.includes(`Part ${i + 1} of 10`), `progress shown on page ${i + 1}`);
+    assert.ok(form.includes(`Part ${i + 1} of ${PAGES.length}`), `progress shown on page ${i + 1}`);
     if (i === 0) assert.ok(form.includes('src="/skip.js"'));
     last = await post(`${qPath}?page=${i}`, fields);
     if (i === 2) {
@@ -716,4 +717,36 @@ test('age from the personal number: filled in when empty, checked when typed', a
   assert.ok(form.includes('<script type="module" src="/personal-number.js"></script>'));
   assert.ok(form.includes('data-personal-number') && form.includes('data-age ') && form.includes('data-age-hint hidden'));
   assert.equal((await fetch(`${base}/personal-number.js`)).status, 200);
+});
+
+test('eating disorders end to end: screening page 11, BMI from the intake, urgent warning, suggestions', async () => {
+  const login = await post('/login', { email: 'dr@example.com', password: 'correct horse battery' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const created = await post('/clinician/patients', {
+    first_name: 'Elin', last_name: 'Ros', personal_number: pnForAge(22), gender: 'Female', age: '22',
+    education: 'Upper secondary school', employed: '2', preferred_language: 'sv',
+  }, cookie);
+  const patientPath = created.headers.get('location');
+  const casePath = (await post(`${patientPath}/assessments`, { mode: 'onsite', language: 'sv' }, cookie)).headers.get('location');
+
+  // Part 11 is in Swedish (the patient's language)
+  const last = await (await fetch(`${base}${casePath}/screening?page=${PAGES.length - 1}`, { headers: { cookie } })).text();
+  assert.ok(last.includes('Ätande och vikt'));
+  assert.ok(last.includes('Framkallar du kräkning för att du känner dig obehagligt mätt?'));
+
+  await answerPages(`${casePath}/screening`, { ...makeAnswers({ scoff3: 1, scoff4: 1, scoff5: 1, ed_comp: 1 }), consent_given: 'yes' }, cookie);
+  assert.equal((await post(`${casePath}/intake`, { moca_administered: 'no', height_cm: '168', weight_kg: '39' }, cookie)).status, 302);
+  const hub = await (await fetch(base + casePath, { headers: { cookie } })).text();
+  assert.ok(hub.includes('Possible medical danger:'), 'BMI 13.8 is urgent');
+  assert.ok(hub.includes('168 cm, 39 kg, BMI 13.8'));
+  assert.ok(hub.includes('checklist?disorder=anorexia'));
+  assert.ok(hub.includes('Check potassium and other electrolytes'), 'purging warning');
+
+  // The anorexia checklist, and confirming bulimia next to anorexia is refused
+  const an = Object.fromEntries(['an_a', 'an_b', 'an_c'].map((id) => [id, 'present']));
+  await post(`${casePath}/checklist?disorder=anorexia`, { ...an, spec_type: 'binge_purge', spec_severity: 'extreme' }, cookie);
+  await post(`${casePath}/checklist?disorder=bulimia`, Object.fromEntries(criterionIds(findDisorder('bulimia')).map((id) => [id, 'present'])), cookie);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'anorexia', action: 'confirm' }, cookie)).status, 302);
+  assert.equal((await post(`${casePath}/diagnoses`, { disorder: 'bulimia', action: 'confirm' }, cookie)).status, 400);
+  assert.ok((await (await fetch(base + casePath, { headers: { cookie } })).text()).includes('<td class="code">F50.0</td>'));
 });

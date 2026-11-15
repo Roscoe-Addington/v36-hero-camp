@@ -258,6 +258,26 @@ export const SCREENING_SECTIONS = [
       { id: 'neuro6', text: 'Have you had a head injury where you were knocked out?', options: YES_NO_OPTIONS },
     ],
   },
+  {
+    // SCOFF (Morgan, Reid & Lacey, 1999): 2 or more "Yes" suggests an eating
+    // disorder. Item 3 says 6 kg instead of "one stone" (6.35 kg). The other
+    // items are written for this app (binge eating, compensation, ARFID,
+    // pica, rumination).
+    title: 'Eating and weight',
+    intro: 'These questions are about eating, food and body weight.',
+    items: [
+      { id: 'scoff1', text: 'Do you make yourself sick because you feel uncomfortably full?', options: YES_NO_OPTIONS },
+      { id: 'scoff2', text: 'Do you worry that you have lost control over how much you eat?', options: YES_NO_OPTIONS },
+      { id: 'scoff3', text: 'Have you recently lost more than 6 kg in a 3-month period?', options: YES_NO_OPTIONS },
+      { id: 'scoff4', text: 'Do you believe yourself to be fat when others say you are too thin?', options: YES_NO_OPTIONS },
+      { id: 'scoff5', text: 'Would you say that food dominates your life?', options: YES_NO_OPTIONS },
+      { id: 'ed_binge', text: 'Do you have episodes of eating an unusually large amount of food in a short time, with a feeling that you cannot stop?', options: YES_NO_OPTIONS },
+      { id: 'ed_comp', text: 'To make up for eating or to avoid gaining weight, do you regularly make yourself vomit, use laxatives or water tablets, fast, or exercise very hard?', options: YES_NO_OPTIONS },
+      { id: 'ed_arfid', text: 'Do you eat so little, or so few kinds of food, that you have lost weight or feel unwell, because of lack of interest in food, the taste, smell or texture of food, or fear of choking or vomiting (not because of your weight or body shape)?', options: YES_NO_OPTIONS },
+      { id: 'ed_pica', text: 'Do you regularly eat things that are not food (for example soil, clay, chalk, paper or hair)?', options: YES_NO_OPTIONS },
+      { id: 'ed_rum', text: 'Does food often come back up into your mouth after eating, without feeling sick, so that you chew it again, swallow it again or spit it out?', options: YES_NO_OPTIONS },
+    ],
+  },
 ];
 
 export const SCREENING_ITEMS = SCREENING_SECTIONS.flatMap((section) => section.items);

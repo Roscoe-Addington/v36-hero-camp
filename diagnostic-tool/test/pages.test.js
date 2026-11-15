@@ -4,10 +4,11 @@ import { PAGES, applySkips, isShown, parsePage, firstOpenPage, progress, findIte
 import { responseQuality, contradictionChecks, KIND } from '../src/response-quality.js';
 import { answers } from './helpers.js';
 
-test('10 pages; tiredness asked after parts 3 and 6', () => {
-  assert.equal(PAGES.length, 10);
+test('11 pages; tiredness asked after parts 3 and 6', () => {
+  assert.equal(PAGES.length, 11);
   assert.deepEqual(PAGES.filter((p) => p.tiredness).map((p) => p.part), [3, 6]);
-  assert.equal(PAGES.flatMap((p) => p.items).length, 95);
+  assert.equal(PAGES.flatMap((p) => p.items).length, 105);
+  assert.equal(PAGES.at(-1).section.title, 'Eating and weight');
 });
 
 test('every skip rule points to an earlier question on the same page', () => {
@@ -40,7 +41,7 @@ test('a page only counts shown questions as missing', () => {
 });
 
 test('progress and resuming at the first open page', () => {
-  assert.deepEqual(progress({}), { answered: 0, total: 95 });
+  assert.deepEqual(progress({}), { answered: 0, total: 105 });
   const done = answers({ psy1: 0, bp1: 0 });
   assert.equal(firstOpenPage({}), 0);
   assert.equal(firstOpenPage({ ...done, gad1: undefined }), 1);

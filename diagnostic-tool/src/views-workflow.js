@@ -5,8 +5,9 @@
 //
 // Uses the same auto-escaping html`...` helper as views.js. Interface text
 // goes through t() (i18n-clinician.js) so the pages work in English and
-// Swedish. Clinical rule content (criteria, rule-out reasons, suggestion
-// reasons) is still English only; see TRA-3 in docs/VALIDATION-PLAN.md.
+// Swedish. Clinical content (names, criteria, rule-out reasons, suggestion
+// reasons) also goes through t(): it is Swedish where i18n-clinical-sv.js has
+// it (the feeding and eating disorders), otherwise English (TRA-3).
 
 import { html, layout, screeningSections, employmentLabel } from './views.js';
 import { DISORDERS, CATEGORIES, findDisorder } from './disorders.js';
@@ -26,12 +27,36 @@ function levelBadge(t, level) {
 }
 
 // "Major depressive disorder + Bipolar I disorder"
-function pairName(r) {
-  return r.ids.map((id) => findDisorder(id).name).join(' + ');
+function pairName(t, r) {
+  return r.ids.map((id) => t(findDisorder(id).name)).join(' + ');
 }
 
 function conflictList(t, rules) {
-  return html`<ul class="conflicts">${rules.map((r) => html`<li>${levelBadge(t, r.level)} <strong>${pairName(r)}.</strong> ${r.message}</li>`)}</ul>`;
+  return html`<ul class="conflicts">${rules.map((r) => html`<li>${levelBadge(t, r.level)} <strong>${pairName(t, r)}.</strong> ${t(r.message)}</li>`)}</ul>`;
+}
+
+// A suggestion reason: plain text, or { text, vars } when it has numbers in it.
+// Decimals get a comma in Swedish (16,5).
+export function reasonText(t, reason) {
+  if (typeof reason === 'string') return t(reason);
+  const vars = Object.fromEntries(Object.entries(reason.vars ?? {}).map(([k, v]) => [k, decimal(t, v)]));
+  return t(reason.text, vars);
+}
+export function decimal(t, value) {
+  return typeof value === 'number' && t.language === 'sv' ? String(value).replace('.', ',') : value;
+}
+
+// Medical warning signs (body.js): urgent ones at the top, all of them in a list.
+function medicalAlert(t, suggestions) {
+  const urgent = (suggestions.medical ?? []).filter((m) => m.urgent);
+  if (!urgent.length) return '';
+  return html`<div class="alert" role="alert"><strong>${t('Possible medical danger:')}</strong> ${urgent.map((m) => reasonText(t, m.finding)).join('; ')}. ${reasonText(t, urgent[0].action)}</div>`;
+}
+function medicalList(t, suggestions) {
+  const list = suggestions.medical ?? [];
+  if (!list.length) return '';
+  return html`<h3>${t('Medical warning signs: check physical health')}</h3>
+    <ul>${list.map((m) => html`<li><strong>${reasonText(t, m.finding)}.</strong> ${reasonText(t, m.action)}</li>`)}</ul>`;
 }
 
 const RATING_LABELS = { present: 'Present', absent: 'Absent', unclear: 'Unclear' };
@@ -145,8 +170,9 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
         ? html`<div class="alert" role="alert"><strong>${t('Safety alert:')}</strong> ${t('the patient answered “{answer}” to PHQ-9 item 9 (thoughts of death or self-harm).', { answer: t(r.safetyAnswer) })} <a href="${base}/risk">${c.risk?.updated_at ? t('Open the risk assessment') : t('Start the suicide risk assessment')}</a>.</div>`
         : ''}
       ${suggestions.neuroReferral.some((n) => n.urgent)
-        ? html`<div class="alert" role="alert"><strong>${t('Possible urgent neurological symptoms:')}</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => n.finding).join('; ')}. ${t('Ask when they started; if within the last days, arrange emergency assessment.')}</div>`
+        ? html`<div class="alert" role="alert"><strong>${t('Possible urgent neurological symptoms:')}</strong> ${suggestions.neuroReferral.filter((n) => n.urgent).map((n) => t(n.finding)).join('; ')}. ${t('Ask when they started; if within the last days, arrange emergency assessment.')}</div>`
         : ''}
+      ${medicalAlert(t, suggestions)}
 
       ${interviewCard(t, base, c, locked)}
 
@@ -176,16 +202,16 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
       <section class="card">
         <h2>${t('6. In-depth assessment')}</h2>
         <p>${t('Based on the intake screening, assess these disorders with the full criteria checklist. You decide which to assess; the list only shows where the screening points.')}</p>
-        ${t.language === 'sv' ? html`<p class="hint">${t('Disorder names, criteria and reasons are in English until the official Swedish DSM-5-TR terminology is added.')}</p>` : ''}
+        ${t.language === 'sv' ? html`<p class="hint">${t('Disorder names, criteria and reasons are in English until the official Swedish DSM-5-TR terminology is added, except for the feeding and eating disorders (unofficial Swedish translation).')}</p>` : ''}
         ${suggestions.suggestions.length === 0
           ? html`<p class="hint">${t('The screening does not point toward any disorder in this app.')}</p>`
           : html`<div class="table-scroll"><table>
               <thead><tr><th>${t('Disorder')}</th><th>${t('Screening')}</th><th>${t('Why')}</th><th>${t('Checklist')}</th></tr></thead>
               <tbody>
                 ${suggestions.suggestions.map((s) => html`<tr>
-                  <td><a href="${base}/checklist?disorder=${s.disorderId}">${s.name}</a></td>
+                  <td><a href="${base}/checklist?disorder=${s.disorderId}">${t(s.name)}</a></td>
                   <td>${strengthBadge(t, s.strength)}</td>
-                  <td><ul class="compact">${s.reasons.map((x) => html`<li>${x}</li>`)}</ul></td>
+                  <td><ul class="compact">${s.reasons.map((x) => html`<li>${reasonText(t, x)}</li>`)}</ul></td>
                   <td>${evaluations[s.disorderId] ? criteriaBadge(t, evaluations[s.disorderId].status) : html`<span class="hint">${t('Not started')}</span>`}</td>
                 </tr>`)}
               </tbody>
@@ -197,21 +223,22 @@ export function casePage({ clinician, c, suggestions, errors = [] }) {
               <label>${t('Assess another disorder')}
                 <select name="disorder" required>
                   <option value="">${t('Choose…')}</option>
-                  ${CATEGORIES.map((cat) => html`<optgroup label="${cat.title}">
-                    ${DISORDERS.filter((d) => d.category === cat.id).map((d) => html`<option value="${d.id}">${d.name}</option>`)}
+                  ${CATEGORIES.map((cat) => html`<optgroup label="${t(cat.title)}">
+                    ${DISORDERS.filter((d) => d.category === cat.id).map((d) => html`<option value="${d.id}">${t(d.name)}</option>`)}
                   </optgroup>`)}
                 </select>
               </label>
               <button>${t('Open checklist')}</button>
             </form>`}
 
+        ${medicalList(t, suggestions)}
         ${suggestions.neuroReferral.length
           ? html`<h3>${t('Neurological symptoms: refer, do not diagnose here')}</h3>
-              <ul>${suggestions.neuroReferral.map((n) => html`<li><strong>${n.finding}.</strong> ${n.action}</li>`)}</ul>`
+              <ul>${suggestions.neuroReferral.map((n) => html`<li><strong>${t(n.finding)}.</strong> ${t(n.action)}</li>`)}</ul>`
           : ''}
         ${suggestions.outOfScope.length
           ? html`<h3>${t('Findings outside this app')}</h3>
-              <ul>${suggestions.outOfScope.map((o) => html`<li><strong>${o.condition}.</strong> ${o.reason}</li>`)}</ul>`
+              <ul>${suggestions.outOfScope.map((o) => html`<li><strong>${t(o.condition)}.</strong> ${reasonText(t, o.reason)}</li>`)}</ul>`
           : ''}
       </section>
 
@@ -237,6 +264,9 @@ function intakeSummary(t, intake, suggestions) {
       : t('not given')}</li>
     <li>${t('Delirium signs (CAM-style rule):')} ${suggestions.delirium.positive ? html`<strong>${t('positive')}</strong>` : t('negative')}</li>
     <li>${t('Catatonic signs:')} ${intake.catatonia === 'yes' ? html`<strong>${t('observed')}</strong>` : t('not observed')}</li>
+    <li>${t('Height and weight:')} ${intake.body
+      ? html`${t('{height} cm, {weight} kg, BMI {bmi}', { height: decimal(t, intake.body.height_cm), weight: decimal(t, intake.body.weight_kg), bmi: decimal(t, intake.body.bmi) })}`
+      : t('not measured')}</li>
     ${intake.notes ? html`<li>${t('Notes:')} ${intake.notes}</li>` : ''}
   </ul>`;
 }
@@ -275,6 +305,13 @@ function intakeForm(t, base, c) {
       ${yesNo(t, 'del_disorganized', t('Disorganised thinking (rambling, illogical, switching topics)'), obs.disorganized)}
       ${yesNo(t, 'del_consciousness', t('Altered level of consciousness (e.g. drowsy, hyperalert)'), obs.consciousness)}
 
+      <h3>${t('Height and weight')}</h3>
+      <p class="hint">${t('Measured at the visit. The app works out the BMI; the BMI limits are for adults (under 18, use BMI for age, ISO-BMI).')}</p>
+      <div class="grid2">
+        <label>${t('Height (cm)')} <input type="number" name="height_cm" min="100" max="250" step="0.5" inputmode="decimal" value="${intake.body?.height_cm ?? ''}" /></label>
+        <label>${t('Weight (kg)')} <input type="number" name="weight_kg" min="20" max="300" step="0.1" inputmode="decimal" value="${intake.body?.weight_kg ?? ''}" /></label>
+      </div>
+
       <h3>${t('Observed signs of catatonia')}</h3>
       ${yesNo(t, 'cat_signs', t('Three or more catatonic signs (e.g. stupor, mutism, posturing, negativism, waxy flexibility, echolalia)'), intake.catatonia)}
 
@@ -300,7 +337,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
           <thead><tr><th>ICD-10</th><th>${t('Diagnosis')}</th><th>${t('Criteria')}</th><th>${t('Note')}</th>${locked ? '' : html`<th></th>`}</tr></thead>
           <tbody>${confirmed.map((d) => html`<tr>
             <td class="code">${d.code}</td>
-            <td>${d.name}</td>
+            <td>${t(d.name)}</td>
             <td>${criteriaBadge(t, d.criteriaStatus)}</td>
             <td>${d.note}</td>
             ${locked
@@ -310,7 +347,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
         </table></div>`
       : html`<p class="hint">${t('No diagnosis confirmed yet.')}</p>`}
     ${checks.length ? html`<h3>${t('Checks for the confirmed diagnoses')}</h3>${conflictList(t, checks)}` : ''}
-    ${confirmed.filter((d) => d.conflictOverride).map((d) => html`<p class="note">${t('Reason for giving {name} despite a conflict:', { name: d.name })} ${d.conflictOverride}</p>`)}
+    ${confirmed.filter((d) => d.conflictOverride).map((d) => html`<p class="note">${t('Reason for giving {name} despite a conflict:', { name: t(d.name) })} ${d.conflictOverride}</p>`)}
 
     ${locked
       ? ''
@@ -326,7 +363,7 @@ function diagnosisSection(t, base, c, evaluations, locked) {
                 return html`<form method="post" action="${base}/diagnoses" class="confirm-row">
                   <input type="hidden" name="disorder" value="${id}" />
                   <input type="hidden" name="action" value="confirm" />
-                  <div><strong>${d.name}</strong> ${criteriaBadge(t, ev.status)} <span class="code">${ev.code}</span></div>
+                  <div><strong>${t(d.name)}</strong> ${criteriaBadge(t, ev.status)} <span class="code">${ev.code}</span></div>
                   <label>${ev.status === STATUS.MET ? t('Note (optional)') : t('Note (required)')}
                     <input name="note" maxlength="1000" ${ev.status === STATUS.MET ? '' : html`required`} />
                   </label>
@@ -520,11 +557,11 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
   const disabled = locked ? html`disabled` : '';
 
   return layout({
-    title: disorder.name,
+    title: t(disorder.name),
     clinician,
     body: html`
       <p><a href="${base}">← ${t('Back to the assessment')}</a></p>
-      <h1>${disorder.name}</h1>
+      <h1>${t(disorder.name)}</h1>
       <p class="hint">${patientLine(t, patient)}</p>
       ${errorList(t, errors)}
 
@@ -534,9 +571,9 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
           <li>${t('{present} present, {absent} absent, {unclear} unclear, {unrated} not rated', { present: ev.present.length, absent: ev.absent.length, unclear: ev.unclear.length, unrated: ev.unrated.length })}</li>
           ${ev.counts.map((n) => html`<li>${t('Symptom count: {present} of {of} present (at least {min} needed)', n)}</li>`)}
         </ul>
-        ${disorder.note ? html`<p class="note">${disorder.note}</p>` : ''}
-        ${disorder.codeNote ? html`<p class="hint">${t('Code:')} ${disorder.codeNote}</p>` : ''}
-        ${suggestion ? html`<p><strong>${t('Why the screening suggested this:')}</strong></p><ul>${suggestion.reasons.map((x) => html`<li>${x}</li>`)}</ul>` : ''}
+        ${disorder.note ? html`<p class="note">${t(disorder.note)}</p>` : ''}
+        ${disorder.codeNote ? html`<p class="hint">${t('Code:')} ${t(disorder.codeNote)}</p>` : ''}
+        ${suggestion ? html`<p><strong>${t('Why the screening suggested this:')}</strong></p><ul>${suggestion.reasons.map((x) => html`<li>${reasonText(t, x)}</li>`)}</ul>` : ''}
       </section>
 
       ${ruleOutSection(t, base, c, disorder)}
@@ -545,9 +582,9 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
 
       <form method="post" action="${base}/checklist?disorder=${disorder.id}">
         ${disorder.groups.map((g) => html`<section class="card">
-          <h2>${g.title}</h2>
+          <h2>${t(g.title)}</h2>
           ${g.items.map((item) => html`<fieldset class="criterion">
-            <legend>${item.label}</legend>
+            <legend>${t(item.label)}</legend>
             <div class="options">
               ${RATINGS.map((r) => html`<label class="choice rating-${r}"><input type="radio" name="${item.id}" value="${r}" ${checklist.ratings[item.id] === r ? html`checked` : ''} ${disabled} /> ${t(RATING_LABELS[r])}</label>`)}
             </div>
@@ -556,16 +593,16 @@ export function checklistPage({ clinician, c, disorder, suggestion, errors = [] 
 
         ${disorder.autoCriteria?.length
           ? html`<section class="card"><h2>${t('From the patient record')}</h2><ul>
-              ${disorder.autoCriteria.map((a) => html`<li>${a.label}: <strong>${evaluateRule(a.rule, {}, patient) ? t('Yes') : t('No')}</strong> (${t('age {age}', { age: patient.age })})</li>`)}
+              ${disorder.autoCriteria.map((a) => html`<li>${t(a.label)}: <strong>${evaluateRule(a.rule, {}, patient) ? t('Yes') : t('No')}</strong> (${t('age {age}', { age: patient.age })})</li>`)}
             </ul></section>`
           : ''}
 
         ${disorder.specifiers.length
           ? html`<section class="card"><h2>${t('Specifiers')}</h2>
-              ${disorder.specifiers.map((sp) => html`<label>${sp.label}
+              ${disorder.specifiers.map((sp) => html`<label>${t(sp.label)}
                 <select name="spec_${sp.id}" ${disabled}>
                   <option value="">${t('Not chosen')}</option>
-                  ${sp.options.map((o) => html`<option value="${o.value}" ${checklist.specifiers[sp.id] === o.value ? html`selected` : ''}>${o.label}</option>`)}
+                  ${sp.options.map((o) => html`<option value="${o.value}" ${checklist.specifiers[sp.id] === o.value ? html`selected` : ''}>${t(o.label)}</option>`)}
                 </select>
               </label>`)}
             </section>`
@@ -595,14 +632,14 @@ function ruleOutSection(t, base, c, disorder) {
       <tbody>
         ${list.map((item) => {
           if (item.outside) {
-            return html`<tr><td>${item.name}</td><td>${item.why}</td><td><span class="hint">${t('Not in this app: assess in the interview')}</span></td></tr>`;
+            return html`<tr><td>${t(item.name)}</td><td>${t(item.why)}</td><td><span class="hint">${t('Not in this app: assess in the interview')}</span></td></tr>`;
           }
           const other = findDisorder(item.id);
           const checklist = c.checklists[item.id];
           const confirmed = c.diagnoses.items.some((d) => d.disorderId === item.id);
           return html`<tr>
-            <td><a href="${base}/checklist?disorder=${item.id}">${other.name}</a></td>
-            <td>${item.why}</td>
+            <td><a href="${base}/checklist?disorder=${item.id}">${t(other.name)}</a></td>
+            <td>${t(item.why)}</td>
             <td>${confirmed ? html`<span class="badge warn">${t('Diagnosis confirmed')}</span> ` : ''}${checklist
               ? criteriaBadge(t, evaluateDisorder(other, checklist, c.patient).status)
               : html`<span class="hint">${t('Not assessed')}</span>`}</td>
@@ -651,18 +688,18 @@ export function finalReportPage({ clinician, c, suggestions }) {
         ${c.diagnoses.items.length
           ? html`<div class="table-scroll"><table>
               <thead><tr><th>ICD-10</th><th>${t('Diagnosis (DSM-5-TR)')}</th><th>${t('Criteria at confirmation')}</th><th>${t('Note')}</th></tr></thead>
-              <tbody>${c.diagnoses.items.map((d) => html`<tr><td class="code">${d.code}</td><td>${d.name}</td><td>${criteriaBadge(t, d.criteriaStatus)}</td><td>${d.note}</td></tr>`)}</tbody>
+              <tbody>${c.diagnoses.items.map((d) => html`<tr><td class="code">${d.code}</td><td>${t(d.name)}</td><td>${criteriaBadge(t, d.criteriaStatus)}</td><td>${d.note}</td></tr>`)}</tbody>
             </table></div>`
           : html`<p>${t('No diagnosis in the scope of this app was made.')}</p>`}
         ${checks.length ? html`<h3>${t('Combination checks')}</h3>${conflictList(t, checks)}` : ''}
-        ${c.diagnoses.items.filter((d) => d.conflictOverride).map((d) => html`<p class="note">${t('Reason for giving {name} despite a conflict:', { name: d.name })} ${d.conflictOverride}</p>`)}
+        ${c.diagnoses.items.filter((d) => d.conflictOverride).map((d) => html`<p class="note">${t('Reason for giving {name} despite a conflict:', { name: t(d.name) })} ${d.conflictOverride}</p>`)}
         ${c.diagnoses.finalNote ? html`<h3>${t('Summary')}</h3><p class="prewrap">${c.diagnoses.finalNote}</p>` : ''}
       </section>
 
       <section class="card">
         <h2>${t('In-depth assessments')}</h2>
         ${evaluations.length
-          ? html`<ul>${evaluations.map((e) => html`<li><strong>${e.disorder.name}</strong>: ${criteriaBadge(t, e.ev.status)}
+          ? html`<ul>${evaluations.map((e) => html`<li><strong>${t(e.disorder.name)}</strong>: ${criteriaBadge(t, e.ev.status)}
               ${e.ev.counts.map((n) => html` · ${t('{present} of {of} symptoms (at least {min})', n)}`)}
               ${e.notes ? html`<br /><span class="hint">${e.notes}</span>` : ''}</li>`)}</ul>`
           : html`<p class="hint">${t('No in-depth checklists were completed.')}</p>`}
@@ -689,11 +726,12 @@ export function finalReportPage({ clinician, c, suggestions }) {
           <li>${t('Safety (PHQ-9 item 9):')} ${r.safetyFlag ? html`<strong>${t(r.safetyAnswer)}</strong>` : t('Not at all')}</li>
           <li>MoCA: ${m ? `${m.adjusted}/30 (${t(m.band)})` : t('not given')}</li>
           <li>${t('Personality screen:')} ${suggestions.personality.score}/8 ${suggestions.personality.positive ? t('(positive)') : ''}</li>
-          <li>${t('Differential screening, positive:')} ${r.differential?.summary.flagged.join('; ') || t('none')}</li>
+          <li>${t('Differential screening, positive:')} ${r.differential?.summary.flagged.map((x) => t(x)).join('; ') || t('none')}</li>
           <li>${t('Response quality:')} ${r.quality ? (r.quality.flags.length ? signsToCheck(t, r.quality.flags.length) : t('No signs of tired or careless answering.')) : t('not recorded')}</li>
         </ul>
-        ${suggestions.neuroReferral.length ? html`<h3>${t('Neurological referral')}</h3><ul>${suggestions.neuroReferral.map((n) => html`<li>${n.finding}. ${n.action}</li>`)}</ul>` : ''}
-        ${suggestions.outOfScope.length ? html`<h3>${t('Findings outside this app')}</h3><ul>${suggestions.outOfScope.map((o) => html`<li>${o.condition}</li>`)}</ul>` : ''}
+        ${medicalList(t, suggestions)}
+        ${suggestions.neuroReferral.length ? html`<h3>${t('Neurological referral')}</h3><ul>${suggestions.neuroReferral.map((n) => html`<li>${t(n.finding)}. ${t(n.action)}</li>`)}</ul>` : ''}
+        ${suggestions.outOfScope.length ? html`<h3>${t('Findings outside this app')}</h3><ul>${suggestions.outOfScope.map((o) => html`<li>${t(o.condition)}</li>`)}</ul>` : ''}
       </section>
 
       ${amendmentHistory(t, c.amendments)}

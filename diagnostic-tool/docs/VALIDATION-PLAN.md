@@ -23,18 +23,19 @@ changes (see [How to keep this plan up to date](#how-to-keep-this-plan-up-to-dat
 
 ## 1. Summary
 
-The intake screening has **95 questions**:
+The intake screening has **105 questions**:
 
 | Source | Items | What it means |
 | --- | --- | --- |
-| Validated instruments, original wording | 27 | PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5. Their English versions are validated. |
-| Adapted from a validated instrument | 9 | SAPAS (8 items, reworded for self-report) and a single-question drug screen (reworded). The original validation does not automatically carry over. |
-| Written for this app | 59 | Not validated. |
+| Validated instruments, original wording | 31 | PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5, SCOFF (4 items). Their English versions are validated. |
+| Adapted from a validated instrument | 10 | SAPAS (8 items, reworded for self-report), a single-question drug screen (reworded) and SCOFF item 3 ("one stone" changed to 6 kg). The original validation does not automatically carry over. |
+| Written for this app | 64 | Not validated. |
 
 On top of the questions, the app contains **rules and clinical content**
 that also need checking: the suggestion rules, differential screening,
-rule-out lists, conflict rules, response-quality thresholds, 52 sets of
-diagnostic criteria labels, ICD-10 codes, and the clinician forms (section 6).
+rule-out lists, conflict rules, response-quality thresholds, 60 sets of
+diagnostic criteria labels, ICD-10 codes, BMI limits and medical warnings,
+and the clinician forms (section 6).
 
 **Validating a question is more than factor analysis.** For screening
 questions the key evidence is **diagnostic accuracy against a gold
@@ -177,6 +178,20 @@ _K: keep the factual question; cognitive interviews only._
 | `neuro5` | New severe headache | own | C | As neuro1 | Open |
 | `neuro6` | Head injury with loss of consciousness | own | C | As neuro1 | Open |
 
+### 3.9 Eating and weight (Part 11)
+
+SCOFF items 1, 2, 4 and 5 are the original wording (validated in English);
+their Swedish wording is unofficial (TRA-1).
+
+| Item | Measures | Source | Route | Plan | Status |
+| --- | --- | --- | --- | --- | --- |
+| `scoff3` | SCOFF item 3: recent weight loss | adapted | R | Use the original SCOFF wording, or a validated Swedish SCOFF version if one exists | Open |
+| `ed_binge` | Binge eating with loss of control | own | R | Replace ed_binge and ed_comp with the EDE-QS (or EDE-Q) binge-eating and compensation items | Open |
+| `ed_comp` | Compensatory behaviour (vomiting, laxatives, fasting, exercise) | own | R | As ed_binge | Open |
+| `ed_arfid` | Restrictive eating not driven by weight or shape (ARFID) | own | R | Replace with the NIAS (Nine Item ARFID Screen) | Open |
+| `ed_pica` | Eating non-food substances (pica) | own | C | Too rare to validate as a screen: keep as a prompt and assess in the interview (e.g. PARDI) | Open |
+| `ed_rum` | Regurgitation (rumination) | own | C | As ed_pica | Open |
+
 ## 4. Replacement candidates
 
 Before replacing, check for each instrument: **licence** (some are free
@@ -210,6 +225,9 @@ licence notes below are **to be verified**; none has been checked.
 | MSI-BPD | pd14–pd19 | 10 | Verify | Yes (verify) |
 | AD8 | cog1–cog2 | 8 | Copyrighted; free for clinical use with permission (verify) | Yes (verify) |
 | GAD-Q-IV | gadA–gadC6 | 9 | Verify | Verify |
+| SCOFF (original wording) | scoff3 | 5 | Reported free to use (verify) | Verify |
+| EDE-QS / EDE-Q | ed_binge, ed_comp | 12 / 28 | Verify | EDE-Q: yes (verify) |
+| NIAS (Nine Item ARFID Screen) | ed_arfid | 9 | Verify | Verify |
 
 Replacing everything above would make the questionnaire much longer.
 Decide per disorder whether a screening question is needed at all, or
@@ -311,12 +329,13 @@ These are not questions, but they decide what the clinician sees.
 | --- | --- | --- | --- | --- |
 | ALG-1 | Suggestions for in-depth assessment | `src/suggestions.js` | In the gold-standard study: compare each *Suggested* / *Consider* with the reference diagnoses (sensitivity, specificity per disorder). | Open |
 | ALG-2 | Differential screening for MDD and GAD | `src/differential.js` | Same study; expert review of each rule. | Open |
-| ALG-3 | Rule-out lists (52 disorders) | `src/differential-lists.js` | Expert review against DSM-5-TR by two psychiatrists independently; resolve disagreements. | Open |
+| ALG-3 | Rule-out lists (60 disorders) | `src/differential-lists.js` | Expert review against DSM-5-TR by two psychiatrists independently; resolve disagreements. | Open |
 | ALG-4 | Conflict rules for diagnoses | `src/conflicts.js` | Expert review against DSM-5-TR and ICD-10 coding rules. | Open |
 | ALG-5 | Response-quality thresholds (2 s per question; tiredness 7/10) | `src/response-quality.js` | Compare flagged and unflagged patients for test-retest agreement and agreement with the interview; adjust thresholds. | Open |
 | ALG-6 | Personality screen cut-off (3 of 8) and borderline count (5 of 8) | `src/suggestions.js` | Replaced by the cut-offs of the chosen instruments (route R), or set from the study. | Open |
 | ALG-7 | MoCA cut-offs (26, bands) and education point | `src/moca.js` | Check against published Swedish norms; consider a lower cut-off (23–24). | Open |
-| CON-1 | Criteria labels, rules and specifiers for 52 disorders | `src/disorders.js` | Expert review against the DSM-5-TR text, rule by rule; the test suite already checks that each rule works. | Open |
+| ALG-8 | BMI limits (15, 17.5, 18.5), medical warnings and the SCOFF cut-off (2 of 5) | `src/body.js`, `src/suggestions.js` | Review by a physician experienced in eating disorders against national guidance; under 18, BMI for age (ISO-BMI) should replace the adult limits. | Open |
+| CON-1 | Criteria labels, rules and specifiers for 60 disorders | `src/disorders.js` | Expert review against the DSM-5-TR text, rule by rule; the test suite already checks that each rule works. | Open |
 | CON-2 | ICD-10 codes | `src/disorders.js` | Check every code against ICD-10-SE. | Open |
 | CON-3 | Intake interview and mental status examination form | `src/clinical-forms.js` | Expert review against local intake routines. | Open |
 | CON-4 | Suicide risk assessment and safety plan form | `src/clinical-forms.js` | Expert review against national guidance; by design it gives no risk score, so no predictive validation is planned. | Open |
@@ -326,11 +345,12 @@ These are not questions, but they decide what the clinician sees.
 
 | ID | What | Plan | Status |
 | --- | --- | --- | --- |
-| TRA-1 | Swedish PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5 (unofficial translation in `src/i18n.js`) | Replace with the official validated Swedish versions; do not validate our own translation. | Open |
+| TRA-1 | Swedish PHQ-9, GAD-7, AUDIT-C, PC-PTSD-5, SCOFF (unofficial translation in `src/i18n.js`) | Replace with the official validated Swedish versions; do not validate our own translation. | Open |
 | TRA-2 | Swedish wording of the own and adapted items | Forward translation by two translators, reconciliation, back-translation, review, then cognitive interviews in Swedish (ISPOR / WHO translation guidance). Items replaced by instruments use the instrument's official Swedish version instead. | Open |
-| TRA-3 | Swedish clinical terms on the clinician pages | Interface, forms and messages are translated (`src/i18n-clinician-sv.js`). Still in English: disorder names, criteria labels, specifiers, rule-out reasons, conflict messages, suggestion reasons, the differential report and the MoCA error messages. Use the official Swedish DSM-5-TR terminology (licensed) and ICD-10-SE names; do not invent terms. | Open |
+| TRA-3 | Swedish clinical terms on the clinician pages | Interface, forms and messages are translated (`src/i18n-clinician-sv.js`). Still in English for the disorders added before the eating disorders: disorder names, criteria labels, specifiers, rule-out reasons, conflict messages, suggestion reasons, the differential report and the MoCA error messages (newer content: TRA-6). Use the official Swedish DSM-5-TR terminology (licensed) and ICD-10-SE names; do not invent terms. | Open |
 | TRA-5 | Swedish interface text on the clinician pages and in the emails to clinicians; the Swedish copyright footer on the patient pages | Review by a Swedish-speaking clinician (written for this app). | Open |
 | TRA-4 | Patient information text (consent page) | Written by the data protection officer in both languages. | Open |
+| TRA-6 | Swedish clinical content for the feeding and eating disorders and everything added after them (unofficial translation in `src/i18n-clinical-sv.js`): names, criteria, specifiers, rule-out reasons, combination rules, suggestion reasons, medical warnings | Review by a Swedish-speaking psychiatrist; replace with the official Swedish DSM-5-TR terms if a licence is obtained. | Open |
 
 ## 8. Order of work
 
@@ -361,3 +381,4 @@ These are not questions, but they decide what the clinician sees.
 | 2026-11-06 | First version: 68 items needing validation (59 own, 9 adapted), 12 rules and content components, 4 translation items. |
 | 2026-11-06 | Clinician pages translated into Swedish: TRA-3 narrowed to the clinical content, TRA-5 added (review of the Swedish interface text). |
 | 2026-11-09 | Patient's preferred language added; patient pages (and on-site questionnaires) now entirely in that language. TRA-5 extended to the Swedish emails and the patient-page copyright footer. |
+| 2026-11-15 | Feeding and eating disorders added (8 disorders, now 60). New Part 11 "Eating and weight": SCOFF (4 validated items, 1 adapted) and 5 own items, with rows in 3.9 and candidates in section 4. ALG-8 added (BMI limits and medical warnings). TRA-6 added: from now on all new content is in Swedish and English, with an unofficial Swedish clinical translation to review. |

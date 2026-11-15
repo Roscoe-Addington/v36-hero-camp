@@ -53,6 +53,20 @@ export const RULES = [
   ...rule(LEVEL.CONFLICT, 'adjustment', ['mdd', 'pdd', 'gad', 'ptsd', 'acute_stress', 'pgd'],
     'Adjustment disorder is only given when the criteria for another specific disorder are not met (criterion C), and not for prolonged grief.'),
 
+  // Feeding and eating: one eating-disorder diagnosis for the same eating problem.
+  ...rule(LEVEL.CONFLICT, 'anorexia', ['bulimia'],
+    'Bulimia nervosa is not given when the binge eating and purging occur only during anorexia nervosa. With a significantly low weight, give anorexia nervosa, binge-eating/purging type.'),
+  ...rule(LEVEL.CONFLICT, 'bed', ['bulimia', 'anorexia'],
+    'Binge-eating disorder is not given when there is recurrent compensatory behaviour (bulimia nervosa), or when the binge eating occurs only during anorexia or bulimia nervosa.'),
+  ...rule(LEVEL.CONFLICT, 'arfid', ['anorexia', 'bulimia'],
+    'ARFID is not given when the restriction occurs only during anorexia or bulimia nervosa, or comes with a disturbed experience of body weight or shape.'),
+  ...rule(LEVEL.CONFLICT, 'rumination', ['anorexia', 'bulimia', 'bed', 'arfid'],
+    'Rumination disorder is not given when the regurgitation occurs only during another feeding or eating disorder.'),
+  ...rule(LEVEL.CONFLICT, 'osfed', ['anorexia', 'bulimia', 'bed', 'arfid', 'pica', 'rumination', 'ufed'],
+    'Other specified and unspecified feeding or eating disorder are only given when the full criteria for a specific feeding or eating disorder are not met.'),
+  ...rule(LEVEL.CONFLICT, 'ufed', ['anorexia', 'bulimia', 'bed', 'arfid', 'pica', 'rumination'],
+    'Other specified and unspecified feeding or eating disorder are only given when the full criteria for a specific feeding or eating disorder are not met.'),
+
   // ----- Allowed only if a condition holds -----
   ...rule(LEVEL.CHECK, 'substance_mood', MOOD_DISORDERS,
     'A substance/medication-induced disorder is only given when the symptoms are NOT better explained by an independent disorder. Give both only if the independent disorder clearly stands on its own (e.g. it started before the use) and the substance causes separate symptoms.'),
@@ -74,6 +88,12 @@ export const RULES = [
     'Both can be given, but check that the mood episodes are distinct periods lasting days, not the reactive mood changes of borderline personality disorder.'),
   ...rule(LEVEL.CHECK, 'mdd', ['major_ncd', 'mild_ncd'],
     'Depression can cause cognitive problems that improve with treatment. Give the neurocognitive disorder only if the decline is not better explained by the depression; consider reassessing cognition after treatment.'),
+  ...rule(LEVEL.CHECK, 'mdd', ['anorexia', 'bulimia', 'bed', 'arfid'],
+    'Both can be given. Check that the weight or appetite change counted for depression is not explained by the eating disorder, and reassess mood after nutritional recovery: starvation itself lowers mood.'),
+  ...rule(LEVEL.CHECK, 'ocd', ['anorexia', 'bulimia', 'arfid'],
+    'Both can be given only if there are obsessions or compulsions that are not about food, weight, shape or eating.'),
+  ...rule(LEVEL.CHECK, 'bdd', ['anorexia', 'bulimia'],
+    'Body dysmorphic disorder is not given when the concern is only about body fat or weight in someone with an eating disorder (BDD criterion D). Give both only if there are other appearance concerns.'),
   ...rule(LEVEL.CHECK, 'delirium', ['mild_ncd'],
     'A neurocognitive disorder cannot be diagnosed from deficits that occur only during a delirium. Reassess cognition after the delirium has cleared.'),
   ...rule(LEVEL.CHECK, 'delirium', ['major_ncd'],

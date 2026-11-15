@@ -47,6 +47,19 @@ export const SV = {
   Student: 'Studerar',
   Language: 'Språk', // MoCA domain
   'Patient’s preferred language': 'Patientens önskade språk',
+  // ----- Height, weight and medical warnings -----
+  'Possible medical danger:': 'Möjlig somatisk fara:',
+  'Medical warning signs: check physical health': 'Somatiska varningstecken: kontrollera den fysiska hälsan',
+  'Height and weight:': 'Längd och vikt:',
+  '{height} cm, {weight} kg, BMI {bmi}': '{height} cm, {weight} kg, BMI {bmi}',
+  'not measured': 'inte uppmätt',
+  'Height and weight': 'Längd och vikt',
+  'Measured at the visit. The app works out the BMI; the BMI limits are for adults (under 18, use BMI for age, ISO-BMI).': 'Mäts vid besöket. Appen räknar ut BMI; BMI-gränserna gäller vuxna (under 18 år används BMI för ålder, ISO-BMI).',
+  'Height (cm)': 'Längd (cm)',
+  'Weight (kg)': 'Vikt (kg)',
+  'Enter both height and weight, or neither.': 'Fyll i både längd och vikt, eller ingetdera.',
+  'Height must be between 100 and 250 cm.': 'Längden måste vara mellan 100 och 250 cm.',
+  'Weight must be between 20 and 300 kg.': 'Vikten måste vara mellan 20 och 300 kg.',
   // ----- Audit log details -----
   'No changes': 'Inga ändringar',
   'Changed: {fields}': 'Ändrat: {fields}',
@@ -327,7 +340,7 @@ export const SV = {
   'Add informant information': 'Lägg till uppgifter från närstående',
   '6. In-depth assessment': '6. Fördjupad bedömning',
   'Based on the intake screening, assess these disorders with the full criteria checklist. You decide which to assess; the list only shows where the screening points.': 'Utifrån screeningen: bedöm dessa tillstånd med den fullständiga kriteriechecklistan. Du avgör vilka som bedöms; listan visar bara vart screeningen pekar.',
-  'Disorder names, criteria and reasons are in English until the official Swedish DSM-5-TR terminology is added.': 'Diagnosnamn, kriterier och motiveringar visas på engelska tills den officiella svenska terminologin för DSM-5-TR har lagts in.',
+  'Disorder names, criteria and reasons are in English until the official Swedish DSM-5-TR terminology is added, except for the feeding and eating disorders (unofficial Swedish translation).': 'Namn på tillstånd, kriterier och skäl är på engelska tills den officiella svenska DSM-5-TR-terminologin lagts in, utom för ätstörningarna (inofficiell svensk översättning).',
   'The screening does not point toward any disorder in this app.': 'Screeningen pekar inte mot något tillstånd i appen.',
   Disorder: 'Tillstånd',
   Screening: 'Screening',

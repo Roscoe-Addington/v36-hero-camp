@@ -13,6 +13,7 @@ import { summaryRows } from './forms.js';
 import { INTERVIEW, MSE, RISK, INFORMANT, riskIndicators } from './clinical-forms.js';
 import { scoreMoca } from './moca.js';
 import { translator } from './i18n-clinician.js';
+import { reasonText } from './views-workflow.js';
 import { employmentLabel } from './views.js';
 
 // Characters WinAnsi has above Latin-1 (code points 0x80-0x9F in Windows-1252).
@@ -99,9 +100,9 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
   heading(t('Diagnoses'));
   if (c.diagnoses.items.length) {
     for (const d of c.diagnoses.items) {
-      para(`${d.code}   ${d.name}`, { bold: true });
+      para(`${d.code}   ${t(d.name)}`, { bold: true });
       para(`${t('Criteria at confirmation: {status}', { status: t(d.criteriaStatus) })}${d.note ? `. ${t('Note: {note}', { note: d.note })}` : ''}`, { size: 9, color: COLOR.muted });
-      if (d.conflictOverride) para(`${t('Reason for giving {name} despite a conflict:', { name: d.name })} ${d.conflictOverride}`, { size: 9, color: COLOR.danger });
+      if (d.conflictOverride) para(`${t('Reason for giving {name} despite a conflict:', { name: t(d.name) })} ${d.conflictOverride}`, { size: 9, color: COLOR.danger });
     }
   } else {
     none(t('No diagnosis in the scope of this app was made.'));
@@ -109,7 +110,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
   const checks = conflictsAmong(c.diagnoses.items.map((d) => d.disorderId));
   if (checks.length) {
     para(t('Combination checks'), { bold: true });
-    for (const k of checks) bullet(`${t(k.level)}: ${k.ids.map((id) => findDisorder(id).name).join(' + ')}. ${k.message}`);
+    for (const k of checks) bullet(`${t(k.level)}: ${k.ids.map((id) => t(findDisorder(id).name)).join(' + ')}. ${t(k.message)}`);
   }
   if (c.diagnoses.finalNote) {
     para(t('Summary'), { bold: true });
@@ -122,7 +123,7 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
     for (const [id, checklist] of assessed) {
       const ev = evaluateDisorder(findDisorder(id), checklist, patient);
       const counts = ev.counts.map((n) => t('{present} of {of} symptoms (at least {min})', n)).join('; ');
-      bullet(`${findDisorder(id).name}: ${t(ev.status)}${counts ? `, ${counts}` : ''}${checklist.notes ? `. ${checklist.notes}` : ''}`);
+      bullet(`${t(findDisorder(id).name)}: ${t(ev.status)}${counts ? `, ${counts}` : ''}${checklist.notes ? `. ${checklist.notes}` : ''}`);
     }
   } else {
     none(t('No in-depth checklists were completed.'));
@@ -152,17 +153,21 @@ export function finalReportPdf({ c, suggestions, clinicianName, language = 'en' 
     { label: t('Safety (PHQ-9 item 9):'), value: r.safetyFlag ? t(r.safetyAnswer) : t('Not at all') },
     { label: 'MoCA', value: m ? `${m.adjusted}/30 (${t(m.band)})` : t('not given') },
     { label: t('Personality screen:'), value: `${suggestions.personality.score}/8${suggestions.personality.positive ? ` ${t('(positive)')}` : ''}` },
-    { label: t('Differential screening, positive:'), value: r.differential?.summary.flagged.join('; ') || t('none') },
+    { label: t('Differential screening, positive:'), value: r.differential?.summary.flagged.map((x) => t(x)).join('; ') || t('none') },
     { label: t('Response quality:'), value: r.quality ? (r.quality.flags.length ? (r.quality.flags.length === 1 ? t('1 sign to check in the interview.') : t('{n} signs to check in the interview.', { n: r.quality.flags.length })) : t('No signs of tired or careless answering.')) : t('not recorded') },
   ]);
   for (const f of r.quality?.flags ?? []) bullet(`${t(f.kind)}: ${f.text}`);
+  if (suggestions.medical?.length) {
+    para(t('Medical warning signs: check physical health'), { bold: true });
+    for (const m of suggestions.medical) bullet(`${reasonText(t, m.finding)}. ${reasonText(t, m.action)}`);
+  }
   if (suggestions.neuroReferral.length) {
     para(t('Neurological referral'), { bold: true });
-    for (const n of suggestions.neuroReferral) bullet(`${n.finding}. ${n.action}`);
+    for (const n of suggestions.neuroReferral) bullet(`${t(n.finding)}. ${t(n.action)}`);
   }
   if (suggestions.outOfScope.length) {
     para(t('Findings outside this app'), { bold: true });
-    for (const o of suggestions.outOfScope) bullet(o.condition);
+    for (const o of suggestions.outOfScope) bullet(t(o.condition));
   }
 
   if (c.amendments?.length) {

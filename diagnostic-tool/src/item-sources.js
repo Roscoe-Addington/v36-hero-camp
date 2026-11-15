@@ -18,6 +18,7 @@ const PHQ9 = { status: 'validated', instrument: 'PHQ-9 (Kroenke et al., 2001)' }
 const GAD7 = { status: 'validated', instrument: 'GAD-7 (Spitzer et al., 2006)' };
 const AUDITC = { status: 'validated', instrument: 'AUDIT-C (Bush et al., 1998)' };
 const PCPTSD5 = { status: 'validated', instrument: 'PC-PTSD-5 (Prins et al., 2016)' };
+const SCOFF = { status: 'validated', instrument: 'SCOFF (Morgan, Reid & Lacey, 1999)' };
 const OWN = { status: 'own' };
 
 export const ITEM_SOURCES = {
@@ -34,6 +35,9 @@ export const ITEM_SOURCES = {
   ...each(range('pd', 1, 8), { status: 'adapted', instrument: 'SAPAS (Moran et al., 2003), reworded for self-report' }),
   ...each(range('pd', 9, 19), OWN),
   ...each(['cog1', 'cog2', ...range('neuro', 1, 6)], OWN),
+  ...each(['scoff1', 'scoff2', 'scoff4', 'scoff5'], SCOFF),
+  scoff3: { status: 'adapted', instrument: 'SCOFF (Morgan, Reid & Lacey, 1999), "one stone" changed to 6 kg' },
+  ...each(['ed_binge', 'ed_comp', 'ed_arfid', 'ed_pica', 'ed_rum'], OWN),
 };
 
 export function needsValidation(id) {

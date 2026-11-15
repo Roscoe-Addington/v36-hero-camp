@@ -392,7 +392,7 @@ function differentialSection(t, differential) {
       <tbody>
         ${entries.map(
           (e) => html`<tr>
-            <td><a href="#diff-${e.id}">${e.condition}</a></td>
+            <td><a href="#diff-${e.id}">${t(e.condition)}</a></td>
             <td>${e.relevantTo.join(', ')}</td>
             <td>${statusBadge(t, e.status)}</td>
           </tr>`
@@ -414,16 +414,16 @@ function differentialSection(t, differential) {
     <h3>${t('Detailed reasoning')}</h3>
     ${entries.map(
       (e) => html`<details class="diff" id="diff-${e.id}" ${e.status === STATUS.FLAGGED || e.status === STATUS.POSSIBLE ? html`open` : ''}>
-        <summary><strong>${e.condition}</strong> ${statusBadge(t, e.status)}</summary>
+        <summary><strong>${t(e.condition)}</strong> ${statusBadge(t, e.status)}</summary>
         <dl>
-          <dt>${t('Why checked')}</dt><dd>${e.why}</dd>
-          <dt>${t('Rule applied')}</dt><dd>${e.rule}</dd>
+          <dt>${t('Why checked')}</dt><dd>${t(e.why)}</dd>
+          <dt>${t('Rule applied')}</dt><dd>${t(e.rule)}</dd>
           ${e.evidence.length
-            ? html`<dt>${t('Answers used')}</dt><dd><ul>${e.evidence.map((ev) => html`<li>${ev.question} — <strong>${t(ev.answer)}</strong></li>`)}</ul></dd>`
+            ? html`<dt>${t('Answers used')}</dt><dd><ul>${e.evidence.map((ev) => html`<li>${itemText(t.language, findItem(ev.id) ?? { text: ev.question })} — <strong>${t(ev.answer)}</strong></li>`)}</ul></dd>`
             : ''}
-          <dt>${t('Finding')}</dt><dd>${e.finding}</dd>
-          <dt>${t('What it means')}</dt><dd>${e.implication}</dd>
-          <dt>${t('Next step')}</dt><dd>${e.nextStep}</dd>
+          <dt>${t('Finding')}</dt><dd>${t(e.finding)}</dd>
+          <dt>${t('What it means')}</dt><dd>${t(e.implication)}</dd>
+          <dt>${t('Next step')}</dt><dd>${t(e.nextStep)}</dd>
         </dl>
       </details>`
     )}
@@ -671,7 +671,7 @@ export function auditDetail(t, detail) {
       : t('{name} as {role}: {reason}', { name, role: t(role).toLowerCase(), reason });
   }
   m = detail.match(/^(confirm|remove) (\S+)$/);
-  if (m) return t(m[1] === 'confirm' ? 'Confirmed: {name}' : 'Removed: {name}', { name: findDisorder(m[2])?.name ?? m[2] });
+  if (m) return t(m[1] === 'confirm' ? 'Confirmed: {name}' : 'Removed: {name}', { name: t(findDisorder(m[2])?.name ?? m[2]) });
   return detail;
 }
 

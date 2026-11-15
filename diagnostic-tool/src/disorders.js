@@ -34,6 +34,7 @@ export const CATEGORIES = [
   { id: 'psychotic', title: 'Schizophrenia spectrum and other psychotic disorders' },
   { id: 'trauma', title: 'Trauma- and stressor-related disorders' },
   { id: 'ocd', title: 'Obsessive-compulsive and related disorders' },
+  { id: 'eating', title: 'Feeding and eating disorders' },
 ];
 
 // ---------- Mood: depressive disorders ----------
@@ -1478,6 +1479,211 @@ const medicalOcrd = {
   codeNote: 'Also code the medical condition itself.',
 };
 
+// ---------- Feeding and eating disorders ----------
+// Severity of anorexia nervosa follows BMI in adults (DSM-5-TR); for
+// patients under 18, use BMI for age (in Sweden ISO-BMI) instead.
+
+const BINGE_A = [
+  one('{p}_a1', 'Eating, in a discrete period (e.g. within 2 hours), an amount of food definitely larger than most people would eat in a similar time and situation'),
+  one('{p}_a2', 'A sense of lack of control over eating during the episode'),
+];
+const binge = (prefix) => BINGE_A.map((c) => ({ ...c, id: c.id.replace('{p}', prefix) }));
+const FREQUENCY_SEVERITY = (what) => ({
+  id: 'severity',
+  label: `Severity (${what} per week, on average)`,
+  options: [
+    { value: 'mild', label: 'Mild: 1–3' },
+    { value: 'moderate', label: 'Moderate: 4–7' },
+    { value: 'severe', label: 'Severe: 8–13' },
+    { value: 'extreme', label: 'Extreme: 14 or more' },
+  ],
+});
+const EATING_CODE_NOTE = 'WHO ICD-10 has no separate code for this disorder; F50.8 (other eating disorders) is commonly used. Check the code in ICD-10-SE and your record system.';
+
+const pica = {
+  id: 'pica',
+  category: 'eating',
+  name: 'Pica',
+  groups: [
+    { title: 'A–D', items: [
+      one('pica_a', 'Persistent eating of non-nutritive, non-food substances (e.g. soil, clay, chalk, paper, hair) over at least 1 month'),
+      one('pica_b', 'The eating is inappropriate to the developmental level'),
+      one('pica_c', 'Not part of a culturally supported or socially normative practice'),
+      one('pica_d', 'If it occurs with another mental disorder (e.g. intellectual disability, autism) or medical condition (including pregnancy), it is severe enough to need separate clinical attention'),
+    ] },
+  ],
+  rule: { all: ['pica_a', 'pica_b', 'pica_c', 'pica_d'] },
+  specifiers: [],
+  code: () => 'F50.8',
+  codeNote: 'WHO ICD-10 codes pica in adults as F50.8 (other eating disorders); F98.3 is pica of infancy and childhood.',
+};
+
+const rumination = {
+  id: 'rumination',
+  category: 'eating',
+  name: 'Rumination disorder',
+  groups: [
+    { title: 'A–D', items: [
+      one('rum_a', 'Repeated regurgitation of food over at least 1 month; the food may be re-chewed, re-swallowed or spat out'),
+      one('rum_b', 'Not attributable to a gastrointestinal or other medical condition (e.g. gastro-oesophageal reflux)'),
+      one('rum_c', 'Not occurring only during anorexia nervosa, bulimia nervosa, binge-eating disorder or ARFID'),
+      one('rum_d', 'If it occurs with another mental disorder (e.g. intellectual disability), it is severe enough to need separate clinical attention'),
+    ] },
+  ],
+  rule: { all: ['rum_a', 'rum_b', 'rum_c', 'rum_d'] },
+  specifiers: [],
+  code: () => 'F50.8',
+  codeNote: 'WHO ICD-10 has no adult code for rumination disorder; F50.8 (other eating disorders) is commonly used, and F98.2 in childhood. Check the code in ICD-10-SE.',
+};
+
+const arfidA = list('arfid_a', [
+  'Significant weight loss (or, in young people, not reaching the expected weight or growth)',
+  'Significant nutritional deficiency',
+  'Dependence on tube feeding or oral nutritional supplements',
+  'Marked interference with psychosocial functioning',
+]);
+const arfid = {
+  id: 'arfid',
+  category: 'eating',
+  name: 'Avoidant/restrictive food intake disorder (ARFID)',
+  groups: [
+    { title: 'A. An eating or feeding disturbance with persistent failure to meet nutritional or energy needs', items: [
+      one('arfid_a', 'Eating or feeding disturbance: e.g. lack of interest in eating, avoidance because of the sensory characteristics of food, or fear of aversive consequences such as choking or vomiting'),
+    ] },
+    { title: 'A. With at least 1 of', items: arfidA },
+    { title: 'B–D', items: [
+      one('arfid_b', 'Not better explained by lack of available food or by a culturally sanctioned practice'),
+      one('arfid_c', 'Not occurring only during anorexia nervosa or bulimia nervosa, and no disturbance in the way body weight or shape is experienced'),
+      one('arfid_d', 'Not attributable to a medical condition or better explained by another mental disorder; if it occurs with one, it is more severe than usual and needs separate clinical attention'),
+    ] },
+  ],
+  rule: { all: ['arfid_a', { count: ids(arfidA), min: 1 }, 'arfid_b', 'arfid_c', 'arfid_d'] },
+  specifiers: [],
+  code: () => 'F50.8',
+  codeNote: EATING_CODE_NOTE,
+};
+
+const anorexia = {
+  id: 'anorexia',
+  category: 'eating',
+  name: 'Anorexia nervosa',
+  note: 'The body weight is significantly low for age, sex, development and physical health. In adults, BMI below 18.5 is usually taken as low; under 18, use BMI for age. Check medical stability (pulse, blood pressure, temperature, electrolytes, ECG) before or alongside the psychiatric assessment.',
+  groups: [
+    { title: 'A–C', items: [
+      one('an_a', 'Restriction of energy intake relative to requirements, leading to a significantly low body weight'),
+      one('an_b', 'Intense fear of gaining weight or becoming fat, or persistent behaviour that interferes with weight gain, even though at a significantly low weight'),
+      one('an_c', 'Disturbance in the way body weight or shape is experienced, undue influence of weight or shape on self-evaluation, or persistent lack of recognition of how serious the low weight is'),
+    ] },
+  ],
+  rule: { all: ['an_a', 'an_b', 'an_c'] },
+  specifiers: [
+    { id: 'type', label: 'Type (last 3 months)', options: [
+      { value: 'restricting', label: 'Restricting type: no recurrent binge eating or purging' },
+      { value: 'binge_purge', label: 'Binge-eating/purging type: recurrent binge eating or purging (vomiting, laxatives, diuretics, enemas)' },
+    ] },
+    { id: 'severity', label: 'Severity (adults, by BMI)', options: [
+      { value: 'mild', label: 'Mild: BMI 17 or more' },
+      { value: 'moderate', label: 'Moderate: BMI 16–16.99' },
+      { value: 'severe', label: 'Severe: BMI 15–15.99' },
+      { value: 'extreme', label: 'Extreme: BMI below 15' },
+    ] },
+  ],
+  code: () => 'F50.0',
+  codeNote: 'WHO ICD-10 uses F50.0 for both types. Some systems (e.g. ICD-10-CM) have separate codes for the restricting and binge-eating/purging types; check the code in ICD-10-SE.',
+};
+
+const bnA = binge('bn');
+const bulimia = {
+  id: 'bulimia',
+  category: 'eating',
+  name: 'Bulimia nervosa',
+  groups: [
+    { title: 'A. Recurrent episodes of binge eating, each with both of', items: bnA },
+    { title: 'B–E', items: [
+      one('bn_b', 'Recurrent inappropriate compensatory behaviour to prevent weight gain: self-induced vomiting, laxatives, diuretics or other medicines, fasting, or excessive exercise'),
+      one('bn_c', 'Binge eating and compensatory behaviour both occur, on average, at least once a week for 3 months'),
+      one('bn_d', 'Self-evaluation is unduly influenced by body shape and weight'),
+      one('bn_e', 'Not occurring only during episodes of anorexia nervosa'),
+    ] },
+  ],
+  rule: { all: [...ids(bnA), 'bn_b', 'bn_c', 'bn_d', 'bn_e'] },
+  specifiers: [FREQUENCY_SEVERITY('compensatory episodes')],
+  code: () => 'F50.2',
+};
+
+const bedA = binge('bed');
+const bedB = list('bed_b', [
+  'Eating much more rapidly than normal',
+  'Eating until feeling uncomfortably full',
+  'Eating large amounts of food when not physically hungry',
+  'Eating alone because of being embarrassed by how much one is eating',
+  'Feeling disgusted with oneself, depressed or very guilty afterwards',
+]);
+const bed = {
+  id: 'bed',
+  category: 'eating',
+  name: 'Binge-eating disorder',
+  groups: [
+    { title: 'A. Recurrent episodes of binge eating, each with both of', items: bedA },
+    { title: 'B. The binge eating comes with at least 3 of', items: bedB },
+    { title: 'C–E', items: [
+      one('bed_c', 'Marked distress about the binge eating'),
+      one('bed_d', 'The binge eating occurs, on average, at least once a week for 3 months'),
+      one('bed_e', 'No recurrent inappropriate compensatory behaviour as in bulimia nervosa, and not occurring only during bulimia nervosa or anorexia nervosa'),
+    ] },
+  ],
+  rule: { all: [...ids(bedA), { count: ids(bedB), min: 3 }, 'bed_c', 'bed_d', 'bed_e'] },
+  specifiers: [FREQUENCY_SEVERITY('binge-eating episodes')],
+  code: () => 'F50.8',
+  codeNote: EATING_CODE_NOTE,
+};
+
+const osfed = {
+  id: 'osfed',
+  category: 'eating',
+  name: 'Other specified feeding or eating disorder',
+  note: 'Used when feeding or eating symptoms cause distress or impairment but do not meet the full criteria for any feeding or eating disorder, and the clinician records why (the presentation below).',
+  groups: [
+    { title: 'A–B', items: [
+      one('osfed_a', 'Feeding or eating symptoms predominate and cause clinically significant distress or impairment'),
+      one('osfed_b', 'The full criteria for any feeding or eating disorder are not met'),
+    ] },
+  ],
+  rule: { all: ['osfed_a', 'osfed_b'] },
+  specifiers: [
+    { id: 'presentation', label: 'Presentation', options: [
+      { value: 'atypical_an', label: 'Atypical anorexia nervosa: all criteria except that the weight is within or above the normal range' },
+      { value: 'bn_low', label: 'Bulimia nervosa of low frequency and/or limited duration' },
+      { value: 'bed_low', label: 'Binge-eating disorder of low frequency and/or limited duration' },
+      { value: 'purging', label: 'Purging disorder: recurrent purging without binge eating' },
+      { value: 'night_eating', label: 'Night eating syndrome' },
+      { value: 'other', label: 'Other (describe in the notes)' },
+    ] },
+  ],
+  code(s) {
+    if (s.presentation === 'atypical_an') return 'F50.1';
+    if (s.presentation === 'bn_low') return 'F50.3';
+    return 'F50.8';
+  },
+  codeNote: 'WHO ICD-10: F50.1 atypical anorexia nervosa, F50.3 atypical bulimia nervosa, F50.8 the other presentations.',
+};
+
+const ufed = {
+  id: 'ufed',
+  category: 'eating',
+  name: 'Unspecified feeding or eating disorder',
+  note: 'Used when the clinician does not specify why the full criteria are not met, e.g. because there is not yet enough information (such as in an emergency).',
+  groups: [
+    { title: 'A–B', items: [
+      one('ufed_a', 'Feeding or eating symptoms predominate and cause clinically significant distress or impairment'),
+      one('ufed_b', 'The full criteria for any feeding or eating disorder are not met, and the reason is not specified'),
+    ] },
+  ],
+  rule: { all: ['ufed_a', 'ufed_b'] },
+  specifiers: [],
+  code: () => 'F50.9',
+};
+
 export const DISORDERS = [
   mdd, pdd, pmdd, dmdd, bipolar1, bipolar2, cyclothymic, substanceMood, medicalMood,
   separation, mutism, phobia, social, panic, agoraphobia, gad, substanceAnxiety, medicalAnxiety,
@@ -1486,6 +1692,7 @@ export const DISORDERS = [
   delusional, briefPsychotic, schizophreniform, schizophrenia, schizoaffective, substancePsychotic, medicalPsychotic, catatonia,
   rad, dsed, ptsd, acuteStress, adjustment, pgd,
   ocd, bdd, hoarding, trich, skinPicking, substanceOcrd, medicalOcrd,
+  pica, rumination, arfid, anorexia, bulimia, bed, osfed, ufed,
 ];
 
 export function findDisorder(id) {

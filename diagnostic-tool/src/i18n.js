@@ -212,6 +212,16 @@ const SV_ITEMS = {
   neuro4: 'Har du fått skakningar (tremor), stelhet eller långsammare rörelser?',
   neuro5: 'Har du fått nya, svåra huvudvärksattacker som inte liknar någon du haft tidigare?',
   neuro6: 'Har du haft en skallskada där du blev medvetslös?',
+  scoff1: 'Framkallar du kräkning för att du känner dig obehagligt mätt?',
+  scoff2: 'Oroar du dig för att du har förlorat kontrollen över hur mycket du äter?',
+  scoff3: 'Har du nyligen gått ner mer än 6 kg under en 3-månadersperiod?',
+  scoff4: 'Tycker du att du är tjock när andra säger att du är för smal?',
+  scoff5: 'Skulle du säga att mat dominerar ditt liv?',
+  ed_binge: 'Har du episoder då du äter en ovanligt stor mängd mat på kort tid och känner att du inte kan sluta?',
+  ed_comp: 'Brukar du, för att kompensera för det du ätit eller för att inte gå upp i vikt, framkalla kräkning, ta laxermedel eller vätskedrivande tabletter, fasta eller träna mycket hårt?',
+  ed_arfid: 'Äter du så lite, eller så få sorters mat, att du har gått ner i vikt eller mår dåligt, på grund av ointresse för mat, matens smak, lukt eller konsistens, eller rädsla för att sätta i halsen eller kräkas (inte på grund av din vikt eller kroppsform)?',
+  ed_pica: 'Äter du regelbundet saker som inte är mat (till exempel jord, lera, krita, papper eller hår)?',
+  ed_rum: 'Kommer maten ofta upp i munnen igen efter att du ätit, utan att du mår illa, så att du tuggar den igen, sväljer den igen eller spottar ut den?',
 };
 
 // Answer options, translated by their English label.
@@ -256,6 +266,7 @@ const SV_SECTIONS = {
   'Other worries, fears and habits': ['Andra bekymmer, rädslor och vanor', ''],
   'Difficult experiences': ['Svåra upplevelser', 'Ibland händer det människor saker som är ovanligt eller särskilt skrämmande, fruktansvärda eller traumatiska. Till exempel: en allvarlig olycka eller brand; ett fysiskt eller sexuellt övergrepp; en jordbävning eller översvämning; krig; att se någon bli dödad eller allvarligt skadad; att en närstående dött genom mord eller självmord. Du behöver inte beskriva vad som hände.'],
   'How you usually are': ['Hur du brukar vara', 'Dessa frågor handlar om hur du brukar vara under större delen av ditt vuxna liv (eller sedan tonåren). Det finns inga rätta eller felaktiga svar.'],
+  'Eating and weight': ['Ätande och vikt', 'Dessa frågor handlar om ätande, mat och kroppsvikt.'],
   'Memory and the nervous system': ['Minne och nervsystem', 'Om något av problemen nedan började plötsligt de senaste dagarna, ring 112 nu.'],
 };
 

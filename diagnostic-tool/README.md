@@ -4,7 +4,7 @@
 patient aged **16 or older**, from the intake screening to a confirmed
 diagnosis with an ICD-10 code.
 
-It covers seven groups of DSM-5-TR disorders (52 in total):
+It covers eight groups of DSM-5-TR disorders (60 in total):
 
 | Group | Disorders |
 | --- | --- |
@@ -15,6 +15,15 @@ It covers seven groups of DSM-5-TR disorders (52 in total):
 | Schizophrenia spectrum and other psychotic disorders | Delusional disorder, brief psychotic disorder, schizophreniform disorder, schizophrenia, schizoaffective disorder, substance/medication-induced and medical-condition psychotic disorders, catatonia (schizotypal personality disorder is listed with the personality disorders) |
 | Trauma- and stressor-related disorders | PTSD, acute stress disorder, adjustment disorder, prolonged grief disorder, reactive attachment disorder and disinhibited social engagement disorder (both childhood-onset) |
 | Obsessive-compulsive and related disorders | OCD, body dysmorphic disorder, hoarding disorder, trichotillomania, excoriation (skin-picking) disorder, substance/medication-induced and medical-condition OCRD |
+| Feeding and eating disorders | Pica, rumination disorder, ARFID, anorexia nervosa, bulimia nervosa, binge-eating disorder, other specified and unspecified feeding or eating disorder |
+
+**Languages of the clinical content.** Everything added from the eating
+disorders onwards is in English and Swedish, including disorder names,
+criteria, rule-out reasons, combination rules and suggestion reasons. The
+Swedish wording is an **unofficial translation** written for this app
+(`src/i18n-clinical-sv.js`, to be reviewed: TRA-6), because the official
+Swedish DSM-5-TR text is licensed. The older disorders' clinical content
+is still in English (TRA-3).
 
 Other neurological symptoms (seizures, weakness, speech or vision loss,
 tremor, new headaches, head injury) are **flagged for referral**, not
@@ -39,20 +48,27 @@ use disorder) are listed as "outside this app" so they are not lost.
    examination**. It can be done before the screening (for example while
    the patient's link is still open).
 3. **Intake screening.** The patient first confirms an information page
-   (on site, the clinician confirms the patient was informed). Then 95
-   questions (about 25 minutes): PHQ-9, GAD-7, GAD criteria items, mood
+   (on site, the clinician confirms the patient was informed). Then 105
+   questions (about 25–30 minutes): PHQ-9, GAD-7, GAD criteria items, mood
    history, psychotic experiences, AUDIT-C, drugs, medicines, health, life
    events, other anxiety disorders, obsessive-compulsive and related
    symptoms, PC-PTSD-5, personality traits, memory and neurological
-   symptoms, shown **one part per page** (10 pages) with a **progress
+   symptoms, and eating (SCOFF plus questions on binge eating,
+   compensation, ARFID, pica and rumination), shown **one part per page**
+   (11 pages) with a **progress
    bar**. Follow-up questions ("If so…") are only asked when they apply
-   (**skip logic**, 13 questions), so many patients answer about 82. After
+   (**skip logic**, 13 questions), so many patients answer about 92. After
    parts 3 and 6 the patient rates **how tired they feel** (0–10); 7 or
    more offers a **break**. Answers are saved page by page and can be
    continued later from the same link.
 4. **MoCA and observed signs.** On site, the clinician enters the **MoCA**
    domain scores (the app adds them up and adds 1 point for 12 years of
-   education or fewer), and signs of **delirium** and **catatonia**.
+   education or fewer), signs of **delirium** and **catatonia**, and
+   **height and weight**. The app works out the **BMI** and shows
+   **medical warning signs**: BMI below 15 is an urgent alert (same-day
+   medical assessment); low BMI, purging and rapid weight loss each say
+   what to check (pulse, blood pressure, temperature, electrolytes, ECG).
+   The BMI limits are for adults; under 18, BMI for age (ISO-BMI) applies.
 5. **Informant.** Information from someone who knows the patient well
    (memory decline, everyday functioning, past periods of elevated mood,
    long-standing traits, safety worries). Saved only with the patient's
@@ -441,7 +457,7 @@ review today), an assessment number and a link to log in.
 ## Validation
 
 **[docs/VALIDATION-PLAN.md](docs/VALIDATION-PLAN.md)** lists everything that
-is not validated (68 of the 95 questions, the rules, the clinical content
+is not validated (74 of the 105 questions, the rules, the clinical content
 and the translations) and how to validate or replace it: replace an item
 with a validated instrument where one exists, or check it against a full
 diagnostic interview (gold standard). It is a living document: the source

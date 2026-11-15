@@ -328,6 +328,25 @@ const RULES = [
     nextStep: 'PCL-5 or a clinician-administered interview (CAPS-5).',
   },
 
+  {
+    id: 'eating',
+    condition: 'Feeding or eating disorder',
+    relevantTo: ['MDD'],
+    why: 'Weight and appetite changes count toward depression (PHQ-9 item 5) but can come from an eating disorder, and starvation itself lowers mood and concentration.',
+    itemIds: ['scoff1', 'scoff2', 'scoff3', 'scoff4', 'scoff5', 'ed_binge', 'ed_comp', 'ed_arfid', 'ed_pica', 'ed_rum'],
+    rule: 'Screen positive if SCOFF is 2 or more, or binge eating, compensatory behaviour, restrictive eating, pica or rumination is reported. Unclear if SCOFF is 1.',
+    evaluate(a) {
+      const scoff = ['scoff1', 'scoff2', 'scoff3', 'scoff4', 'scoff5'].filter((id) => a[id] === YES).length;
+      if (scoff >= 2 || ['ed_binge', 'ed_comp', 'ed_arfid', 'ed_pica', 'ed_rum'].some((id) => a[id] === YES)) {
+        return { status: STATUS.FLAGGED, finding: 'Signs of a possible feeding or eating disorder (see the suggestions for which one).' };
+      }
+      if (scoff === 1) return { status: STATUS.POSSIBLE, finding: 'One SCOFF answer positive: ask about eating, weight and body image.' };
+      return { status: STATUS.NOT_INDICATED, finding: 'No signs of an eating disorder in the screening.' };
+    },
+    implication: 'If an eating disorder explains the weight or appetite change, do not count that symptom toward depression, and reassess mood after nutritional recovery.',
+    nextStep: 'Measure height and weight; assess eating behaviour with the eating-disorder checklists; check physical health if weight is low or purging is reported.',
+  },
+
   // ----- Conditions a questionnaire cannot screen for -----
   {
     id: 'neurocognitive',
